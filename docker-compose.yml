@@ -1,0 +1,29 @@
+services:
+  internal_db:
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    environment:
+      POSTGRES_PASSWORD: ${INTERNAL_DB_PASSWORD}
+      POSTGRES_DB: ${INTERNAL_DB_NAME}
+      POSTGRES_USER: ${INTERNAL_DB_USER}
+    ports:
+      - "${INTERNAL_DB_PORT}:${INTERNAL_DB_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        - SERVER_PORT=${SERVER_PORT}
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      internal_db:
+        condition: service_healthy
