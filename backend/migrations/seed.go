@@ -98,7 +98,6 @@ func seedGroups(tx *gorm.DB, databases map[string]models.Database) (map[string]m
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			group = models.Group{
 				AccessType: groupSeed.accessType,
-				DatabaseID: int64(groupSeed.databases[0].ID),
 				Databases:  groupSeed.databases,
 			}
 			err = tx.Create(&group).Error
