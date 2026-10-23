@@ -2,12 +2,10 @@ package models
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type Session struct {
-	gorm.Model
+	ID uint `gorm:"primaryKey"`
 
 	OpaqueToken        string        `gorm:"unique; not null"`
 	IdleTimeout        time.Duration `gorm:"not null"`

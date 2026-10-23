@@ -1,9 +1,7 @@
 package models
 
-import "gorm.io/gorm"
-
 type Database struct {
-	gorm.Model
+	ID       uint   `gorm:"primaryKey"`
 	Port     uint   `gorm:"unique;not null"`
 	Host     string `gorm:"not null"`
 	User     string `gorm:"not null"`
