@@ -2,29 +2,30 @@ package postgresql
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type PoolManager struct {
 	mu    sync.RWMutex
-	pools map[uint]*sql.DB
+	pools map[uint]*gorm.DB
 }
 
 var _ ports.DatabasePoolInvalidator = (*PoolManager)(nil)
 
 func NewPoolManager() *PoolManager {
 	return &PoolManager{
-		pools: make(map[uint]*sql.DB),
+		pools: make(map[uint]*gorm.DB),
 	}
 }
 
-func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*sql.DB, error) {
+func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*gorm.DB, error) {
 	m.mu.RLock()
 	existingPool, exists := m.pools[database.ID]
 	m.mu.RUnlock()
@@ -34,13 +35,17 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*sql.D
 
 	dsn := buildDSN(database)
 
-	pool, err := sql.Open("pgx", dsn)
+	pool, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("open PostgreSQL pool: %w", err)
 	}
 
-	if err := pool.PingContext(ctx); err != nil {
-		pool.Close()
+	sqlPool, err := pool.DB()
+	if err != nil {
+		return nil, fmt.Errorf("get PostgreSQL SQL pool: %w", err)
+	}
+	if err := sqlPool.PingContext(ctx); err != nil {
+		_ = sqlPool.Close()
 		return nil, fmt.Errorf("ping PostgreSQL pool: %w", err)
 	}
 
@@ -49,7 +54,9 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*sql.D
 	if existingPool, exists := m.pools[database.ID]; exists {
 		m.mu.Unlock()
 
-		pool.Close()
+		if sqlPool, err := pool.DB(); err == nil {
+			_ = sqlPool.Close()
+		}
 
 		return existingPool, nil
 	}
@@ -76,13 +83,17 @@ func (m *PoolManager) Invalidate(databaseID uint) error {
 		return nil
 	}
 
-	return pool.Close()
+	sqlPool, err := pool.DB()
+	if err != nil {
+		return err
+	}
+	return sqlPool.Close()
 }
 
 func (m *PoolManager) CloseAll() error {
 	m.mu.Lock()
 
-	pools := make([]*sql.DB, 0, len(m.pools))
+	pools := make([]*gorm.DB, 0, len(m.pools))
 
 	for databaseID, pool := range m.pools {
 		pools = append(pools, pool)
@@ -94,7 +105,12 @@ func (m *PoolManager) CloseAll() error {
 	var closeErrors []error
 
 	for _, pool := range pools {
-		if err := pool.Close(); err != nil {
+		sqlPool, err := pool.DB()
+		if err != nil {
+			closeErrors = append(closeErrors, err)
+			continue
+		}
+		if err := sqlPool.Close(); err != nil {
 			closeErrors = append(closeErrors, err)
 		}
 	}

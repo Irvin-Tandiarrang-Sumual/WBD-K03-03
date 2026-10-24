@@ -6,7 +6,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
 
-	postgresqldriver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver/postgresql"
+	driver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver"
 
 	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
@@ -73,9 +73,9 @@ func Run() {
 		return
 	}
 
-	connectionTester := postgresqldriver.NewConnectionTester()
+	connectionTester := driver.NewDatabaseConnectionTester()
 
-	poolManager := postgresqldriver.NewPoolManager()
+	poolManager := driver.NewDatabasePoolManager()
 
 	defer func() {
 		if err := poolManager.CloseAll(); err != nil {

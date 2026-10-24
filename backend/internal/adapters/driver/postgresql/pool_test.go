@@ -2,21 +2,26 @@ package postgresql
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func TestPoolManagerReturnsExistingPool(t *testing.T) {
 	manager := NewPoolManager()
 
-	pool, err := sql.Open("pgx", "postgres://localhost/test")
+	pool, err := gorm.Open(postgres.Open("postgres://localhost/test"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("sql.Open() error = %v", err)
 	}
 
-	defer pool.Close()
+	sqlPool, err := pool.DB()
+	if err != nil {
+		t.Fatalf("DB() error = %v", err)
+	}
+	defer sqlPool.Close()
 
 	manager.pools[1] = pool
 
@@ -35,12 +40,18 @@ func TestPoolManagerReturnsExistingPool(t *testing.T) {
 func TestPoolManagerInvalidate(t *testing.T) {
 	manager := NewPoolManager()
 
-	pool, err := sql.Open("pgx", "postgres://localhost/test")
+	pool, err := gorm.Open(postgres.Open("postgres://localhost/test"), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("sql.Open() error = %v", err)
+		t.Fatalf("gorm.Open() error = %v", err)
 	}
 
 	manager.pools[1] = pool
+
+	sqlPool, err := pool.DB()
+	if err != nil {
+		t.Fatalf("DB() error = %v", err)
+	}
+	defer sqlPool.Close()
 
 	if err := manager.Invalidate(1); err != nil {
 		t.Fatalf("Invalidate() error = %v", err)
@@ -58,18 +69,29 @@ func TestPoolManagerInvalidate(t *testing.T) {
 func TestPoolManagerCloseAll(t *testing.T) {
 	manager := NewPoolManager()
 
-	first, err := sql.Open("pgx", "postgres://localhost/first")
+	first, err := gorm.Open(postgres.Open("postgres://localhost/first"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("first sql.Open() error = %v", err)
 	}
 
-	second, err := sql.Open("pgx", "postgres://localhost/second")
+	second, err := gorm.Open(postgres.Open("postgres://localhost/second"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("second sql.Open() error = %v", err)
 	}
 
 	manager.pools[1] = first
 	manager.pools[2] = second
+
+	firstSQL, err := first.DB()
+	if err != nil {
+		t.Fatalf("first DB() error = %v", err)
+	}
+	defer firstSQL.Close()
+	secondSQL, err := second.DB()
+	if err != nil {
+		t.Fatalf("second DB() error = %v", err)
+	}
+	defer secondSQL.Close()
 
 	if err := manager.CloseAll(); err != nil {
 		t.Fatalf("CloseAll() error = %v", err)
