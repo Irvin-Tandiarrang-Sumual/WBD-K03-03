@@ -1,4 +1,4 @@
-package group
+package domain
 
 type Group struct {
 	ID         uint

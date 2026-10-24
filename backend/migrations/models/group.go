@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain/errors"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +14,7 @@ type Group struct {
 
 func (g *Group) BeforeCreate(tx *gorm.DB) (err error) {
 	if !g.hasDatabaseIDs() {
-		return errors.ErrGroupMustHaveDatabase
+		return domain.ErrGroupMustHaveDatabase
 	}
 
 	if err := g.areDatabaseIDsValid(tx); err != nil {
@@ -38,7 +38,7 @@ func (g *Group) areDatabaseIDsValid(tx *gorm.DB) (err error) {
 	}
 
 	if len(inputDBIDs) == 0 {
-		return errors.ErrDatabaseNotFound
+		return domain.ErrDatabaseNotFound
 	}
 
 	var countInDB int64
@@ -48,7 +48,7 @@ func (g *Group) areDatabaseIDsValid(tx *gorm.DB) (err error) {
 	}
 
 	if int(countInDB) != len(inputDBIDs) {
-		return errors.ErrDatabaseNotFound
+		return domain.ErrDatabaseNotFound
 	}
 
 	return nil

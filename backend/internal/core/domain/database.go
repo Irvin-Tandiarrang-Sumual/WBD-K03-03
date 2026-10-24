@@ -1,4 +1,4 @@
-package database
+package domain
 
 type Database struct {
 	ID       uint
