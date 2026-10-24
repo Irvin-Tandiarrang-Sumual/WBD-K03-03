@@ -78,8 +78,8 @@ docker compose down -v
 | DELETE | `api/v1/admin/users/:id` | Hapus satu user | Wajib menyertakan `:id` |
 | GET | `api/v1/admin/groups` | Ambil semua group |  |
 | GET | `api/v1/admin/groups/:id` | Ambil detail satu group | |
-| POST | `api/v1/admin/groups` | Buat group baru | Body: `database_ids` berisi ID database yang terhubung, `access_type` juga |
-| PATCH | `api/v1/admin/groups/:id` | Update sebagian data group | Body dapat berisi `access_type` baru (`view_only` atau `view_edit`) |
+| POST | `api/v1/admin/groups` | Buat group baru | Body: `name` dan `databases`, setiap database memiliki `database_id` dan `access_type` |
+| PATCH | `api/v1/admin/groups/:id` | Update sebagian data group | Body dapat berisi `name` atau `databases`, setiap database memiliki `database_id` dan `access_type` |
 | DELETE | `api/v1/admin/groups/:id` | Hapus satu group | Wajib menyertakan `:id` |
 | POST | `api/v1/admin/groups/:group_id/users` | Hubungkan user ke group | Kirim `user_id` dan `group_id` di request body |
 | DELETE | `api/v1/admin/groups/:group_id/users/:user_id` | Putus hubungan user-group |  |

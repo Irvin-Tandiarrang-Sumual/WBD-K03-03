@@ -1,4 +1,4 @@
-package models
+package model
 
 import (
 	"time"
@@ -7,8 +7,9 @@ import (
 )
 
 type Migration struct {
-	DatabaseID int    `gorm:"primaryKey"`
-	Version    string `gorm:"primaryKey"`
+	ID         uint   `gorm:"primaryKey"`
+	DatabaseID int    `gorm:"not null;unique:database_id"`
+	Version    string `gorm:"not null;unique:database_id"`
 
 	MigratedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	Status     string         `gorm:"not null;default:'fail'"`
