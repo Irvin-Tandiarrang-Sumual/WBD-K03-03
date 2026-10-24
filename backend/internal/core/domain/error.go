@@ -29,4 +29,5 @@ var (
 	ErrInvalidMigrationInput       = errors.New("Migration input is not valid")
 	ErrMigrationVersionUnavailable = errors.New("Migration version is not available")
 	ErrInvalidPagination           = errors.New("Pagination parameters are not valid")
+	ErrInvalidDatabaseQuery        = errors.New("Database query is not valid")
 )

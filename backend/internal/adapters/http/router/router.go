@@ -2,6 +2,7 @@ package router
 
 import (
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
+	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
@@ -16,6 +17,7 @@ func SetUpRouter(
 	users *userhandler.UserHandler,
 	groups *grouphandler.GroupHandler,
 	databases *databasehandler.DatabaseHandler,
+	databaseExecutor *databaseexecutorhandler.DatabaseExecutorHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
 ) {
@@ -120,5 +122,18 @@ func SetUpRouter(
 	adminDatabases.DELETE(
 		"/:databaseId",
 		databases.DeleteDatabase,
+	)
+
+	me := api.Group("/me")
+	me.Use(middleware.Authenticate(sessionService))
+
+	meDatabases := me.Group("/databases")
+	meDatabases.POST(
+		"/:database_id/query",
+		databaseExecutor.ExecuteDatabaseQuery,
+	)
+	meDatabases.POST(
+		"/:database_id/explain",
+		databaseExecutor.ExplainDatabaseQuery,
 	)
 }

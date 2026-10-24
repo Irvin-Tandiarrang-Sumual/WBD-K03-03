@@ -10,6 +10,7 @@ import (
 
 	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
+	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 
@@ -25,6 +26,7 @@ import (
 
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
+	databaseexecutorservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_executor"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
@@ -132,6 +134,12 @@ func Run() {
 		sessionService,
 		poolManager,
 	)
+	databaseExecutor := driver.NewDatabaseExecutor(poolManager)
+	databaseExecutorService := databaseexecutorservice.NewDatabaseExecutorService(
+		databaseService,
+		databaseRepository,
+		databaseExecutor,
+	)
 
 	authHandler := authhandler.NewAuthHandler(
 		authService,
@@ -149,6 +157,9 @@ func Run() {
 	databaseHandler := databasehandler.NewDatabaseHandler(
 		databaseService,
 	)
+	databaseExecutorHandler := databaseexecutorhandler.NewDatabaseExecutorHandler(
+		databaseExecutorService,
+	)
 
 	r := gin.Default()
 
@@ -158,6 +169,7 @@ func Run() {
 		userHandler,
 		groupHandler,
 		databaseHandler,
+		databaseExecutorHandler,
 		sessionService,
 		userService,
 	)
