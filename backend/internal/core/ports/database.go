@@ -30,3 +30,7 @@ type DatabaseCredentialCipher interface {
 type DatabaseConnectionTester interface {
 	Test(ctx context.Context, database domain.Database) error
 }
+
+type DatabasePoolInvalidator interface {
+	Invalidate(databaseID uint) error
+}

@@ -13,16 +13,18 @@ type Service struct {
 	tester    ports.DatabaseConnectionTester
 	groups    ports.GroupRepository
 	sessions  ports.SessionService
+	pools     ports.DatabasePoolInvalidator
 }
 
 var _ ports.DatabaseService = (*Service)(nil)
 
-func NewService(databases ports.DatabaseRepository, tester ports.DatabaseConnectionTester, groups ports.GroupRepository, sessions ports.SessionService) *Service {
+func NewService(databases ports.DatabaseRepository, tester ports.DatabaseConnectionTester, groups ports.GroupRepository, sessions ports.SessionService, pools ports.DatabasePoolInvalidator) *Service {
 	return &Service{
 		databases: databases,
 		tester:    tester,
 		groups:    groups,
 		sessions:  sessions,
+		pools: pools,
 	}
 }
 
@@ -87,6 +89,10 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 
 	userIDs, err := s.groups.ListUserIDsByDatabase(ctx, id)
 	if err != nil {
+		return err
+	}
+
+	if err := s.pools.Invalidate(id); err != nil {
 		return err
 	}
 
