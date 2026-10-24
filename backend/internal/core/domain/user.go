@@ -6,3 +6,14 @@ type User struct {
 	Password string
 	Role     string
 }
+
+type CreateUserInput struct {
+	Username string
+	Password string
+	GroupIDs []uint
+}
+
+type UpdateUserInput struct {
+	Username *string
+	Password *string
+}

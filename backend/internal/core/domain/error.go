@@ -16,5 +16,7 @@ var (
 	ErrMembershipNotFound    = errors.New("User is not a group member")
 	ErrDatabaseAccessDenied  = errors.New("Database access denied")
 	ErrDatabaseAlreadyExists = errors.New("Database already registered")
-	ErrDatabaseInUse 		= errors.New("Database cannot be removed because a group would have no database")
+	ErrDatabaseInUse	 	 = errors.New("Database cannot be removed because a group would have no database")
+	ErrUsernameTaken		 = errors.New("Username is already used")
+	ErrInvalidRole  		 = errors.New("Invalid role")
 )
