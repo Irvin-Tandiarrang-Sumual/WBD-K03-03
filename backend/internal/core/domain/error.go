@@ -19,4 +19,6 @@ var (
 	ErrDatabaseInUse	 	 = errors.New("Database cannot be removed because a group would have no database")
 	ErrUsernameTaken		 = errors.New("Username is already used")
 	ErrInvalidRole  		 = errors.New("Invalid role")
+	ErrInvalidSession = errors.New("Invalid or expired session")
+	ErrInvalidCredentials = errors.New("Invalid username or password")
 )

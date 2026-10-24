@@ -9,7 +9,7 @@ type User struct {
 	ID uint `gorm:"primaryKey"`
 
 	Username string `gorm:"unique;not null"`
-	Password string `gorm:"notnull"`
+	Password string `gorm:"not null"`
 	Role     string `gorm:"type:text;check:role IN ('user', 'admin');default:user"`
 
 	Sessions []Session `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
@@ -17,34 +17,29 @@ type User struct {
 }
 
 type UserGroup struct {
-	UserID  uint `gorm:"primaryKey`
-	GroupID uint `gorm:"primaryKey`
+	UserID  uint `gorm:"primaryKey"`
+	GroupID uint `gorm:"primaryKey"`
 }
 
-func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
-	if u.hasGroupIDs() {
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+	if len(u.Groups) == 0 {
 		return domain.ErrUserMustHaveGroup
 	}
 
-	return u.areGroupIDsValid(tx)
+	inputIDs := make([]uint, 0, len(u.Groups))
 
-}
-
-func (u *User) hasGroupIDs() bool {
-	return len(u.Groups) == 0
-}
-
-func (u *User) areGroupIDsValid(tx *gorm.DB) (err error) {
-	var inputIDs []uint
-	for _, g := range u.Groups {
-		if g.ID != 0 {
-			inputIDs = append(inputIDs, g.ID)
+	for _, group := range u.Groups {
+		if group.ID != 0 {
+			inputIDs = append(inputIDs, group.ID)
 		}
 	}
 
 	var countInDB int64
-	err = tx.Model(&Group{}).Where("id IN ?", inputIDs).Count(&countInDB).Error
-	if err != nil {
+
+	if err := tx.
+		Model(&Group{}).
+		Where("id IN ?", inputIDs).
+		Count(&countInDB).Error; err != nil {
 		return err
 	}
 

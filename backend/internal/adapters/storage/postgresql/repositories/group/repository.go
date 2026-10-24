@@ -78,7 +78,7 @@ func (r *Repository) FindByID(ctx context.Context, id uint) (domain.Group, error
 	}
 
 	var relations []models.GroupDatabase
-	err = r.db.WithContext(ctx).Where("group_id = ?", id).Order(("database_id ASC")).First(&relations).Error
+	err = r.db.WithContext(ctx).Where("group_id = ?", id).Order(("database_id ASC")).Find(&relations).Error
 	if err != nil{
 		return domain.Group{}, err
 	}
