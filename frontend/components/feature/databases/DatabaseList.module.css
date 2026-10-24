@@ -1,0 +1,167 @@
+.wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.header {
+  margin-bottom: 3rem;
+  text-align: center;
+}
+
+.titleBadge {
+  background-color: #1a1a1a;
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+  display: inline-block;
+  border: 1px solid #333;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2.5rem;
+  padding: 2.5rem;
+  border: 1px solid #333;
+  border-radius: 12px;
+  background-color: #0a0a0a;
+  width: 100%;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #111;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: #555;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cardText {
+  margin: 0;
+  color: #d4d4d8;
+  line-height: 1.5;
+}
+
+.accessEdit {
+  color: #3b82f6;
+}
+
+.accessView {
+  color: #eab308;
+}
+
+.statusConnected {
+  color: #22c55e;
+}
+
+.statusDisconnected {
+  color: #ef4444;
+}
+
+.cardFooter {
+  margin-top: 1rem;
+}
+
+.pagination {
+  margin-top: 4rem;
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+}
+
+.button {
+  background-color: #1a1a1a;
+  color: #fff;
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.button:hover:not(:disabled) {
+  background-color: #2a2a2a;
+  border-color: #888;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.controls {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.searchInput {
+  background-color: #111;
+  color: #fff;
+  border: 1px solid #333;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  width: 300px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.searchInput::placeholder {
+  color: #a1a1aa;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #888;
+}
+
+.pageInfo {
+  color: #a1a1aa;
+  margin: 0;
+  text-align: left;
+}
+
+.openButton {
+  color: #fff; 
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+  text-decoration: none;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem; 
+  display: inline-block; 
+}
+
+.openButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px; 
+  background-color: #2a2a2a; 
+}
+
+.openButton:active {
+  transform: scale(0.95); 
+}
