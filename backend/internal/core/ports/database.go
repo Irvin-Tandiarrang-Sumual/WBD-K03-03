@@ -7,6 +7,10 @@ import (
 )
 
 type DatabaseService interface {
+	List(ctx context.Context) ([]domain.Database, error)
+	Get(ctx context.Context, id uint) (domain.Database, error)
+	Create(ctx context.Context, input domain.CreateDatabaseInput) (domain.Database, error)
+	Delete(ctx context.Context, id uint) error
 }
 
 type DatabaseRepository interface {
@@ -21,4 +25,8 @@ type DatabaseRepository interface {
 type DatabaseCredentialCipher interface {
 	Encrypt(plaintext string) (string, error)
 	Decrypt(ciphertext string) (string, error)
+}
+
+type DatabaseConnectionTester interface {
+	Test(ctx context.Context, database domain.Database) error
 }

@@ -340,3 +340,37 @@ func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.Databa
 
 	return tx.Create(&relations).Error
 }
+
+func (r *Repository) ListUserIDsByDatabase(ctx context.Context, databaseID uint) ([]uint, error) {
+	var userIDs []uint
+
+	err := r.db.
+		WithContext(ctx).
+		Table("user_groups").
+		Select("DISTINCT user_groups.user_id").
+		Joins("JOIN group_databases ON group_databases.group_id = user_groups.group_id").
+		Where("group_databases.database_id = ?", databaseID).
+		Pluck("user_groups.user_id", &userIDs).Error
+
+	return userIDs, err
+}
+
+func (r *Repository) HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error) {
+	var exists bool
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT EXISTS (
+			SELECT 1
+			FROM group_databases AS target
+			WHERE target.database_id = ?
+			AND NOT EXISTS (
+				SELECT 1
+				FROM group_databases AS other
+				WHERE other.group_id = target.group_id
+				AND other.database_id <> target.database_id
+			)
+		)
+	`, databaseID).Scan(&exists).Error
+
+	return exists, err
+}

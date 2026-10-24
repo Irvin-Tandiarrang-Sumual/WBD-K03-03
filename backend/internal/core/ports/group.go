@@ -86,4 +86,7 @@ type GroupRepository interface {
 		userID uint,
 		databaseID uint,
 	) ([]domain.AccessType, error)
+
+	ListUserIDsByDatabase(ctx context.Context, databaseID uint) ([]uint, error)
+	HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error)
 }
