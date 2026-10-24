@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain/errors"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"gorm.io/gorm"
 )
 
@@ -18,7 +18,7 @@ type User struct {
 
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
 	if u.hasGroupIDs() {
-		return errors.ErrUserMustHaveGroup
+		return domain.ErrUserMustHaveGroup
 	}
 
 	return u.areGroupIDsValid(tx)
@@ -44,7 +44,7 @@ func (u *User) areGroupIDsValid(tx *gorm.DB) (err error) {
 	}
 
 	if int(countInDB) != len(inputIDs) {
-		return errors.ErrInvalidGroupsIDs
+		return domain.ErrInvalidGroupsIDs
 	}
 
 	return nil

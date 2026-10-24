@@ -1,0 +1,12 @@
+package domain
+
+import "errors"
+
+var (
+	ErrInvalidGroupsIDs      = errors.New("Group ids are not valid")
+	ErrGroupNotFound         = errors.New("Group is not found")
+	ErrGroupMustHaveDatabase = errors.New("Group must have access to at least one database")
+	ErrUserNotFound          = errors.New("User is not found")
+	ErrUserMustHaveGroup     = errors.New("User must have at least one group")
+	ErrDatabaseNotFound      = errors.New("Database is not found")
+)
