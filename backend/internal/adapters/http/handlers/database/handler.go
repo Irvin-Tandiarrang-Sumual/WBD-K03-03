@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/ginutil"
@@ -132,8 +133,11 @@ func (h *DatabaseHandler) DeleteDatabase(c *gin.Context) {
 }
 
 func currentUserID(c *gin.Context) (uint, error) {
-	// TODO: replace with the authenticated user ID from the auth middleware.
-	return 0, domain.ErrCurrentUserUnavailable
+	userID, exists := middleware.AuthenticatedUserID(c)
+	if !exists {
+		return 0, domain.ErrCurrentUserUnavailable
+	}
+	return userID, nil
 }
 
 func toResponse(database *domain.Database) DatabaseResponse {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
@@ -88,8 +89,11 @@ func (h *DatabaseExecutorHandler) ExplainDatabaseQuery(c *gin.Context) {
 }
 
 func currentDatabaseExecutorUserID(c *gin.Context) (uint, error) {
-	// TODO: replace with the authenticated user ID from the auth middleware.
-	return 0, domain.ErrCurrentUserUnavailable
+	userID, exists := middleware.AuthenticatedUserID(c)
+	if !exists {
+		return 0, domain.ErrCurrentUserUnavailable
+	}
+	return userID, nil
 }
 
 func writeDatabaseExecutorErrorResponse(c *gin.Context, err error) {

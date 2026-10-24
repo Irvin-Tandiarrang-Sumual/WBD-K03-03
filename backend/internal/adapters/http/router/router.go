@@ -128,6 +128,14 @@ func SetUpRouter(
 	me.Use(middleware.Authenticate(sessionService))
 
 	meDatabases := me.Group("/databases")
+	meDatabases.GET(
+		"",
+		databases.GetDatabasesByUserID,
+	)
+	meDatabases.GET(
+		"/:database_id",
+		databases.GetDatabaseByIDAndUserID,
+	)
 	meDatabases.POST(
 		"/:database_id/query",
 		databaseExecutor.ExecuteDatabaseQuery,
