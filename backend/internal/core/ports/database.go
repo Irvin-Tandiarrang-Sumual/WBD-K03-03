@@ -14,3 +14,8 @@ type DatabaseRepository interface {
 
 	FindByID(ctx context.Context, id uint) (domain.Database, error)
 }
+
+type DatabaseCredentialCipher interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(ciphertext string) (string, error)
+}
