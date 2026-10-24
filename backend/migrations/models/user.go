@@ -16,6 +16,11 @@ type User struct {
 	Groups   []Group   `gorm:"many2many:user_groups;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
+type UserGroup struct {
+	UserID  uint `gorm:"primaryKey`
+	GroupID uint `gorm:"primaryKey`
+}
+
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
 	if u.hasGroupIDs() {
 		return domain.ErrUserMustHaveGroup

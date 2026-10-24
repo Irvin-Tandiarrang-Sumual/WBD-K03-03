@@ -22,11 +22,27 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := db.SetupJoinTable(
+		&models.User{},
+		"Groups",
+		&models.UserGroup{},
+	); err != nil {
+		return err
+	}
+	if err := db.SetupJoinTable(
+		&models.Group{},
+		"Users",
+		&models.UserGroup{},
+	); err != nil {
+		return err
+	}
+
 	return db.AutoMigrate(
 		&models.Database{},
 		&models.Group{},
 		&models.GroupDatabase{},
 		&models.User{},
+		&models.UserGroup{},
 		&models.Session{},
 		&models.Migration{},
 	)
