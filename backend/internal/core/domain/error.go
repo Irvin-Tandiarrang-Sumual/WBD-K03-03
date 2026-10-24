@@ -15,4 +15,5 @@ var (
 	ErrMembershipExists      = errors.New("User is already a group member")
 	ErrMembershipNotFound    = errors.New("User is not a group member")
 	ErrDatabaseAccessDenied  = errors.New("Database access denied")
+	ErrDatabaseAlreadyExists = errors.New("Database already registered")
 )
