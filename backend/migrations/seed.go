@@ -64,56 +64,118 @@ func seedDatabases(tx *gorm.DB) (map[string]models.Database, error) {
 	return databases, nil
 }
 
-func seedGroups(tx *gorm.DB, databases map[string]models.Database) (map[string]models.Group, error) {
+type groupDatabaseAccessSeed struct {
+	database   models.Database
+	accessType string
+}
+
+func seedGroups(
+	tx *gorm.DB,
+	databases map[string]models.Database,
+) (map[string]models.Group, error) {
 	groupSeeds := []struct {
-		key        string
-		accessType string
-		databases  []models.Database
+		key      string
+		name     string
+		accesses []groupDatabaseAccessSeed
 	}{
 		{
-			key:        "admin",
-			accessType: "view_edit",
-			databases: []models.Database{
-				databases[databaseKey(5432)],
-				databases[databaseKey(3306)],
+			key:  "admin",
+			name: "admin",
+			accesses: []groupDatabaseAccessSeed{
+				{
+					database:   databases[databaseKey(5432)],
+					accessType: "view_edit",
+				},
+				{
+					database:   databases[databaseKey(3306)],
+					accessType: "view_edit",
+				},
 			},
 		},
 		{
-			key:        "user",
-			accessType: "view_only",
-			databases: []models.Database{
-				databases[databaseKey(5432)],
-				databases[databaseKey(3306)],
+			key:  "user",
+			name: "user",
+			accesses: []groupDatabaseAccessSeed{
+				{
+					database:   databases[databaseKey(5432)],
+					accessType: "view_only",
+				},
+				{
+					database:   databases[databaseKey(3306)],
+					accessType: "view_only",
+				},
 			},
 		},
 	}
 
 	groups := make(map[string]models.Group, len(groupSeeds))
+
 	for _, groupSeed := range groupSeeds {
 		var group models.Group
-		err := tx.Where("access_type = ? AND database_id = ?",
-			groupSeed.accessType,
-			groupSeed.databases[0].ID,
+
+		err := tx.Where(
+			"name = ?",
+			groupSeed.name,
 		).First(&group).Error
+
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			group = models.Group{
-				AccessType: groupSeed.accessType,
-				Databases:  groupSeed.databases,
+				Name: groupSeed.name,
 			}
 			err = tx.Create(&group).Error
 		}
+
 		if err != nil {
-			return nil, fmt.Errorf("seeding %s group: %w", groupSeed.key, err)
+			return nil, fmt.Errorf(
+				"seeding %s group: %w",
+				groupSeed.key,
+				err,
+			)
 		}
 
-		if err := tx.Model(&group).Association("Databases").Replace(groupSeed.databases); err != nil {
-			return nil, fmt.Errorf("syncing databases for %s group: %w", groupSeed.key, err)
+		if err := replaceGroupDatabaseAccesses(
+			tx,
+			group.ID,
+			groupSeed.accesses,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"syncing database accesses for %s group: %w",
+				groupSeed.key,
+				err,
+			)
 		}
 
 		groups[groupSeed.key] = group
 	}
 
 	return groups, nil
+}
+
+func replaceGroupDatabaseAccesses(
+	tx *gorm.DB,
+	groupID uint,
+	accesses []groupDatabaseAccessSeed,
+) error {
+	if err := tx.Where(
+		"group_id = ?",
+		groupID,
+	).Delete(&models.GroupDatabase{}).Error; err != nil {
+		return err
+	}
+
+	for _, access := range accesses {
+		relation := models.GroupDatabase{
+			GroupID:    groupID,
+			DatabaseID: access.database.ID,
+			AccessType: access.accessType,
+		}
+
+		if err := tx.Create(&relation).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func seedUsers(tx *gorm.DB, groups map[string]models.Group) error {
