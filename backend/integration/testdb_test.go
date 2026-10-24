@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/migrations"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/migrations"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

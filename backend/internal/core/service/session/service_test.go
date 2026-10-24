@@ -26,7 +26,7 @@ func TestCreateBuildsOpaqueSession(t *testing.T) {
 		},
 	}
 
-	service := sessionservice.NewService(repo)
+	service := 	sessionservice.NewSessionService(repo)
 
 	session, err := service.Create(
 		context.Background(),
@@ -106,7 +106,7 @@ func TestResolveValidSessionTouchesLastActive(t *testing.T) {
 		},
 	}
 
-	service := sessionservice.NewService(repo)
+	service := 	sessionservice.NewSessionService(repo)
 
 	got, err := service.Resolve(
 		context.Background(),
@@ -159,7 +159,7 @@ func TestResolveRejectsIdleExpiredSession(t *testing.T) {
 		},
 	}
 
-	service := sessionservice.NewService(repo)
+	service := sessionservice.NewSessionService(repo)
 
 	_, err := service.Resolve(
 		context.Background(),
@@ -212,7 +212,7 @@ func TestResolveRejectsAbsoluteExpiredSession(t *testing.T) {
 		},
 	}
 
-	service := sessionservice.NewService(repo)
+	service := sessionservice.NewSessionService(repo)
 
 	_, err := service.Resolve(
 		context.Background(),
@@ -228,7 +228,7 @@ func TestResolveRejectsAbsoluteExpiredSession(t *testing.T) {
 }
 
 func TestResolveRejectsEmptyToken(t *testing.T) {
-	service := sessionservice.NewService(
+	service := sessionservice.NewSessionService(
 		&testutil.SessionRepository{},
 	)
 
@@ -267,7 +267,7 @@ func TestRevokeAndRevokeUser(t *testing.T) {
 		},
 	}
 
-	service := sessionservice.NewService(repo)
+	service := sessionservice.NewSessionService(repo)
 
 	if err := service.Revoke(
 		context.Background(),

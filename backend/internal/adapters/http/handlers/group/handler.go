@@ -10,15 +10,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
+type GroupHandler struct {
 	service ports.GroupService
 }
 
-func NewHandler(service ports.GroupService) *Handler {
-	return &Handler{service: service}
+func NewGroupHandler(service ports.GroupService) *GroupHandler {
+	return &GroupHandler{service: service}
 }
 
-func (h *Handler) List(c *gin.Context) {
+func (h *GroupHandler) List(c *gin.Context) {
 	groups, err := h.service.List(c.Request.Context())
 	if err != nil {
 		writeError(c, err)
@@ -34,7 +34,7 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *Handler) Get(c *gin.Context) {
+func (h *GroupHandler) Get(c *gin.Context) {
 	groupID, err := parseID(c, "groupId")
 	if err != nil {
 		writeError(c, err)
@@ -50,7 +50,7 @@ func (h *Handler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, toGroupResponse(group))
 }
 
-func (h *Handler) Create(c *gin.Context) {
+func (h *GroupHandler) Create(c *gin.Context) {
 	var request CreateGroupRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -72,7 +72,7 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, toGroupResponse(group))
 }
 
-func (h *Handler) Update(c *gin.Context) {
+func (h *GroupHandler) Update(c *gin.Context) {
 	groupID, err := parseID(c, "groupId")
 	if err != nil {
 		writeError(c, err)
@@ -104,7 +104,7 @@ func (h *Handler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, toGroupResponse(group))
 }
 
-func (h *Handler) Delete(c *gin.Context) {
+func (h *GroupHandler) Delete(c *gin.Context) {
 	groupID, err := parseID(c, "groupId")
 	if err != nil {
 		writeError(c, err)
@@ -119,7 +119,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *Handler) AddUser(c *gin.Context) {
+func (h *GroupHandler) AddUser(c *gin.Context) {
 	groupID, err := parseID(c, "groupId")
 	if err != nil {
 		writeError(c, err)
@@ -140,7 +140,7 @@ func (h *Handler) AddUser(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *Handler) RemoveUser(c *gin.Context) {
+func (h *GroupHandler) RemoveUser(c *gin.Context) {
 	groupID, err := parseID(c, "groupId")
 	if err != nil {
 		writeError(c, err)

@@ -1,4 +1,4 @@
-package models
+package model
 
 import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -6,8 +6,7 @@ import (
 )
 
 type User struct {
-	ID uint `gorm:"primaryKey"`
-
+	ID       uint   `gorm:"primaryKey"`
 	Username string `gorm:"unique;not null"`
 	Password string `gorm:"not null"`
 	Role     string `gorm:"type:text;check:role IN ('user', 'admin');default:user"`
@@ -42,10 +41,8 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 		Count(&countInDB).Error; err != nil {
 		return err
 	}
-
 	if int(countInDB) != len(inputIDs) {
 		return domain.ErrInvalidGroupsIDs
 	}
-
 	return nil
 }

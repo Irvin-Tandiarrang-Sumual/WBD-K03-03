@@ -9,20 +9,20 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 )
 
-type Service struct {
+type groupService struct {
 	groups    ports.GroupRepository
 	users     ports.UserRepository
 	databases ports.DatabaseRepository
 	sessions  ports.SessionService
 }
 
-func NewService(
+func NewGroupService(
 	groups ports.GroupRepository,
 	users ports.UserRepository,
 	databases ports.DatabaseRepository,
 	sessions ports.SessionService,
-) *Service {
-	return &Service{
+) ports.GroupService {
+	return &groupService{
 		groups:    groups,
 		users:     users,
 		databases: databases,
@@ -30,15 +30,15 @@ func NewService(
 	}
 }
 
-func (s *Service) List(ctx context.Context) ([]domain.Group, error) {
+func (s *groupService) List(ctx context.Context) ([]domain.Group, error) {
 	return s.groups.List(ctx)
 }
 
-func (s *Service) Get(ctx context.Context, id uint) (domain.Group, error) {
+func (s *groupService) Get(ctx context.Context, id uint) (domain.Group, error) {
 	return s.groups.FindByID(ctx, id)
 }
 
-func (s *Service) Create(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
+func (s *groupService) Create(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
 	
 	input.Name = strings.TrimSpace(input.Name)
 
@@ -66,7 +66,7 @@ func (s *Service) Create(ctx context.Context, input domain.CreateGroupInput) (do
 	return s.groups.Create(ctx, group)
 }
 
-func (s *Service) Update(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
+func (s *groupService) Update(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
 	
 	current, err := s.groups.FindByID(ctx, id)
 	if err != nil {
@@ -120,7 +120,7 @@ func (s *Service) Update(ctx context.Context, id uint, input domain.UpdateGroupI
 	return updated, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id uint) error {
+func (s *groupService) Delete(ctx context.Context, id uint) error {
 	
 	if _, err := s.groups.FindByID(ctx, id); err != nil {
 		return err
@@ -154,7 +154,7 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 	return s.revokeUsers(ctx, userIDs)
 }
 
-func (s *Service) AddUser(ctx context.Context, groupID uint, userID uint) error {
+func (s *groupService) AddUser(ctx context.Context, groupID uint, userID uint) error {
 	
 	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
 		return err
@@ -170,7 +170,7 @@ func (s *Service) AddUser(ctx context.Context, groupID uint, userID uint) error 
 	return s.sessions.RevokeUser(ctx, userID)
 }
 
-func (s *Service) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+func (s *groupService) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
 	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (s *Service) RemoveUser(ctx context.Context, groupID uint, userID uint) err
 	return s.sessions.RevokeUser(ctx, userID)
 }
 
-func (s *Service) EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
+func (s *groupService) EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
 	accesses, err := s.groups.ListAccessTypes(ctx, userID, databaseID)
 	if err != nil {
 		return "", err
@@ -228,7 +228,7 @@ func (s *Service) EffectiveDatabaseAccess(ctx context.Context, userID uint, data
 	return effective, nil
 }
 
-func (s *Service) revokeUsers(ctx context.Context, userIDs []uint) error {
+func (s *groupService) revokeUsers(ctx context.Context, userIDs []uint) error {
 	for _, userID := range userIDs {
 		err := s.sessions.RevokeUser(ctx, userID)
 		if err != nil {

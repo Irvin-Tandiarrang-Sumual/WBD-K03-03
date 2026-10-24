@@ -1,4 +1,4 @@
-package models
+package model
 
 type Database struct {
 	ID       uint   `gorm:"primaryKey"`

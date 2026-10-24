@@ -9,31 +9,31 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Service struct {
+type userService struct {
 	users    ports.UserRepository
 	groups   ports.GroupRepository
 	sessions ports.SessionService
 }
 
-var _ ports.UserService = (*Service)(nil)
+var _ ports.UserService = (*userService)(nil)
 
-func NewService(users ports.UserRepository, groups ports.GroupRepository, sessions ports.SessionService) *Service {
-	return &Service{
+func NewUserService(users ports.UserRepository, groups ports.GroupRepository, sessions ports.SessionService) ports.UserService {
+	return &userService{
 		users:    users,
 		groups:   groups,
 		sessions: sessions,
 	}
 }
 
-func (s *Service) List(ctx context.Context) ([]domain.User, error) {
+func (s *userService) List(ctx context.Context) ([]domain.User, error) {
 	return s.users.List(ctx)
 }
 
-func (s *Service) Get(ctx context.Context, id uint) (domain.User, error) {
+func (s *userService) Get(ctx context.Context, id uint) (domain.User, error) {
 	return s.users.FindByID(ctx, id)
 }
 
-func (s *Service) Create(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
+func (s *userService) Create(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
 	username := strings.TrimSpace(input.Username)
 
 	if username == "" ||
@@ -72,7 +72,7 @@ func (s *Service) Create(ctx context.Context, input domain.CreateUserInput) (dom
 	)
 }
 
-func (s *Service) Update(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error) {
+func (s *userService) Update(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error) {
 	if _, err := s.users.FindByID(ctx, id); err != nil {
 		return domain.User{}, err
 	}
@@ -124,7 +124,7 @@ func (s *Service) Update(ctx context.Context, id uint, input domain.UpdateUserIn
 	return updated, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id uint) error {
+func (s *userService) Delete(ctx context.Context, id uint) error {
 	if _, err := s.users.FindByID(ctx, id); err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 	return s.sessions.RevokeUser(ctx, id)
 }
 
-func (s *Service) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
+func (s *userService) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
 	role = strings.ToLower(strings.TrimSpace(role))
 
 	if role != domain.RoleUser && role != domain.RoleAdmin {

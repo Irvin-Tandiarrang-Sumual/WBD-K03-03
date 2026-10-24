@@ -10,15 +10,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
+type UserHandler struct {
 	service ports.UserService
 }
 
-func NewHandler(service ports.UserService) *Handler {
-	return &Handler{service: service}
+func NewUserHandler(service ports.UserService) *UserHandler {
+	return &UserHandler{service: service}
 }
 
-func (h *Handler) List(c *gin.Context) {
+func (h *UserHandler) List(c *gin.Context) {
 	users, err := h.service.List(c.Request.Context())
 	if err != nil {
 		writeError(c, err)
@@ -34,7 +34,7 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *Handler) Get(c *gin.Context) {
+func (h *UserHandler) Get(c *gin.Context) {
 	userID, err := parseID(c, "userId")
 	if err != nil {
 		writeError(c, err)
@@ -50,7 +50,7 @@ func (h *Handler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, toUserResponse(user))
 }
 
-func (h *Handler) Create(c *gin.Context) {
+func (h *UserHandler) Create(c *gin.Context) {
 	var request CreateUserRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -73,7 +73,7 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, toUserResponse(createdUser))
 }
 
-func (h *Handler) Update(c *gin.Context) {
+func (h *UserHandler) Update(c *gin.Context) {
 	userID, err := parseID(c, "userId")
 	if err != nil {
 		writeError(c, err)
@@ -101,7 +101,7 @@ func (h *Handler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, toUserResponse(updatedUser))
 }
 
-func (h *Handler) Delete(c *gin.Context) {
+func (h *UserHandler) Delete(c *gin.Context) {
 	userID, err := parseID(c, "userId")
 	if err != nil {
 		writeError(c, err)
@@ -116,7 +116,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *Handler) SetRole(c *gin.Context) {
+func (h *UserHandler) SetRole(c *gin.Context) {
 	userID, err := parseID(c, "userId")
 	if err != nil {
 		writeError(c, err)

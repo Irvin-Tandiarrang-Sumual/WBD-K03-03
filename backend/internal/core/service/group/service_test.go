@@ -45,7 +45,7 @@ func TestCreateNormalizesAndSortsDatabaseAccesses(t *testing.T) {
 		},
 	}
 
-	service := groupservice.NewService(
+	service := 	groupservice.NewGroupService(
 		groups,
 		&testutil.UserRepository{},
 		databases,
@@ -91,7 +91,7 @@ func TestCreateNormalizesAndSortsDatabaseAccesses(t *testing.T) {
 }
 
 func TestCreateRequiresAtLeastOneDatabase(t *testing.T) {
-	service := groupservice.NewService(
+	service := groupservice.NewGroupService(
 		&testutil.GroupRepository{},
 		&testutil.UserRepository{},
 		&testutil.DatabaseRepository{},
@@ -130,7 +130,7 @@ func TestEffectiveDatabaseAccessUsesMaximumPrivilege(t *testing.T) {
 		},
 	}
 
-	service := groupservice.NewService(
+	service := groupservice.NewGroupService(
 		groups,
 		&testutil.UserRepository{},
 		&testutil.DatabaseRepository{},
@@ -170,7 +170,7 @@ func TestEffectiveDatabaseAccessDeniesMissingGrant(t *testing.T) {
 		},
 	}
 
-	service := groupservice.NewService(
+	service := groupservice.NewGroupService(
 		groups,
 		&testutil.UserRepository{},
 		&testutil.DatabaseRepository{},
@@ -233,7 +233,7 @@ func TestAddUserRevokesSession(t *testing.T) {
 		},
 	}
 
-	service := groupservice.NewService(
+	service := groupservice.NewGroupService(
 		groups,
 		users,
 		&testutil.DatabaseRepository{},
@@ -294,7 +294,7 @@ func TestRemoveUserPreventsRegularUserFromLosingLastGroup(t *testing.T) {
 		},
 	}
 
-	service := groupservice.NewService(
+	service := groupservice.NewGroupService(
 		groups,
 		users,
 		&testutil.DatabaseRepository{},
@@ -374,7 +374,7 @@ func TestUpdateAccessRevokesAllGroupMembers(t *testing.T) {
 		},
 	}
 
-	service := groupservice.NewService(
+	service := groupservice.NewGroupService(
 		groups,
 		&testutil.UserRepository{},
 		databases,

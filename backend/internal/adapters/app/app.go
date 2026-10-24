@@ -29,7 +29,7 @@ import (
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
 
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/migrations"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/migrations"
 	"github.com/gin-gonic/gin"
 )
 
@@ -86,46 +86,46 @@ func Run() {
 		}
 	}()
 
-	userRepository := userrepository.NewRepository(
+	userRepository := userrepository.NewUserRepository(
 		db,
 	)
 
-	groupRepository := grouprepository.NewRepository(
+	groupRepository := grouprepository.NewGroupRepository(
 		db,
 	)
 
-	databaseRepository := databaserepository.NewRepository(
+	databaseRepository := databaserepository.NewDatabaseRepository(
 		db,
 		credentialCipher,
 	)
 
-	sessionRepository := sessionrepository.NewRepository(
+	sessionRepository := sessionrepository.NewSessionRepository(
 		db,
 	)
 
-	sessionService := sessionservice.NewService(
+	sessionService := sessionservice.NewSessionService(
 		sessionRepository,
 	)
 
-	authService := authservice.NewService(
+	authService := authservice.NewAuthService(
 		userRepository,
 		sessionService,
 	)
 
-	userService := userservice.NewService(
+	userService := userservice.NewUserService(
 		userRepository,
 		groupRepository,
 		sessionService,
 	)
 
-	groupService := groupservice.NewService(
+	groupService := groupservice.NewGroupService(
 		groupRepository,
 		userRepository,
 		databaseRepository,
 		sessionService,
 	)
 
-	databaseService := databaseservice.NewService(
+	databaseService := databaseservice.NewDatabaseService(
 		databaseRepository,
 		connectionTester,
 		groupRepository,
@@ -133,20 +133,20 @@ func Run() {
 		poolManager,
 	)
 
-	authHandler := authhandler.NewHandler(
+	authHandler := authhandler.NewAuthHandler(
 		authService,
 		cfg.Session.CookieSecure,
 	)
 
-	userHandler := userhandler.NewHandler(
+	userHandler := userhandler.NewUserHandler(
 		userService,
 	)
 
-	groupHandler := grouphandler.NewHandler(
+	groupHandler := grouphandler.NewGroupHandler(
 		groupService,
 	)
 
-	databaseHandler := databasehandler.NewHandler(
+	databaseHandler := databasehandler.NewDatabaseHandler(
 		databaseService,
 	)
 

@@ -47,7 +47,7 @@ func TestCreateHashesPasswordAndCreatesRegularUser(t *testing.T) {
 		},
 	}
 
-	service := userservice.NewService(
+	service := 	userservice.NewUserService(
 		users,
 		groups,
 		sessions,
@@ -112,7 +112,7 @@ func TestCreateRejectsInvalidGroupIDs(t *testing.T) {
 		},
 	}
 
-	service := userservice.NewService(
+	service := userservice.NewUserService(
 		users,
 		groups,
 		&testutil.SessionService{},
@@ -195,7 +195,7 @@ func TestUpdatePasswordRevokesSessions(t *testing.T) {
 		},
 	}
 
-	service := userservice.NewService(
+	service := userservice.NewUserService(
 		users,
 		&testutil.GroupRepository{},
 		sessions,
@@ -258,7 +258,7 @@ func TestSetRoleRevokesSessions(t *testing.T) {
 		},
 	}
 
-	service := userservice.NewService(
+	service := userservice.NewUserService(
 		users,
 		&testutil.GroupRepository{},
 		sessions,
@@ -284,7 +284,7 @@ func TestSetRoleRevokesSessions(t *testing.T) {
 }
 
 func TestSetRoleRejectsInvalidRole(t *testing.T) {
-	service := userservice.NewService(
+	service := userservice.NewUserService(
 		&testutil.UserRepository{},
 		&testutil.GroupRepository{},
 		&testutil.SessionService{},
@@ -326,7 +326,7 @@ func TestSetRoleRejectsRegularUserWithoutGroup(t *testing.T) {
 		},
 	}
 
-	service := userservice.NewService(
+	service := userservice.NewUserService(
 		users,
 		groups,
 		&testutil.SessionService{},

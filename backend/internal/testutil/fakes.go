@@ -6,6 +6,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
 // Setiap fake meng-embed interface aslinya. Method yang benar-benar dibutuhkan
@@ -117,10 +118,50 @@ func (f *GroupRepository) HasGroupWithOnlyDatabase(ctx context.Context, database
 
 type DatabaseRepository struct {
 	ports.DatabaseRepository
+	FindByIdFunc  func(context.Context, uint) (*domain.Database, error)
+	FindAllFunc   func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	SaveFunc      func(context.Context, *domain.Database) (*domain.Database, error)
+	FindAllByUserIDFunc func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	FindByIDAndUserIDFunc func(context.Context, uint, uint) (*domain.Database, error)
 	FindByIDFunc  func(context.Context, uint) (domain.Database, error)
 	ExistsAllFunc func(context.Context, []uint) (bool, error)
 	CreateFunc    func(context.Context, domain.Database) (domain.Database, error)
 	DeleteFunc    func(context.Context, uint) error
+}
+
+func (f *DatabaseRepository) FindById(ctx context.Context, id uint) (*domain.Database, error) {
+	if f.FindByIdFunc != nil {
+		return f.FindByIdFunc(ctx, id)
+	}
+	database, err := f.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &database, nil
+}
+
+func (f *DatabaseRepository) FindAll(ctx context.Context, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
+	return f.FindAllFunc(ctx, params)
+}
+
+func (f *DatabaseRepository) Save(ctx context.Context, database *domain.Database) (*domain.Database, error) {
+	return f.SaveFunc(ctx, database)
+}
+
+func (f *DatabaseRepository) FindAllByUserID(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
+	return f.FindAllByUserIDFunc(ctx, userID, params)
+}
+
+func (f *DatabaseRepository) FindByIDAndUserID(ctx context.Context, databaseID uint, userID uint) (*domain.Database, error) {
+	return f.FindByIDAndUserIDFunc(ctx, databaseID, userID)
+}
+
+func (f *DatabaseRepository) FindWithCredentialByID(ctx context.Context, id uint) (domain.Database, error) {
+	database, err := f.FindById(ctx, id)
+	if err != nil {
+		return domain.Database{}, err
+	}
+	return *database, nil
 }
 
 func (f *DatabaseRepository) FindByID(ctx context.Context, id uint) (domain.Database, error) {
@@ -133,6 +174,14 @@ func (f *DatabaseRepository) ExistsAll(ctx context.Context, ids []uint) (bool, e
 
 func (f *DatabaseRepository) Create(ctx context.Context, database domain.Database) (domain.Database, error) {
 	return f.CreateFunc(ctx, database)
+}
+
+func (f *DatabaseRepository) CreateDatabase(ctx context.Context, database *domain.Database) (*domain.Database, error) {
+	createdDatabase, err := f.Create(ctx, *database)
+	if err != nil {
+		return nil, err
+	}
+	return &createdDatabase, nil
 }
 
 func (f *DatabaseRepository) Delete(ctx context.Context, id uint) error {

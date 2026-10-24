@@ -11,19 +11,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
+type AuthHandler struct {
 	service      ports.AuthService
 	secureCookie bool
 }
 
-func NewHandler(service ports.AuthService, secureCookie bool) *Handler {
-	return &Handler{
+func NewAuthHandler(service ports.AuthService, secureCookie bool) *AuthHandler {
+	return &AuthHandler{
 		service:      service,
 		secureCookie: secureCookie,
 	}
 }
 
-func (h *Handler) Login(c *gin.Context) {
+func (h *AuthHandler) Login(c *gin.Context) {
 	var request LoginRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -72,7 +72,7 @@ func (h *Handler) Login(c *gin.Context) {
 	})
 }
 
-func (h *Handler) Logout(c *gin.Context) {
+func (h *AuthHandler) Logout(c *gin.Context) {
 	opaqueToken, err := c.Cookie(middleware.SessionCookieName)
 
 	if err == nil && opaqueToken != "" {

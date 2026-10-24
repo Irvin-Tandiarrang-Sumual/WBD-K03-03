@@ -12,10 +12,10 @@ import (
 
 func SetUpRouter(
 	r *gin.Engine,
-	auth *authhandler.Handler,
-	users *userhandler.Handler,
-	groups *grouphandler.Handler,
-	databases *databasehandler.Handler,
+	auth *authhandler.AuthHandler,
+	users *userhandler.UserHandler,
+	groups *grouphandler.GroupHandler,
+	databases *databasehandler.DatabaseHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
 ) {
@@ -104,21 +104,21 @@ func SetUpRouter(
 
 	adminDatabases.GET(
 		"",
-		databases.List,
+		databases.GetAllDatabases,
 	)
 
 	adminDatabases.GET(
 		"/:databaseId",
-		databases.Get,
+		databases.GetDatabaseByID,
 	)
 
 	adminDatabases.POST(
 		"",
-		databases.Create,
+		databases.CreateDatabase,
 	)
 
 	adminDatabases.DELETE(
 		"/:databaseId",
-		databases.Delete,
+		databases.DeleteDatabase,
 	)
 }

@@ -52,7 +52,7 @@ func TestLoginSuccess(t *testing.T) {
 		},
 	}
 
-	service := authservice.NewService(users, sessions)
+	service := 	authservice.NewAuthService(users, sessions)
 
 	user, session, err := service.Login(
 		context.Background(),
@@ -111,7 +111,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 		},
 	}
 
-	service := authservice.NewService(users, sessions)
+	service := authservice.NewAuthService(users, sessions)
 
 	_, _, err := service.Login(
 		context.Background(),
@@ -152,7 +152,7 @@ func TestLoginHidesUnknownUsername(t *testing.T) {
 		},
 	}
 
-	service := authservice.NewService(users, sessions)
+	service := authservice.NewAuthService(users, sessions)
 
 	_, _, err := service.Login(
 		context.Background(),
@@ -181,7 +181,7 @@ func TestLogoutRevokesCurrentToken(t *testing.T) {
 		},
 	}
 
-	service := authservice.NewService(
+	service := authservice.NewAuthService(
 		&testutil.UserRepository{},
 		sessions,
 	)

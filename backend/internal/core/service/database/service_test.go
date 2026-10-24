@@ -39,7 +39,7 @@ func TestCreateValidatesTestsConnectionThenPersists(t *testing.T) {
 		},
 	}
 
-	service := databaseservice.NewService(
+	service := 	databaseservice.NewDatabaseService(
 		databases,
 		tester,
 		&testutil.GroupRepository{},
@@ -47,9 +47,9 @@ func TestCreateValidatesTestsConnectionThenPersists(t *testing.T) {
 		&testutil.DatabasePoolInvalidator{},
 	)
 
-	created, err := service.Create(
+	created, err := 	service.CreateDatabase(
 		context.Background(),
-		domain.CreateDatabaseInput{
+		&domain.CreateDatabaseInput{
 			Port:     5432,
 			Host:     " localhost ",
 			User:     " postgres ",
@@ -112,7 +112,7 @@ func TestCreateStopsWhenConnectionTestFails(t *testing.T) {
 		},
 	}
 
-	service := databaseservice.NewService(
+	service := databaseservice.NewDatabaseService(
 		databases,
 		tester,
 		&testutil.GroupRepository{},
@@ -120,9 +120,9 @@ func TestCreateStopsWhenConnectionTestFails(t *testing.T) {
 		&testutil.DatabasePoolInvalidator{},
 	)
 
-	_, err := service.Create(
+	_, err := 	service.CreateDatabase(
 		context.Background(),
-		domain.CreateDatabaseInput{
+		&domain.CreateDatabaseInput{
 			Port: 5432,
 			Host: "localhost",
 			User: "postgres",
@@ -158,7 +158,7 @@ func TestCreateRejectsInvalidInputBeforeConnectionTest(t *testing.T) {
 		},
 	}
 
-	service := databaseservice.NewService(
+	service := databaseservice.NewDatabaseService(
 		&testutil.DatabaseRepository{},
 		tester,
 		&testutil.GroupRepository{},
@@ -166,9 +166,9 @@ func TestCreateRejectsInvalidInputBeforeConnectionTest(t *testing.T) {
 		&testutil.DatabasePoolInvalidator{},
 	)
 
-	_, err := service.Create(
+	_, err := 	service.CreateDatabase(
 		context.Background(),
-		domain.CreateDatabaseInput{
+		&domain.CreateDatabaseInput{
 			Port: 0,
 			Host: "localhost",
 			User: "postgres",
@@ -211,7 +211,7 @@ func TestDeleteRejectsDatabaseThatWouldLeaveGroupEmpty(t *testing.T) {
 		},
 	}
 
-	service := databaseservice.NewService(
+	service := databaseservice.NewDatabaseService(
 		databases,
 		&testutil.DatabaseConnectionTester{},
 		groups,
@@ -219,7 +219,7 @@ func TestDeleteRejectsDatabaseThatWouldLeaveGroupEmpty(t *testing.T) {
 		&testutil.DatabasePoolInvalidator{},
 	)
 
-	err := service.Delete(
+	err := 	service.DeleteDatabase(
 		context.Background(),
 		9,
 	)
@@ -301,7 +301,7 @@ func TestDeleteInvalidatesPoolDeletesAndRevokesAffectedUsers(t *testing.T) {
 		},
 	}
 
-	service := databaseservice.NewService(
+	service := databaseservice.NewDatabaseService(
 		databases,
 		&testutil.DatabaseConnectionTester{},
 		groups,
@@ -309,7 +309,7 @@ func TestDeleteInvalidatesPoolDeletesAndRevokesAffectedUsers(t *testing.T) {
 		pools,
 	)
 
-	if err := service.Delete(
+	if err := 	service.DeleteDatabase(
 		context.Background(),
 		9,
 	); err != nil {

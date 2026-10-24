@@ -22,33 +22,33 @@ import (
 func authRouter(db *gorm.DB) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
-	userRepo := userrepository.NewRepository(db)
+	userRepo := 	userrepository.NewUserRepository(db)
 
-	groupRepo := grouprepository.NewRepository(db)
+	groupRepo := 	grouprepository.NewGroupRepository(db)
 
-	sessionRepo := sessionrepository.NewRepository(db)
+	sessionRepo := 	sessionrepository.NewSessionRepository(db)
 
-	sessionService := sessionservice.NewService(
+	sessionService := 	sessionservice.NewSessionService(
 		sessionRepo,
 	)
 
-	authService := authservice.NewService(
+	authService := 	authservice.NewAuthService(
 		userRepo,
 		sessionService,
 	)
 
-	userService := userservice.NewService(
+	userService := 	userservice.NewUserService(
 		userRepo,
 		groupRepo,
 		sessionService,
 	)
 
-	authHandler := authhandler.NewHandler(
+	authHandler := 	authhandler.NewAuthHandler(
 		authService,
 		false,
 	)
 
-	userHandler := userhandler.NewHandler(
+	userHandler := 	userhandler.NewUserHandler(
 		userService,
 	)
 

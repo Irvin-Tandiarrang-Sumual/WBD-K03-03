@@ -10,21 +10,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Service struct {
+type authService struct {
 	users    ports.UserRepository
 	sessions ports.SessionService
 }
 
-var _ ports.AuthService = (*Service)(nil)
+var _ ports.AuthService = (*authService)(nil)
 
-func NewService(users ports.UserRepository, sessions ports.SessionService) *Service {
-	return &Service{
+func NewAuthService(users ports.UserRepository, sessions ports.SessionService) ports.AuthService {
+	return &authService{
 		users:    users,
 		sessions: sessions,
 	}
 }
 
-func (s *Service) Login(ctx context.Context, username string, password string) (domain.User, domain.Session, error) {
+func (s *authService) Login(ctx context.Context, username string, password string) (domain.User, domain.Session, error) {
 	username = strings.TrimSpace(username)
 
 	if username == "" || password == "" {
@@ -54,6 +54,6 @@ func (s *Service) Login(ctx context.Context, username string, password string) (
 	return user, session, nil
 }
 
-func (s *Service) Logout(ctx context.Context, opaqueToken string) error {
+func (s *authService) Logout(ctx context.Context, opaqueToken string) error {
 	return s.sessions.Revoke(ctx, opaqueToken)
 }

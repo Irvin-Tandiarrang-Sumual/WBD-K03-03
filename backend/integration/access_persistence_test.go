@@ -12,7 +12,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/migrations/models"
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 )
 
 func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
@@ -85,20 +85,20 @@ func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	groupRepo := grouprepository.NewRepository(db)
+	groupRepo := 	grouprepository.NewGroupRepository(db)
 
-	userRepo := userrepository.NewRepository(db)
+	userRepo := 	userrepository.NewUserRepository(db)
 
-	databaseRepo := databaserepository.NewRepository(
+	databaseRepo := 	databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)
 
-	sessionService := sessionservice.NewService(
-		sessionrepository.NewRepository(db),
+	sessionService := 	sessionservice.NewSessionService(
+		sessionrepository.NewSessionRepository(db),
 	)
 
-	service := groupservice.NewService(
+	service := 	groupservice.NewGroupService(
 		groupRepo,
 		userRepo,
 		databaseRepo,
@@ -143,7 +143,7 @@ func TestIntegrationGroupFindByIDLoadsAllDatabaseAccesses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	groupRepo := grouprepository.NewRepository(db)
+	groupRepo := 	grouprepository.NewGroupRepository(db)
 
 	group, err := groupRepo.FindByID(
 		context.Background(),
@@ -181,14 +181,14 @@ func TestIntegrationDatabaseCredentialIsEncryptedAtRest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repo := databaserepository.NewRepository(
+	repo := 	databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)
 
-	created, err := repo.Create(
+	created, err := repo.CreateDatabase(
 		ctx,
-		domain.Database{
+		&domain.Database{
 			Port:     15432,
 			Host:     "localhost",
 			User:     "postgres",

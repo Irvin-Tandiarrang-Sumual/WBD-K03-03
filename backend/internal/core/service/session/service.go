@@ -19,19 +19,19 @@ const (
 	sessionTokenBytes = 32
 )
 
-type Service struct {
+type sessionService struct {
 	sessions ports.SessionRepository
 }
 
-var _ ports.SessionService = (*Service)(nil)
+var _ ports.SessionService = (*sessionService)(nil)
 
-func NewService(sessions ports.SessionRepository) *Service {
-	return &Service{
+func NewSessionService(sessions ports.SessionRepository) ports.SessionService {
+	return &sessionService{
 		sessions: sessions,
 	}
 }
 
-func (s *Service) Create(ctx context.Context, userID uint) (domain.Session, error) {
+func (s *sessionService) Create(ctx context.Context, userID uint) (domain.Session, error) {
 	opaqueToken, err := generateOpaqueToken()
 	if err != nil {
 		return domain.Session{}, err
@@ -50,7 +50,7 @@ func (s *Service) Create(ctx context.Context, userID uint) (domain.Session, erro
 	return s.sessions.Create(ctx, session)
 }
 
-func (s *Service) Resolve(ctx context.Context, opaqueToken string) (domain.Session, error) {
+func (s *sessionService) Resolve(ctx context.Context, opaqueToken string) (domain.Session, error) {
 	opaqueToken = strings.TrimSpace(opaqueToken)
 
 	if opaqueToken == "" {
@@ -89,7 +89,7 @@ func (s *Service) Resolve(ctx context.Context, opaqueToken string) (domain.Sessi
 	return session, nil
 }
 
-func (s *Service) Revoke(ctx context.Context, opaqueToken string) error {
+func (s *sessionService) Revoke(ctx context.Context, opaqueToken string) error {
 	if strings.TrimSpace(opaqueToken) == "" {
 		return nil
 	}
@@ -97,7 +97,7 @@ func (s *Service) Revoke(ctx context.Context, opaqueToken string) error {
 	return s.sessions.DeleteByToken(ctx, opaqueToken)
 }
 
-func (s *Service) RevokeUser(ctx context.Context, userID uint) error {
+func (s *sessionService) RevokeUser(ctx context.Context, userID uint) error {
 	return s.sessions.DeleteByUserID(ctx, userID)
 }
 

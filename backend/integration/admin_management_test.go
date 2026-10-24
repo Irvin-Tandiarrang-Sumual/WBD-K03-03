@@ -14,7 +14,7 @@ import (
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/migrations/models"
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 )
 
 func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
@@ -34,26 +34,26 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	userRepo := userrepository.NewRepository(db)
+	userRepo := 	userrepository.NewUserRepository(db)
 
-	groupRepo := grouprepository.NewRepository(db)
+	groupRepo := 	grouprepository.NewGroupRepository(db)
 
-	databaseRepo := databaserepository.NewRepository(
+	databaseRepo := 	databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)
 
-	sessionService := sessionservice.NewService(
-		sessionrepository.NewRepository(db),
+	sessionService := 	sessionservice.NewSessionService(
+		sessionrepository.NewSessionRepository(db),
 	)
 
-	userService := userservice.NewService(
+	userService := 	userservice.NewUserService(
 		userRepo,
 		groupRepo,
 		sessionService,
 	)
 
-	groupService := groupservice.NewService(
+	groupService := 	groupservice.NewGroupService(
 		groupRepo,
 		userRepo,
 		databaseRepo,

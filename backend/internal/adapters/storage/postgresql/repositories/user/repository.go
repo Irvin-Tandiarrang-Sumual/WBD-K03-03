@@ -6,21 +6,21 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/migrations/models"
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"gorm.io/gorm"
 )
 
-type Repository struct {
+type userRepository struct {
 	db *gorm.DB
 }
 
-var _ ports.UserRepository = (*Repository)(nil)
+var _ ports.UserRepository = (*userRepository)(nil)
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+func NewUserRepository(db *gorm.DB) ports.UserRepository {
+	return &userRepository{db: db}
 }
 
-func (r *Repository) List(ctx context.Context) ([]domain.User, error) {
+func (r *userRepository) List(ctx context.Context) ([]domain.User, error) {
 	var storedUsers []models.User
 
 	if err := r.db.
@@ -40,7 +40,7 @@ func (r *Repository) List(ctx context.Context) ([]domain.User, error) {
 	return users, nil
 }
 
-func (r *Repository) FindByID(ctx context.Context, id uint) (domain.User, error) {
+func (r *userRepository) FindByID(ctx context.Context, id uint) (domain.User, error) {
 	var storedUser models.User
 
 	err := r.db.
@@ -59,7 +59,7 @@ func (r *Repository) FindByID(ctx context.Context, id uint) (domain.User, error)
 	return toDomain(storedUser), nil
 }
 
-func (r *Repository) Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {
+func (r *userRepository) Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {
 	var created domain.User
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -115,7 +115,7 @@ func (r *Repository) Create(ctx context.Context, user domain.User, groupIDs []ui
 	return created, nil
 }
 
-func (r *Repository) Update(ctx context.Context, id uint, username *string, passwordHash *string) (domain.User, error) {
+func (r *userRepository) Update(ctx context.Context, id uint, username *string, passwordHash *string) (domain.User, error) {
 	updates := make(map[string]any)
 
 	if username != nil {
@@ -151,7 +151,7 @@ func (r *Repository) Update(ctx context.Context, id uint, username *string, pass
 	return r.FindByID(ctx, id)
 }
 
-func (r *Repository) Delete(ctx context.Context, id uint) error {
+func (r *userRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.
 			Where("user_id = ?", id).
@@ -179,7 +179,7 @@ func (r *Repository) Delete(ctx context.Context, id uint) error {
 	})
 }
 
-func (r *Repository) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
+func (r *userRepository) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
 	result := r.db.
 		WithContext(ctx).
 		Model(&models.User{}).
@@ -205,7 +205,7 @@ func toDomain(storedUser models.User) domain.User {
 	}
 }
 
-func (r *Repository) FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error) {
+func (r *userRepository) FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error) {
 	var storedUser models.User
 
 	err := r.db.

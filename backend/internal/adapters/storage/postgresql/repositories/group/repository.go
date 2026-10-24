@@ -4,60 +4,60 @@ import (
 	"context"
 	"errors"
 
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/migrations/models"
 	"gorm.io/gorm"
 )
 
-type Repository struct{
+type groupRepository struct {
 	db *gorm.DB
 }
 
-var _ ports.GroupRepository = (*Repository)(nil)
+var _ ports.GroupRepository = (*groupRepository)(nil)
 
-func NewRepository(db *gorm.DB) *Repository{
-	return &Repository{db: db}
+func NewGroupRepository(db *gorm.DB) ports.GroupRepository {
+	return &groupRepository{db: db}
 }
 
-func (r *Repository) List(ctx context.Context) ([]domain.Group, error){
+func (r *groupRepository) List(ctx context.Context) ([]domain.Group, error) {
 	var storedGroups []models.Group
 	err := r.db.WithContext(ctx).Order("id ASC").Find(&storedGroups).Error
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
 	groups := make([]domain.Group, 0, len(storedGroups))
-	if len(storedGroups) == 0{
+	if len(storedGroups) == 0 {
 		return groups, nil
 	}
 
 	groupIDs := make([]uint, 0, len(storedGroups))
-	for _, storedGroup := range storedGroups{
+	for _, storedGroup := range storedGroups {
 		groupIDs = append(groupIDs, storedGroup.ID)
 	}
 
 	var relations []models.GroupDatabase
 
 	err = r.db.WithContext(ctx).Where("group_id IN ?", groupIDs).Order("group_id ASC, database_id ASC").Find(&relations).Error
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
 	accessesByGroup := make(map[uint][]domain.DatabaseAccess)
-	for _, relation := range relations{
+	for _, relation := range relations {
 		accessesByGroup[relation.GroupID] = append(
-			accessesByGroup[relation.GroupID], 
+			accessesByGroup[relation.GroupID],
 			domain.DatabaseAccess{
 				DatabaseID: relation.DatabaseID,
 				AccessType: domain.AccessType(relation.AccessType),
 			})
 	}
 
-	for _, storedGroup := range storedGroups{
+	for _, storedGroup := range storedGroups {
 		groups = append(groups, domain.Group{
-			ID: storedGroup.ID,
-			Name: storedGroup.Name,
+			ID:               storedGroup.ID,
+			Name:             storedGroup.Name,
 			DatabaseAccesses: accessesByGroup[storedGroup.ID],
 		})
 	}
@@ -66,12 +66,12 @@ func (r *Repository) List(ctx context.Context) ([]domain.Group, error){
 
 }
 
-func (r *Repository) FindByID(ctx context.Context, id uint) (domain.Group, error) {
+func (r *groupRepository) FindByID(ctx context.Context, id uint) (domain.Group, error) {
 	var storedGroup models.Group
-	
+
 	err := r.db.WithContext(ctx).First(&storedGroup, id).Error
-	if err != nil{
-		if errors.Is(err, gorm.ErrRecordNotFound){
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return domain.Group{}, domain.ErrGroupNotFound
 		}
 		return domain.Group{}, err
@@ -79,12 +79,12 @@ func (r *Repository) FindByID(ctx context.Context, id uint) (domain.Group, error
 
 	var relations []models.GroupDatabase
 	err = r.db.WithContext(ctx).Where("group_id = ?", id).Order(("database_id ASC")).Find(&relations).Error
-	if err != nil{
+	if err != nil {
 		return domain.Group{}, err
 	}
 
 	accesses := make([]domain.DatabaseAccess, 0, len(relations))
-	for _, relation := range relations{
+	for _, relation := range relations {
 		accesses = append(accesses, domain.DatabaseAccess{
 			DatabaseID: relation.DatabaseID,
 			AccessType: domain.AccessType(relation.AccessType),
@@ -92,13 +92,13 @@ func (r *Repository) FindByID(ctx context.Context, id uint) (domain.Group, error
 	}
 
 	return domain.Group{
-		ID: storedGroup.ID,
-		Name: storedGroup.Name,
+		ID:               storedGroup.ID,
+		Name:             storedGroup.Name,
 		DatabaseAccesses: accesses,
 	}, nil
 }
 
-func (r *Repository) ExistsAll(ctx context.Context, ids []uint) (bool, error) {
+func (r *groupRepository) ExistsAll(ctx context.Context, ids []uint) (bool, error) {
 	if len(ids) == 0 {
 		return true, nil
 	}
@@ -126,7 +126,7 @@ func (r *Repository) ExistsAll(ctx context.Context, ids []uint) (bool, error) {
 	return count == int64(len(cleanIDs)), nil
 }
 
-func (r *Repository) Create(ctx context.Context, group domain.Group) (domain.Group, error) {
+func (r *groupRepository) Create(ctx context.Context, group domain.Group) (domain.Group, error) {
 	var created domain.Group
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		storedGroup := models.Group{
@@ -149,14 +149,14 @@ func (r *Repository) Create(ctx context.Context, group domain.Group) (domain.Gro
 		return nil
 	})
 
-	if err != nil{
+	if err != nil {
 		return domain.Group{}, err
 	}
 
 	return created, nil
 }
 
-func (r *Repository) Update(ctx context.Context, group domain.Group) (domain.Group, error){
+func (r *groupRepository) Update(ctx context.Context, group domain.Group) (domain.Group, error) {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.
 			Model(&models.Group{}).
@@ -173,7 +173,6 @@ func (r *Repository) Update(ctx context.Context, group domain.Group) (domain.Gro
 			return domain.ErrGroupNotFound
 		}
 
-		
 		return replaceDatabaseAccesses(tx, group.ID, group.DatabaseAccesses)
 	})
 
@@ -184,7 +183,7 @@ func (r *Repository) Update(ctx context.Context, group domain.Group) (domain.Gro
 	return group, nil
 }
 
-func (r *Repository) Delete(ctx context.Context, id uint) error {
+func (r *groupRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.
 			Where("group_id = ?", id).
@@ -200,7 +199,6 @@ func (r *Repository) Delete(ctx context.Context, id uint) error {
 			return err
 		}
 
-
 		result := tx.Delete(&models.Group{}, id)
 		if result.Error != nil {
 			return result.Error
@@ -213,7 +211,7 @@ func (r *Repository) Delete(ctx context.Context, id uint) error {
 	})
 }
 
-func (r *Repository) AddUser(ctx context.Context, groupID uint,	userID uint) error {
+func (r *groupRepository) AddUser(ctx context.Context, groupID uint, userID uint) error {
 
 	relation := models.UserGroup{
 		UserID:  userID,
@@ -234,7 +232,7 @@ func (r *Repository) AddUser(ctx context.Context, groupID uint,	userID uint) err
 	return nil
 }
 
-func (r *Repository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+func (r *groupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
 	result := r.db.
 		WithContext(ctx).
 		Where(
@@ -254,7 +252,7 @@ func (r *Repository) RemoveUser(ctx context.Context, groupID uint, userID uint) 
 	return nil
 }
 
-func (r *Repository) CountUserGroups(ctx context.Context, userID uint) (int64, error) {
+func (r *groupRepository) CountUserGroups(ctx context.Context, userID uint) (int64, error) {
 	var count int64
 
 	err := r.db.
@@ -266,7 +264,7 @@ func (r *Repository) CountUserGroups(ctx context.Context, userID uint) (int64, e
 	return count, err
 }
 
-func (r *Repository) ListUserIDs(ctx context.Context, groupID uint) ([]uint, error){
+func (r *groupRepository) ListUserIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	userIDs := make([]uint, 0)
 	err := r.db.
 		WithContext(ctx).
@@ -282,7 +280,7 @@ func (r *Repository) ListUserIDs(ctx context.Context, groupID uint) ([]uint, err
 	return userIDs, nil
 }
 
-func (r *Repository) ListAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
+func (r *groupRepository) ListAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
 	var storedAccessTypes []string
 
 	err := r.db.
@@ -303,8 +301,7 @@ func (r *Repository) ListAccessTypes(ctx context.Context, userID uint, databaseI
 		return nil, err
 	}
 
-
-	accessTypes := make([]domain.AccessType, 0,	len(storedAccessTypes))
+	accessTypes := make([]domain.AccessType, 0, len(storedAccessTypes))
 	for _, storedAccessType := range storedAccessTypes {
 		accessTypes = append(
 			accessTypes,
@@ -316,7 +313,6 @@ func (r *Repository) ListAccessTypes(ctx context.Context, userID uint, databaseI
 }
 
 func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.DatabaseAccess) error {
-	
 	err := tx.
 		Where("group_id = ?", groupID).
 		Delete(&models.GroupDatabase{}).Error
@@ -329,7 +325,6 @@ func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.Databa
 
 	relations := make([]models.GroupDatabase, 0, len(accesses))
 
-	
 	for _, access := range accesses {
 		relations = append(relations, models.GroupDatabase{
 			GroupID:    groupID,
@@ -341,7 +336,7 @@ func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.Databa
 	return tx.Create(&relations).Error
 }
 
-func (r *Repository) ListUserIDsByDatabase(ctx context.Context, databaseID uint) ([]uint, error) {
+func (r *groupRepository) ListUserIDsByDatabase(ctx context.Context, databaseID uint) ([]uint, error) {
 	var userIDs []uint
 
 	err := r.db.
@@ -355,7 +350,7 @@ func (r *Repository) ListUserIDsByDatabase(ctx context.Context, databaseID uint)
 	return userIDs, err
 }
 
-func (r *Repository) HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error) {
+func (r *groupRepository) HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error) {
 	var exists bool
 
 	err := r.db.WithContext(ctx).Raw(`
