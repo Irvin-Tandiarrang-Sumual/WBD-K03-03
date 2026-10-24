@@ -2,6 +2,22 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Run with Docker
+
+From the repository root, copy `.env.example` to `.env`:
+```bash
+Copy-Item .env.example .env
+```
+, then run:
+
+```bash
+docker compose up --build
+```
+
+The frontend will be available at `http://localhost:3000` by default.
+
+### Run with npm
+
 First, run the development server:
 
 ```bash
