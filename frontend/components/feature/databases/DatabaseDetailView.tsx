@@ -200,6 +200,31 @@ export default function DatabaseDetailView({
   const { toasts, removeToast, toast } = useToast();
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [pendingExplain, setPendingExplain] = useState(false);
+  const [targetRollback, setTargetRollback] = useState<{ id: number; version: string } | null>(null);
+  const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
+  const [rollbackLoading, setRollbackLoading] = useState(false);
+
+  async function handleConfirmRollback() {
+    if (!targetRollback) return;
+    setRollbackLoading(true);
+    try {
+      await api.rollback(Number(databaseId), targetRollback.id);
+      toast.success(`Rollback ke migrasi versi ${targetRollback.version} berhasil dieksekusi!`, "Rollback Berhasil");
+      const refreshed = await api.migrations(databaseId, 1, 100);
+      setMigrations(refreshed.data || []);
+      setRollbackModalOpen(false);
+      setTargetRollback(null);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Gagal melakukan rollback.",
+        "Rollback Gagal",
+      );
+      setRollbackModalOpen(false);
+    } finally {
+      setRollbackLoading(false);
+    }
+  }
+
   // Check if query contains potentially destructive statements
   function isDestructiveQuery(q: string): boolean {
     const upper = q.toUpperCase();
@@ -280,6 +305,19 @@ Apakah Anda yakin ingin mengeksekusi query ini pada database?`}
         isLoading={queryExecuting}
         onConfirm={() => executeSqlQuery(pendingExplain)}
         onCancel={() => setConfirmModalOpen(false)}
+      />
+
+      {/* Confirmation Modal for Rollback */}
+      <ConfirmModal
+        isOpen={rollbackModalOpen}
+        title="Konfirmasi Rollback Migrasi"
+        message={`Apakah Anda yakin ingin melakukan rollback ke migrasi versi ${targetRollback?.version}? Perubahan skema yang lebih baru akan dibatalkan secara otomatis melalui SQL down.`}
+        confirmText="Ya, Jalankan Rollback"
+        cancelText="Batal"
+        variant="danger"
+        isLoading={rollbackLoading}
+        onConfirm={handleConfirmRollback}
+        onCancel={() => setRollbackModalOpen(false)}
       />
       {/* Top Bar with Navigation & Title */}
 
@@ -815,34 +853,12 @@ Apakah Anda yakin ingin mengeksekusi query ini pada database?`}
                         {isViewEdit && (
                           <button
                             type="button"
-
                             className={styles.secondaryButton}
                             style={{ fontSize: "0.75rem", padding: "2px 6px" }}
-                            onClick={async () => {
-                              if (
-                                confirm(
-                                  `Apakah Anda yakin ingin rollback ke migrasi ID ${m.id}?`,
-                                )
-                              ) {
-                                try {
-                                  await api.rollback(Number(databaseId), m.id);
-
-                                  alert("Rollback berhasil dieksekusi!");
-
-                                  const refreshed = await api.migrations(databaseId, 1, 100);
-
-                                  setMigrations(refreshed.data || []);
-                                } catch (err: unknown) {
-                                  alert(
-                                    err instanceof Error
-
-                                      ? err.message
-                                      : "Gagal melakukan rollback.",
-                                  );
-                                }
-                              }
+                            onClick={() => {
+                              setTargetRollback({ id: m.id, version: m.version });
+                              setRollbackModalOpen(true);
                             }}
-
                           >
                             Rollback ke sini
                           </button>
