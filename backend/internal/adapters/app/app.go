@@ -5,199 +5,86 @@ import (
 	"log"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
-
-	driver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver"
-
-	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
-	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
-	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
-	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
-	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
-	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
-
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
-
-	storagepostgresql "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql"
-
-	databaserepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/database"
-	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
-	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
-	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
-	migrationrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/migration"
-
-	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
-	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
-	databaseexecutorservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_executor"
-	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
-	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
-	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
-	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
-
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/migrations"
 	"github.com/gin-gonic/gin"
 )
 
 func Run() {
-
-	cfg, err := config.LoadConfig()
+	application, err := buildApplication()
 	if err != nil {
-		log.Printf("failed to load config: %v", err)
+		log.Printf("failed to build application: %v", err)
 		return
 	}
-
-	db, err := storagepostgresql.ConnectToSystemDatabase(
-		cfg.Database,
-	)
-
-	if err != nil {
-		log.Printf(
-			"failed to connect to system database: %v",
-			err,
-		)
-		return
-	}
-
-	if err := migrations.Migrate(db); err != nil {
-		log.Printf(
-			"failed to migrate system database: %v",
-			err,
-		)
-		return
-	}
-
-	credentialCipher, err := security.NewAESGCMCipher(
-		[]byte(cfg.Security.DatabaseCredentialKey),
-	)
-
-	if err != nil {
-		log.Printf(
-			"failed to initialize database credential cipher: %v",
-			err,
-		)
-		return
-	}
-
-	connectionTester := driver.NewDatabaseConnectionTester()
-
-	poolManager := driver.NewDatabasePoolManager()
-
-	defer func() {
-		if err := poolManager.CloseAll(); err != nil {
-			log.Printf(
-				"failed to close target database pools: %v",
-				err,
-			)
-		}
-	}()
-
-	userRepository := userrepository.NewUserRepository(
-		db,
-	)
-
-	groupRepository := grouprepository.NewGroupRepository(
-		db,
-	)
-
-	databaseRepository := databaserepository.NewDatabaseRepository(
-		db,
-		credentialCipher,
-	)
-
-	sessionRepository := sessionrepository.NewSessionRepository(
-		db,
-	)
-
-	sessionService := sessionservice.NewSessionService(
-		sessionRepository,
-	)
-
-	authService := authservice.NewAuthService(
-		userRepository,
-		sessionService,
-	)
-
-	userService := userservice.NewUserService(
-		userRepository,
-		groupRepository,
-		sessionService,
-	)
-
-	groupService := groupservice.NewGroupService(
-		groupRepository,
-		userRepository,
-		databaseRepository,
-		sessionService,
-	)
-
-	databaseService := databaseservice.NewDatabaseService(
-		databaseRepository,
-		connectionTester,
-		groupRepository,
-		sessionService,
-		poolManager,
-	)
-	databaseExecutor := driver.NewDatabaseExecutor(poolManager)
-	databaseExecutorService := databaseexecutorservice.NewDatabaseExecutorService(
-		databaseService,
-		databaseRepository,
-		databaseExecutor,
-		groupService,
-	)
-	migrationRepository := migrationrepository.NewMigrationRepository(db)
-	migrationService := migrationservice.NewMigrationService(
-		migrationRepository,
-		databaseRepository,
-		databaseExecutor,
-		groupService,
-	)
-
-	authHandler := authhandler.NewAuthHandler(
-		authService,
-		cfg.Session.CookieSecure,
-	)
-
-	userHandler := userhandler.NewUserHandler(
-		userService,
-	)
-
-	groupHandler := grouphandler.NewGroupHandler(
-		groupService,
-	)
-
-	databaseHandler := databasehandler.NewDatabaseHandler(
-		databaseService,
-	)
-	databaseExecutorHandler := databaseexecutorhandler.NewDatabaseExecutorHandler(
-		databaseExecutorService,
-	)
-	migrationHandler := migrationhandler.NewMigrationHandler(migrationService)
-
-	r := gin.Default()
-
-	router.SetUpRouter(
-		r,
-		authHandler,
-		userHandler,
-		groupHandler,
-		databaseHandler,
-		databaseExecutorHandler,
-		migrationHandler,
-		sessionService,
-		userService,
-		groupService,
-	)
+	defer application.close()
 
 	address := fmt.Sprintf(
 		"%s:%d",
-		cfg.Server.Host,
-		cfg.Server.Port,
+		application.config.Server.Host,
+		application.config.Server.Port,
 	)
 
-	if err := r.Run(address); err != nil {
-		log.Printf(
-			"failed to run HTTP server: %v",
-			err,
-		)
+	if err := application.engine.Run(address); err != nil {
+		log.Printf("failed to run HTTP server: %v", err)
 	}
+}
+
+type application struct {
+	config      *config.Config
+	engine      *gin.Engine
+	closeTarget func()
+}
+
+func (a *application) close() {
+	if a.closeTarget != nil {
+		a.closeTarget()
+	}
+}
+
+func buildApplication() (*application, error) {
+	configuration, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	systemDatabase, closeSystemDatabase, err := buildSystemDatabase(configuration)
+	if err != nil {
+		return nil, err
+	}
+
+	targetDatabaseInfrastructure, err := buildTargetDatabaseInfrastructure(configuration)
+	if err != nil {
+		closeSystemDatabase()
+		return nil, err
+	}
+
+	services, err := buildServices(systemDatabase, targetDatabaseInfrastructure)
+	if err != nil {
+		targetDatabaseInfrastructure.close()
+		closeSystemDatabase()
+		return nil, err
+	}
+
+	handlers := buildHandlers(configuration, services)
+	engine := gin.Default()
+	router.SetupRouter(
+		engine,
+		handlers.auth,
+		handlers.user,
+		handlers.group,
+		handlers.database,
+		handlers.databaseExecutor,
+		handlers.migration,
+		services.session,
+		services.user,
+		services.group,
+	)
+
+	return &application{
+		config: configuration,
+		engine: engine,
+		closeTarget: func() {
+			targetDatabaseInfrastructure.close()
+			closeSystemDatabase()
+		},
+	}, nil
 }
