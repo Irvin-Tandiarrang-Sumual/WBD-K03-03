@@ -20,6 +20,23 @@ func NewDatabaseExecutorHandler(databaseExecutorService ports.DatabaseExecutorSe
 	return &DatabaseExecutorHandler{databaseExecutorService: databaseExecutorService}
 }
 
+// ExecuteDatabaseQuery executes a SQL query on a database.
+//
+//	@Summary		Execute query
+//	@Description	Executes a raw SQL query on the specified database. Requires view access.
+//	@Tags			Me - Databases
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			database_id	path		int									true	"Database ID"
+//	@Param			body		body		DatabaseQueryRequest				true	"SQL query"
+//	@Success		200			{object}	response.BaseResponse[any]			"Query executed successfully"
+//	@Failure		400			{object}	response.BaseResponse[any]			"Invalid database ID or query"
+//	@Failure		401			{object}	response.BaseResponse[any]			"Unauthorized"
+//	@Failure		403			{object}	response.BaseResponse[any]			"Forbidden (no view access)"
+//	@Failure		404			{object}	response.BaseResponse[any]			"Database not found"
+//	@Failure		500			{object}	response.BaseResponse[any]			"Internal server error"
+//	@Router			/me/databases/{database_id}/query [post]
 func (h *DatabaseExecutorHandler) ExecuteDatabaseQuery(c *gin.Context) {
 	databaseID, err := strconv.ParseUint(c.Param("database_id"), 10, 64)
 	if err != nil || databaseID == 0 {
@@ -51,6 +68,24 @@ func (h *DatabaseExecutorHandler) ExecuteDatabaseQuery(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success("database query executed successfully", result))
 }
 
+// ExplainDatabaseQuery explains a SQL query execution plan.
+//
+//	@Summary		Explain query
+//	@Description	Returns the execution plan for a SQL query. Requires view access. Use `analyzer=true` for EXPLAIN ANALYZE.
+//	@Tags			Me - Databases
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			database_id	path		int								true	"Database ID"
+//	@Param			body		body		DatabaseQueryRequest			true	"SQL query"
+//	@Param			analyzer	query		bool							false	"Use EXPLAIN ANALYZE (default: false)"
+//	@Success		200			{object}	response.BaseResponse[any]		"Query plan retrieved"
+//	@Failure		400			{object}	response.BaseResponse[any]		"Invalid database ID, query, or analyzer param"
+//	@Failure		401			{object}	response.BaseResponse[any]		"Unauthorized"
+//	@Failure		403			{object}	response.BaseResponse[any]		"Forbidden (no view access)"
+//	@Failure		404			{object}	response.BaseResponse[any]		"Database not found"
+//	@Failure		500			{object}	response.BaseResponse[any]		"Internal server error"
+//	@Router			/me/databases/{database_id}/explain [post]
 func (h *DatabaseExecutorHandler) ExplainDatabaseQuery(c *gin.Context) {
 	databaseID, err := strconv.ParseUint(c.Param("database_id"), 10, 64)
 	if err != nil || databaseID == 0 {

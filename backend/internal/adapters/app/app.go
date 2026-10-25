@@ -9,6 +9,9 @@ import (
 	httpmiddleware "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/gin-gonic/gin"
+
+	// Auto-generated Swagger docs — registers spec on init
+	_ "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/docs"
 )
 
 func Run() {
@@ -65,15 +68,20 @@ func buildApplication() (*application, error) {
 		return nil, err
 	}
 
-	handlers := buildHandlers(configuration, services)
+	handlers := buildHandlers(configuration, services, systemDatabase)
 	engine := gin.Default()
 	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))
 	engine.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"swagger": "/swagger/index.html",
+			"health": "/health",
+		})
 	})
-	engine.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	engine.GET("/swagger", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/swagger/index.html")
 	})
+	engine.GET("/health", handlers.health.Check)
 	router.SetupRouter(
 		engine,
 		handlers.auth,
@@ -82,6 +90,7 @@ func buildApplication() (*application, error) {
 		handlers.database,
 		handlers.databaseExecutor,
 		handlers.migration,
+		handlers.health,
 		services.session,
 		services.user,
 		services.group,

@@ -1,0 +1,1615 @@
+basePath: /api/v1
+definitions:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_migration_MigrationResponse
+  : properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+        type: array
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers_auth.LoginResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse
+  : properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers_database.DatabaseResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers_health.HealthResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationComparisonResponse
+  : properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationComparisonResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse
+  : properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse
+  : properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_database.DatabaseResponse'
+        type: array
+      paging:
+        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
+      status:
+        type: string
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_group_GroupResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+        type: array
+      paging:
+        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
+      status:
+        type: string
+    type: object
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_migration_MigrationResponse
+  : properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+        type: array
+      paging:
+        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
+      status:
+        type: string
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_user_UserResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+        type: array
+      paging:
+        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
+      status:
+        type: string
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata:
+    properties:
+      current_page:
+        type: integer
+      limit:
+        type: integer
+      total_data:
+        type: integer
+      total_page:
+        type: integer
+    type: object
+  internal_adapters_http_handlers_auth.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  internal_adapters_http_handlers_auth.LoginResponse:
+    properties:
+      id:
+        type: integer
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_adapters_http_handlers_database.CreateDatabaseRequest:
+    properties:
+      host:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      type:
+        enum:
+        - postgresql
+        - mysql
+        type: string
+      user:
+        type: string
+    required:
+    - host
+    - name
+    - password
+    - port
+    - type
+    - user
+    type: object
+  internal_adapters_http_handlers_database.DatabaseResponse:
+    properties:
+      host:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      port:
+        type: integer
+      type:
+        type: string
+      user:
+        type: string
+    type: object
+  internal_adapters_http_handlers_database_executor.DatabaseQueryRequest:
+    properties:
+      query:
+        type: string
+    required:
+    - query
+    type: object
+  internal_adapters_http_handlers_group.CreateGroupRequest:
+    properties:
+      databaseAccesses:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_group.DatabaseAccessRequest'
+        type: array
+      name:
+        type: string
+    required:
+    - databaseAccesses
+    - name
+    type: object
+  internal_adapters_http_handlers_group.DatabaseAccessRequest:
+    properties:
+      accessType:
+        type: string
+      databaseId:
+        type: integer
+    required:
+    - accessType
+    - databaseId
+    type: object
+  internal_adapters_http_handlers_group.DatabaseAccessResponse:
+    properties:
+      accessType:
+        type: string
+      databaseId:
+        type: integer
+    type: object
+  internal_adapters_http_handlers_group.GroupResponse:
+    properties:
+      databaseAccesses:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_group.DatabaseAccessResponse'
+        type: array
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  internal_adapters_http_handlers_group.UpdateGroupRequest:
+    properties:
+      databaseAccesses:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers_group.DatabaseAccessRequest'
+        type: array
+      name:
+        type: string
+    type: object
+  internal_adapters_http_handlers_health.HealthResponse:
+    properties:
+      services:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        example: ok
+        type: string
+      timestamp:
+        example: "2026-10-25T14:45:00Z"
+        type: string
+    type: object
+  internal_adapters_http_handlers_migration.CreateMigrationRequest:
+    properties:
+      sql_up:
+        type: string
+    required:
+    - sql_up
+    type: object
+  internal_adapters_http_handlers_migration.MigrationComparisonResponse:
+    properties:
+      first_migration:
+        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+      second_migration:
+        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+      sql_down_equal:
+        type: boolean
+      sql_up_equal:
+        type: boolean
+    type: object
+  internal_adapters_http_handlers_migration.MigrationResponse:
+    properties:
+      database_id:
+        type: integer
+      error_message:
+        type: string
+      id:
+        type: integer
+      sql_down:
+        type: string
+      sql_up:
+        type: string
+      status:
+        type: string
+      user_id:
+        type: integer
+      version:
+        type: string
+    type: object
+  internal_adapters_http_handlers_migration.RollbackMigrationRequest:
+    properties:
+      database_id:
+        type: integer
+      target_migration_id:
+        type: integer
+    required:
+    - database_id
+    - target_migration_id
+    type: object
+  internal_adapters_http_handlers_user.CreateUserRequest:
+    properties:
+      groupIds:
+        items:
+          type: integer
+        type: array
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - groupIds
+    - password
+    - username
+    type: object
+  internal_adapters_http_handlers_user.SetRoleRequest:
+    properties:
+      role:
+        type: string
+    required:
+    - role
+    type: object
+  internal_adapters_http_handlers_user.UpdateUserRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_adapters_http_handlers_user.UserResponse:
+    properties:
+      id:
+        type: integer
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Backend API for WBD K03-03 — database management platform with user/group
+    access control and migration support.
+  title: WBD K03-03 API
+  version: "1.0"
+paths:
+  /admin/databases:
+    get:
+      description: Returns a paginated list of all databases. Requires admin privileges.
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Databases retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+        "400":
+          description: Invalid pagination
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: List databases (admin)
+      tags:
+      - Admin - Databases
+    post:
+      consumes:
+      - application/json
+      description: Registers a new database connection. Requires admin privileges.
+      parameters:
+      - description: Database connection details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_database.CreateDatabaseRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Database created
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Database already exists
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Create database (admin)
+      tags:
+      - Admin - Databases
+  /admin/databases/{id}:
+    delete:
+      description: Deletes a registered database by its ID. Requires admin privileges.
+      parameters:
+      - description: Database ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Database deleted
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid database ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Database is in use
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Delete database (admin)
+      tags:
+      - Admin - Databases
+    get:
+      description: Returns a database by its ID. Requires admin privileges.
+      parameters:
+      - description: Database ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Database retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+        "400":
+          description: Invalid database ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get database (admin)
+      tags:
+      - Admin - Databases
+  /admin/groups:
+    get:
+      description: Returns a paginated list of all groups. Requires admin privileges.
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Groups retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_group_GroupResponse'
+        "400":
+          description: Invalid pagination
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: List groups
+      tags:
+      - Admin - Groups
+    post:
+      consumes:
+      - application/json
+      description: Creates a new group with database access permissions. Requires
+        admin privileges.
+      parameters:
+      - description: Group data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_group.CreateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Group created
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+        "400":
+          description: Invalid input or invalid database access type
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Group name already taken
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Create group
+      tags:
+      - Admin - Groups
+  /admin/groups/{groupId}:
+    delete:
+      description: Deletes a group by its ID. Requires admin privileges.
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Group deleted
+        "400":
+          description: Invalid group ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Group still has users / must have database
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Delete group
+      tags:
+      - Admin - Groups
+    get:
+      description: Returns a single group by its ID. Requires admin privileges.
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group found
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+        "400":
+          description: Invalid group ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get group
+      tags:
+      - Admin - Groups
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing group. Requires admin privileges.
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      - description: Fields to update (all optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_group.UpdateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group updated
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Group name already taken
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Update group
+      tags:
+      - Admin - Groups
+  /admin/groups/{groupId}/users/{userId}:
+    delete:
+      description: Removes an existing user from an existing group. Requires admin
+        privileges.
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User removed from group
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Group or user not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Membership not found / user must remain in a group
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Remove user from group
+      tags:
+      - Admin - Groups
+    post:
+      description: Adds an existing user to an existing group. Requires admin privileges.
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User added to group
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Group or user not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Membership already exists
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Add user to group
+      tags:
+      - Admin - Groups
+  /admin/users:
+    get:
+      description: Returns a paginated list of all users. Requires admin privileges.
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Users retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_user_UserResponse'
+        "400":
+          description: Invalid pagination
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: List users
+      tags:
+      - Admin - Users
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user and assigns them to one or more groups. Requires
+        admin privileges.
+      parameters:
+      - description: User data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_user.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Username already taken
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Create user
+      tags:
+      - Admin - Users
+  /admin/users/{userId}:
+    delete:
+      description: Deletes a user by their ID. Requires admin privileges.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User deleted
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: User must have at least one group
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Delete user
+      tags:
+      - Admin - Users
+    get:
+      description: Returns a single user by their ID. Requires admin privileges.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User found
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get user
+      tags:
+      - Admin - Users
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing user's username and/or password. Requires admin
+        privileges.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: Fields to update (all optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_user.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User updated
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Username already taken
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Update user
+      tags:
+      - Admin - Users
+  /admin/users/{userId}/role:
+    patch:
+      consumes:
+      - application/json
+      description: Updates the role of a user (e.g. "admin" or "user"). Requires admin
+        privileges.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: Role to set
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_user.SetRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Role updated
+          schema:
+            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+        "400":
+          description: Invalid input or invalid role
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not admin)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Set user role
+      tags:
+      - Admin - Users
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with username and password. On success, a session
+        cookie is set.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      summary: Login
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      description: Invalidate the current session. Clears the session cookie.
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Logged out successfully
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Logout
+      tags:
+      - Auth
+  /health:
+    get:
+      description: Check server health status and system database connectivity.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse'
+        "503":
+          description: Service is degraded
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse'
+      summary: Health check
+      tags:
+      - Health
+  /me/databases:
+    get:
+      description: Returns a paginated list of databases the authenticated user has
+        access to.
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Databases retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+        "400":
+          description: Invalid pagination
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: List my databases
+      tags:
+      - Me - Databases
+  /me/databases/{database_id}:
+    get:
+      description: Returns a specific database that the authenticated user has view
+        access to.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Database retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+        "400":
+          description: Invalid database ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get my database
+      tags:
+      - Me - Databases
+  /me/databases/{database_id}/explain:
+    post:
+      consumes:
+      - application/json
+      description: Returns the execution plan for a SQL query. Requires view access.
+        Use `analyzer=true` for EXPLAIN ANALYZE.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: SQL query
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_database_executor.DatabaseQueryRequest'
+      - description: 'Use EXPLAIN ANALYZE (default: false)'
+        in: query
+        name: analyzer
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Query plan retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid database ID, query, or analyzer param
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Explain query
+      tags:
+      - Me - Databases
+  /me/databases/{database_id}/migrations:
+    get:
+      description: Returns a paginated list of migrations for a specific database.
+        Requires view access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Migrations retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_migration_MigrationResponse'
+        "400":
+          description: Invalid database ID or pagination
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: List migrations
+      tags:
+      - Me - Migrations
+    post:
+      consumes:
+      - application/json
+      description: Runs a SQL migration (sql_up) on the specified database and records
+        the result. Requires edit access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: SQL up migration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_migration.CreateMigrationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Migration created
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse'
+        "400":
+          description: Invalid database ID or migration input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no edit access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Migration version conflict
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Create migration
+      tags:
+      - Me - Migrations
+  /me/databases/{database_id}/migrations/{migration_id}:
+    get:
+      description: Returns a specific migration by its ID within a database. Requires
+        view access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: Migration ID
+        in: path
+        name: migration_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Migration retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse'
+        "400":
+          description: Invalid database or migration ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Migration not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get migration
+      tags:
+      - Me - Migrations
+  /me/databases/{database_id}/migrations/compare:
+    get:
+      description: Compares the sql_up and sql_down of two migrations within a database.
+        Requires view access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: First migration ID
+        in: query
+        name: migration_id_1
+        required: true
+        type: integer
+      - description: Second migration ID
+        in: query
+        name: migration_id_2
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Comparison result
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationComparisonResponse'
+        "400":
+          description: Invalid database ID or migration IDs
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Migration not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Compare migrations
+      tags:
+      - Me - Migrations
+  /me/databases/{database_id}/query:
+    post:
+      consumes:
+      - application/json
+      description: Executes a raw SQL query on the specified database. Requires view
+        access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: SQL query
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_database_executor.DatabaseQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Query executed successfully
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid database ID or query
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Execute query
+      tags:
+      - Me - Databases
+  /me/databases/migrations/rollback:
+    post:
+      consumes:
+      - application/json
+      description: Rolls back all migrations up to and including the target migration
+        ID.
+      parameters:
+      - description: Rollback target
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers_migration.RollbackMigrationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Migrations rolled back
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_migration_MigrationResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Rollback unavailable or version conflict
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Rollback migrations
+      tags:
+      - Me - Migrations
+schemes:
+- http
+- https
+securityDefinitions:
+  CookieAuth:
+    description: 'Session cookie. After login, copy the value of the `session` cookie
+      from the Set-Cookie header and paste it here as: `session=<token>`'
+    in: header
+    name: Cookie
+    type: apiKey
+swagger: "2.0"

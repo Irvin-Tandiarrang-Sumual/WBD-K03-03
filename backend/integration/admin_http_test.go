@@ -14,6 +14,7 @@ import (
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
 	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
+	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
@@ -37,6 +38,7 @@ func fullIntegrationRouter(t *testing.T, stack *integrationStack) *gin.Engine {
 		databasehandler.NewDatabaseHandler(stack.databaseService),
 		databaseexecutorhandler.NewDatabaseExecutorHandler(stack.executorService),
 		migrationhandler.NewMigrationHandler(stack.migrationService),
+		healthhandler.NewHealthHandler(nil),
 		stack.sessionService,
 		stack.userService,
 		stack.groupService,

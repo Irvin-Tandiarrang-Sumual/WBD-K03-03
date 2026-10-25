@@ -45,8 +45,8 @@ func TestBuildHandlersConstructsAllHTTPHandlers(t *testing.T) {
 	configuration := &config.Config{Session: config.SessionConfig{CookieSecure: true}}
 	services := &applicationServices{}
 
-	handlers := buildHandlers(configuration, services)
-	if handlers == nil || handlers.auth == nil || handlers.user == nil || handlers.group == nil || handlers.database == nil || handlers.databaseExecutor == nil || handlers.migration == nil {
+	handlers := buildHandlers(configuration, services, nil)
+	if handlers == nil || handlers.auth == nil || handlers.user == nil || handlers.group == nil || handlers.database == nil || handlers.databaseExecutor == nil || handlers.migration == nil || handlers.health == nil {
 		t.Fatalf("incomplete handlers: %+v", handlers)
 	}
 }
