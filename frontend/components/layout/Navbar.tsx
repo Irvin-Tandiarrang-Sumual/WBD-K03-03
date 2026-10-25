@@ -7,11 +7,11 @@ const MENU = [
     { href: "/", label: "Home"},
     { href: "/databases", label: "Databases"},
     { href: "/admin", label: "Admin Control"},
-]
+] as const;
 
 export default function Navbar() {
     const pathname = usePathname();
-    const isActive = (href) =>
+    const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (

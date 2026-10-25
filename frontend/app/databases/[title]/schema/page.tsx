@@ -3,15 +3,21 @@ import SchemaViewer from "@/components/feature/databases/schema/SchemaViewer";
 
 export const instant = false;
 
-export default async function DatabaseDetail({ params }) {
+interface DatabaseDetailProps {
+  params: Promise<{ title: string }>;
+}
+
+export default async function DatabaseDetail({
+  params,
+}: DatabaseDetailProps) {
   const { title } = await params;
   const decodedTitle = decodeURIComponent(title);
-  const databaseName = `${decodedTitle}`;
+  const databaseId = `${decodedTitle}`;
 
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <SchemaViewer dbName={databaseName} />
+        <SchemaViewer databaseId={databaseId} />
       </main>
     </div>
   );

@@ -1,0 +1,37 @@
+import type {
+  Migration,
+  MigrationComparison,
+  PagedResponse,
+} from "@/lib/types";
+import { request } from "@/lib/api/client";
+
+export const migrationApi = {
+  list: (databaseId: number | string, page = 1, limit = 20) =>
+    request<PagedResponse<Migration>>(
+      `/api/v1/me/databases/${databaseId}/migrations?page=${page}&limit=${limit}`,
+    ),
+
+  create: (databaseId: number | string, sqlUp: string) =>
+    request<Migration>(`/api/v1/me/databases/${databaseId}/migrations`, {
+      method: "POST",
+      body: JSON.stringify({ sql_up: sqlUp }),
+    }),
+
+  compare: (
+    databaseId: number | string,
+    firstMigrationId: number | string,
+    secondMigrationId: number | string,
+  ) =>
+    request<MigrationComparison>(
+      `/api/v1/me/databases/${databaseId}/migrations/compare?migration_id_1=${firstMigrationId}&migration_id_2=${secondMigrationId}`,
+    ),
+
+  rollback: (databaseId: number, targetMigrationId: number) =>
+    request<Migration>("/api/v1/me/databases/migrations/rollback", {
+      method: "POST",
+      body: JSON.stringify({
+        database_id: databaseId,
+        target_migration_id: targetMigrationId,
+      }),
+    }),
+};

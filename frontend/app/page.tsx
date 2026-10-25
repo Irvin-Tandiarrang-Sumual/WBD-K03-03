@@ -1,13 +1,20 @@
-import Image from "next/image";
 import styles from "./page.module.css";
 // import { Card } from "next/font/google";
 import Card from "@/components/ui/Card";
-import ButtonLink from "@/components/ui/ButtonLink"
+import ButtonLink from "@/components/ui/ButtonLink";
 
 const features = [
-  {title: "Databases", text: "View databases, tables. Compare versions. Migrate to different versions.", href: "/databases"},
-  {title: "Admin Control", text: "Create users. Create and edit access groups. Handle sessions. ", href: "/admin"}
-]
+  {
+    title: "Databases",
+    text: "View databases, tables. Compare versions. Migrate to different versions.",
+    href: "/databases",
+  },
+  {
+    title: "Admin Control",
+    text: "Create users. Create and edit access groups. Handle sessions.",
+    href: "/admin",
+  },
+] as const;
 
 export default function Home() {
 
