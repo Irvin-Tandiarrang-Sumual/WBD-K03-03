@@ -1,7 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/app"
+)
 
 func main() {
-	fmt.Println("Hello, world!")
+	app.Run()
 }
