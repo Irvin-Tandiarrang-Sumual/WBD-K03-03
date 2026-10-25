@@ -10,6 +10,7 @@ export interface Database {
   port: number;
   user: string;
   type: DatabaseType | string;
+  access_type?: AccessType;
   accessType?: AccessType;
 }
 
@@ -106,3 +107,4 @@ export interface UpdateGroupInput {
   name?: string;
   databaseAccesses?: DatabaseAccess[];
 }
+

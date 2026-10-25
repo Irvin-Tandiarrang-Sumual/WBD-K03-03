@@ -83,20 +83,9 @@ func (r *databaseRepository) FindAllByUserID(ctx context.Context, userID uint, p
 		return nil, 0, err
 	}
 
-	databaseIDs := make([]uint, 0, len(storedDatabases))
-	for _, storedDatabase := range storedDatabases {
-		databaseIDs = append(databaseIDs, storedDatabase.ID)
-	}
-
-	accessByDatabase, err := r.effectiveAccessByDatabase(ctx, userID, databaseIDs)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	databases := make([]*domain.Database, 0, len(storedDatabases))
 	for _, storedDatabase := range storedDatabases {
 		database := toDomain(storedDatabase, "")
-		database.AccessType = accessByDatabase[storedDatabase.ID]
 		databases = append(databases, &database)
 	}
 	return databases, total, nil
@@ -118,45 +107,8 @@ func (r *databaseRepository) FindByIDAndUserID(ctx context.Context, databaseID u
 		return nil, err
 	}
 
-	accessByDatabase, err := r.effectiveAccessByDatabase(ctx, userID, []uint{storedDatabase.ID})
-	if err != nil {
-		return nil, err
-	}
-
 	database := toDomain(storedDatabase, "")
-	database.AccessType = accessByDatabase[storedDatabase.ID]
 	return &database, nil
-}
-
-func (r *databaseRepository) effectiveAccessByDatabase(ctx context.Context, userID uint, databaseIDs []uint) (map[uint]string, error) {
-	accessMap := make(map[uint]string, len(databaseIDs))
-	if len(databaseIDs) == 0 {
-		return accessMap, nil
-	}
-
-	var rows []struct {
-		DatabaseID uint
-		AccessType string
-	}
-	err := r.db.WithContext(ctx).
-		Table("group_databases AS gd").
-		Select("gd.database_id, gd.access_type").
-		Joins("JOIN user_groups AS ug ON ug.group_id = gd.group_id").
-		Where("ug.user_id = ? AND gd.database_id IN ?", userID, databaseIDs).
-		Scan(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-
-	for _, row := range rows {
-		if row.AccessType == string(domain.AccessViewEdit) {
-			accessMap[row.DatabaseID] = string(domain.AccessViewEdit)
-		} else if accessMap[row.DatabaseID] == "" {
-			accessMap[row.DatabaseID] = row.AccessType
-		}
-	}
-
-	return accessMap, nil
 }
 
 func (r *databaseRepository) FindByID(ctx context.Context, databaseID uint) (domain.Database, error) {
@@ -187,6 +139,53 @@ func (r *databaseRepository) FindWithCredentialByID(ctx context.Context, databas
 		return domain.Database{}, err
 	}
 	return toDomain(storedDatabase, password), nil
+}
+
+func (r *databaseRepository) FindCredentialByHostAndPort(ctx context.Context, host string, port uint, user string) (string, error) {
+	var storedDatabase model.Database
+	err := r.db.WithContext(ctx).
+		Where("host = ? AND port = ? AND \"user\" = ?", host, port, user).
+		First(&storedDatabase).Error
+	if err != nil {
+		err = r.db.WithContext(ctx).
+			Where("host = ? AND port = ?", host, port).
+			First(&storedDatabase).Error
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return r.cipher.Decrypt(storedDatabase.Password)
+}
+
+func (r *databaseRepository) GetDistinctHosts(ctx context.Context) ([]domain.DatabaseHost, error) {
+	type hostRow struct {
+		Host string `gorm:"column:host"`
+		Port uint   `gorm:"column:port"`
+		User string `gorm:"column:user"`
+		Type string `gorm:"column:type"`
+	}
+
+	var rows []hostRow
+	err := r.db.WithContext(ctx).
+		Model(&model.Database{}).
+		Select("DISTINCT host, port, \"user\", type").
+		Order("host ASC, port ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]domain.DatabaseHost, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, domain.DatabaseHost{
+			Host: row.Host,
+			Port: row.Port,
+			User: row.User,
+			Type: row.Type,
+		})
+	}
+	return result, nil
 }
 
 func (r *databaseRepository) ExistsAll(ctx context.Context, databaseIDs []uint) (bool, error) {
@@ -227,30 +226,10 @@ func (r *databaseRepository) CreateDatabase(ctx context.Context, database *domai
 		Type:     database.Type,
 		Name:     database.Name,
 	}
-
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&storedDatabase).Error; err != nil {
-			if errors.Is(err, gorm.ErrDuplicatedKey) {
-				return domain.ErrDatabaseAlreadyExists
-			}
-			return err
+	if err := r.db.WithContext(ctx).Create(&storedDatabase).Error; err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, domain.ErrDatabaseAlreadyExists
 		}
-
-		var adminGroup model.Group
-		if err := tx.Where("name = ?", "admin").First(&adminGroup).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
-			}
-			return err
-		}
-
-		return tx.Create(&model.GroupDatabase{
-			GroupID:    adminGroup.ID,
-			DatabaseID: storedDatabase.ID,
-			AccessType: string(domain.AccessViewEdit),
-		}).Error
-	})
-	if err != nil {
 		return nil, err
 	}
 
@@ -261,8 +240,20 @@ func (r *databaseRepository) CreateDatabase(ctx context.Context, database *domai
 }
 
 func (r *databaseRepository) Delete(ctx context.Context, databaseID uint) error {
+	// 1. Periksa apakah ada group yang masih mengarah ke database ini
+	var groupCount int64
+	if err := r.db.WithContext(ctx).Table("group_databases").Where("database_id = ?", databaseID).Count(&groupCount).Error; err == nil && groupCount > 0 {
+		return domain.ErrDatabaseInUse
+	}
+
+	// 2. Bersihkan data migrasi internal yang berelasi dengan database ini
+	_ = r.db.WithContext(ctx).Where("database_id = ?", databaseID).Delete(&model.Migration{}).Error
+
 	result := r.db.WithContext(ctx).Delete(&model.Database{}, databaseID)
 	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrForeignKeyViolated) {
+			return domain.ErrDatabaseInUse
+		}
 		return result.Error
 	}
 	if result.RowsAffected == 0 {

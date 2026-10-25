@@ -8,7 +8,7 @@ type Database struct {
 	Password   string
 	Type       string
 	Name       string
-	AccessType string
+	AccessType AccessType
 }
 
 type CreateDatabaseInput struct {
@@ -19,3 +19,11 @@ type CreateDatabaseInput struct {
 	Type     string
 	Name     string
 }
+
+type DatabaseHost struct {
+	Host string `json:"host"`
+	Port uint   `json:"port"`
+	User string `json:"user"`
+	Type string `json:"type"`
+}
+

@@ -8,7 +8,6 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func SeedTestData(db *gorm.DB) error {
@@ -22,11 +21,7 @@ func SeedDevelopmentData(db *gorm.DB, cipher ports.DatabaseCredentialCipher) err
 }
 
 func seedData(db *gorm.DB, encodePassword func(string) (string, error)) error {
-	silentDB := db.Session(&gorm.Session{
-		Logger: db.Logger.LogMode(logger.Silent),
-	})
-
-	return silentDB.Transaction(func(tx *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
 		databases, err := seedTestDatabases(tx, encodePassword)
 		if err != nil {
 			return err
@@ -45,9 +40,6 @@ func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error))
 	databaseSeeds := []model.Database{
 		{Port: 5432, Host: "demo_postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db1_pg"},
 		{Port: 3306, Host: "demo_mysql", User: "demo_user", Password: "demo_password", Type: "mysql", Name: "db2_mysql"},
-		{Port: 5432, Host: "demo_postgres_extra", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db3_pg_empty"},
-		{Port: 5432, Host: "demo_postgres_extra", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db4_pg_sales"},
-		{Port: 3306, Host: "demo_mysql_extra", User: "demo_user", Password: "demo_password", Type: "mysql", Name: "db5_mysql_analytics"},
 	}
 
 	databases := make(map[string]model.Database, len(databaseSeeds))
@@ -65,7 +57,6 @@ func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error))
 			err = tx.Create(&database).Error
 		} else if err == nil {
 			err = tx.Model(&database).Updates(map[string]any{
-				"port":     databaseSeed.Port,
 				"host":     databaseSeed.Host,
 				"user":     databaseSeed.User,
 				"password": databaseSeed.Password,
@@ -81,21 +72,14 @@ func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error))
 }
 
 func seedGroups(tx *gorm.DB, databases map[string]model.Database) (map[string]model.Group, error) {
-	allDatabases := []model.Database{
-		{ID: databases[databaseKey("db1_pg")].ID},
-		{ID: databases[databaseKey("db2_mysql")].ID},
-		{ID: databases[databaseKey("db3_pg_empty")].ID},
-		{ID: databases[databaseKey("db4_pg_sales")].ID},
-		{ID: databases[databaseKey("db5_mysql_analytics")].ID},
-	}
 	groupSeeds := []struct {
 		key        string
 		name       string
 		accessType string
 		databases  []model.Database
 	}{
-		{"admin", "admin", "view_edit", allDatabases},
-		{"user", "user", "view_only", allDatabases},
+		{"admin", "admin", "view_edit", []model.Database{{ID: databases[databaseKey("db1_pg")].ID}, {ID: databases[databaseKey("db2_mysql")].ID}}},
+		{"user", "user", "view_only", []model.Database{{ID: databases[databaseKey("db1_pg")].ID}, {ID: databases[databaseKey("db2_mysql")].ID}}},
 	}
 
 	groups := make(map[string]model.Group, len(groupSeeds))

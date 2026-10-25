@@ -23,3 +23,7 @@ INSERT INTO products (sku, name, price) VALUES
 INSERT INTO inventory_movements (product_id, quantity_change, movement_type) VALUES
     (1, 20, 'stock_in'),
     (2, 35, 'stock_in');
+
+-- Grant all privileges to demo_user so dynamic database creation is permitted
+GRANT ALL PRIVILEGES ON *.* TO 'demo_user'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;

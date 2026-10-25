@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -233,36 +234,48 @@ func currentUserID(c *gin.Context) (uint, error) {
 
 func toResponse(database *domain.Database) DatabaseResponse {
 	return DatabaseResponse{
-		ID: database.ID, Port: database.Port, Host: database.Host,
-		User: database.User, Type: database.Type, Name: database.Name,
-		AccessType: database.AccessType,
+		ID:         database.ID,
+		Port:       database.Port,
+		Host:       database.Host,
+		User:       database.User,
+		Type:       database.Type,
+		Name:       database.Name,
+		AccessType: string(database.AccessType),
 	}
 }
 
 func writeDatabaseErrorResponse(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	message := "internal server error"
+	if err != nil && err.Error() != "" {
+		message = err.Error()
+	}
 	switch {
 	case errors.Is(err, domain.ErrDatabaseNotFound):
 		status = http.StatusNotFound
-		message = err.Error()
 	case errors.Is(err, domain.ErrInvalidDatabaseID),
 		errors.Is(err, domain.ErrInvalidUserID),
 		errors.Is(err, domain.ErrInvalidPagination),
 		errors.Is(err, domain.ErrInvalidDatabaseInput),
 		errors.Is(err, domain.ErrInvalidInput):
 		status = http.StatusBadRequest
-		message = err.Error()
 	case errors.Is(err, domain.ErrDatabaseAlreadyExists),
 		errors.Is(err, domain.ErrDatabaseInUse):
 		status = http.StatusConflict
-		message = err.Error()
-	case errors.Is(err, domain.ErrDatabaseConnectionFailed):
-		status = http.StatusBadRequest
-		message = err.Error()
 	case errors.Is(err, domain.ErrCurrentUserUnavailable):
 		status = http.StatusNotImplemented
-		message = err.Error()
+	default:
+		if err != nil {
+			errLower := strings.ToLower(err.Error())
+			if strings.Contains(errLower, "connection refused") ||
+				strings.Contains(errLower, "no such host") ||
+				strings.Contains(errLower, "dial tcp") ||
+				strings.Contains(errLower, "failed to connect") ||
+				strings.Contains(errLower, "authentication failed") ||
+				strings.Contains(errLower, "access denied") {
+				status = http.StatusBadRequest
+			}
+		}
 	}
 	c.JSON(status, response.Error(message))
 }

@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import DatabaseEntryView from "@/components/feature/databases/DatabaseEntryView";
 
 export const instant = false;
 
@@ -8,5 +8,7 @@ interface DatabasePageProps {
 
 export default async function DatabasePage({ params }: DatabasePageProps) {
   const { title } = await params;
-  redirect(`/databases/${encodeURIComponent(title)}/schema`);
+  const decodedTitle = decodeURIComponent(title);
+
+  return <DatabaseEntryView databaseId={decodedTitle} />;
 }

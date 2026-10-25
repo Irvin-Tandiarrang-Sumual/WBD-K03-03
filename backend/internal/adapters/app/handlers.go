@@ -24,7 +24,7 @@ type applicationHandlers struct {
 
 func buildHandlers(configuration *config.Config, services *applicationServices, systemDatabase *gorm.DB) *applicationHandlers {
 	return &applicationHandlers{
-		auth:             authhandler.NewAuthHandler(services.auth, configuration.Session.CookieSecure),
+		auth:             authhandler.NewAuthHandler(services.auth, configuration.Session.CookieSecure, services.user),
 		user:             userhandler.NewUserHandler(services.user),
 		group:            grouphandler.NewGroupHandler(services.group),
 		database:         databasehandler.NewDatabaseHandler(services.database),

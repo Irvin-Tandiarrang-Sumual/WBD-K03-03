@@ -6,6 +6,9 @@ import (
 )
 
 func MigrateSystemDatabase(db *gorm.DB) error {
+	// Drop erroneous/legacy unique constraints first before auto migrating
+	_ = db.Exec("ALTER TABLE databases DROP CONSTRAINT IF EXISTS uni_databases_port; DROP INDEX IF EXISTS uni_databases_port;").Error
+
 	if err := db.AutoMigrate(
 		&model.Database{},
 		&model.Group{},
@@ -16,29 +19,19 @@ func MigrateSystemDatabase(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
-	if db.Migrator().HasConstraint(&model.Database{}, "uni_databases_port") {
-		if err := db.Migrator().DropConstraint(&model.Database{}, "uni_databases_port"); err != nil {
-			return err
-		}
-	}
-	if db.Migrator().HasIndex(&model.Database{}, "uni_databases_port") {
-		if err := db.Migrator().DropIndex(&model.Database{}, "uni_databases_port"); err != nil {
-			return err
-		}
-	}
 
-	// Older versions accidentally made database_id unique by itself, which
-	// prevented a database from having more than one migration record.
-	for _, legacyName := range []string{"uni_migrations_database_id", "uni_migrations_version"} {
+	for _, legacyName := range []string{"uni_migrations_database_id", "uni_migrations_version", "uni_databases_port"} {
+		if db.Migrator().HasConstraint(&model.Database{}, legacyName) {
+			_ = db.Migrator().DropConstraint(&model.Database{}, legacyName)
+		}
+		if db.Migrator().HasIndex(&model.Database{}, legacyName) {
+			_ = db.Migrator().DropIndex(&model.Database{}, legacyName)
+		}
 		if db.Migrator().HasConstraint(&model.Migration{}, legacyName) {
-			if err := db.Migrator().DropConstraint(&model.Migration{}, legacyName); err != nil {
-				return err
-			}
+			_ = db.Migrator().DropConstraint(&model.Migration{}, legacyName)
 		}
 		if db.Migrator().HasIndex(&model.Migration{}, legacyName) {
-			if err := db.Migrator().DropIndex(&model.Migration{}, legacyName); err != nil {
-				return err
-			}
+			_ = db.Migrator().DropIndex(&model.Migration{}, legacyName)
 		}
 	}
 	return nil

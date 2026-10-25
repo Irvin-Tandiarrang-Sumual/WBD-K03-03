@@ -27,6 +27,11 @@ export const adminApi = {
       body: JSON.stringify({ role }),
     }),
 
+  deleteUser: (userId: number | string) =>
+    request<void>(`/api/v1/admin/users/${userId}`, {
+      method: "DELETE",
+    }),
+
   listGroups: (page = 1, limit = 20) =>
     request<PagedResponse<Group>>(
       `/api/v1/admin/groups?page=${page}&limit=${limit}`,
@@ -35,20 +40,31 @@ export const adminApi = {
   getGroup: (id: number | string) =>
     request<Group>(`/api/v1/admin/groups/${id}`),
 
-  addUserToGroup: (groupId: number | string, userId: number | string) =>
-    request<void>(`/api/v1/admin/groups/${groupId}/users/${userId}`, {
-      method: "POST",
-    }),
-
   createGroup: (payload: CreateGroupInput) =>
     request<Group>("/api/v1/admin/groups", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  updateGroup: (id: number | string, payload: UpdateGroupInput) =>
-    request<Group>(`/api/v1/admin/groups/${id}`, {
+  updateGroup: (groupId: number | string, payload: UpdateGroupInput) =>
+    request<Group>(`/api/v1/admin/groups/${groupId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+
+  deleteGroup: (groupId: number | string) =>
+    request<void>(`/api/v1/admin/groups/${groupId}`, {
+      method: "DELETE",
+    }),
+
+  addUserToGroup: (groupId: number | string, userId: number | string) =>
+    request<void>(`/api/v1/admin/groups/${groupId}/users/${userId}`, {
+      method: "POST",
+    }),
+
+  removeUserFromGroup: (groupId: number | string, userId: number | string) =>
+    request<void>(`/api/v1/admin/groups/${groupId}/users/${userId}`, {
+      method: "DELETE",
+    }),
 };
+

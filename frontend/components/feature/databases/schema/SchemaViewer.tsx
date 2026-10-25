@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, unwrapPaged } from "@/lib/api";
+import {
+  buildColumnsQuery,
+  buildConstraintsQuery,
+  buildIndexesQuery,
+  parseConstraintsRows,
+  parseIndexesRows,
+  readCell,
+  type TableConstraintItem,
+  type TableIndexItem,
+} from "@/lib/schemaMetadata";
 import type { Database, QueryRow } from "@/lib/types";
 import styles from "./SchemaViewer.module.css";
 
@@ -14,23 +24,19 @@ function readRows(body: { data?: { rows?: QueryRow[] } }): QueryRow[] {
   return Array.isArray(body.data?.rows) ? body.data.rows : [];
 }
 
-function readValue(row: QueryRow, name: string): unknown {
-  const matchingKey = Object.keys(row).find(
-    (key) => key.toLowerCase() === name.toLowerCase(),
-  );
-  return matchingKey ? row[matchingKey] : undefined;
-}
-
 export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
   const router = useRouter();
   const [tables, setTables] = useState<string[]>([]);
   const [activeTable, setActiveTable] = useState("");
   const [columns, setColumns] = useState<QueryRow[]>([]);
+  const [constraints, setConstraints] = useState<TableConstraintItem[]>([]);
+  const [indexes, setIndexes] = useState<TableIndexItem[]>([]);
   const [database, setDatabase] = useState<Database | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.databases(1, 100)
+    api
+      .databases(1, 100)
       .then((body) => {
         const accessibleDatabase = unwrapPaged(body).find(
           (item) => String(item.id) === databaseId,
@@ -49,7 +55,7 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
       })
       .then((body) => {
         const names = readRows(body)
-          .map((row) => String(readValue(row, "table_name") || ""))
+          .map((row) => readCell(row, "table_name"))
           .filter(Boolean);
         setTables(names);
         setActiveTable(names[0] || "");
@@ -71,12 +77,8 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
     const escapedTable = activeTable.replaceAll("'", "''");
     const databaseType = String(database.type).toLowerCase();
 
-    api.query(
-      databaseId,
-      databaseType === "mysql"
-        ? `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${escapedTable}' ORDER BY ordinal_position`
-        : `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name = '${escapedTable}' ORDER BY ordinal_position`,
-    )
+    api
+      .query(databaseId, buildColumnsQuery(escapedTable, databaseType))
       .then((body) => setColumns(readRows(body)))
       .catch((requestError: unknown) => {
         setError(
@@ -85,9 +87,21 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
             : "Unable to load columns.",
         );
       });
+
+    api
+      .query(databaseId, buildConstraintsQuery(escapedTable, databaseType))
+      .then((body) => setConstraints(parseConstraintsRows(readRows(body))))
+      .catch(() => setConstraints([]));
+
+    api
+      .query(databaseId, buildIndexesQuery(escapedTable, databaseType))
+      .then((body) => setIndexes(parseIndexesRows(readRows(body))))
+      .catch(() => setIndexes([]));
   }, [databaseId, activeTable, database]);
 
-  const canMigrate = Boolean(database && database.accessType === "view_edit");
+  const canMigrate = Boolean(
+    database && (database.access_type ?? database.accessType) === "view_edit",
+  );
 
   return (
     <div className={styles.container}>
@@ -138,28 +152,95 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
           ))}
         </aside>
 
-        <main className={styles.main}>
-          <table className={styles.dataTable}>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Nullable</th>
-              </tr>
-            </thead>
-            <tbody>
-              {columns.map((column, index) => (
-                <tr key={`${String(readValue(column, "column_name"))}-${index}`}>
-                  <td>{String(readValue(column, "column_name") || "")}</td>
-                  <td>{String(readValue(column, "data_type") || "")}</td>
-                  <td>{String(readValue(column, "is_nullable") || "")}</td>
+        <main className={styles.main} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <div>
+            <h3 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>
+              Columns ({columns.length})
+            </h3>
+            <table className={styles.dataTable}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Nullable</th>
+                  <th>Default</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {columns.length === 0 && !error && (
-            <p className={styles.emptyState}>No columns found.</p>
-          )}
+              </thead>
+              <tbody>
+                {columns.map((column, index) => (
+                  <tr key={`${readCell(column, "column_name")}-${index}`}>
+                    <td>{readCell(column, "column_name")}</td>
+                    <td>{readCell(column, "data_type")}</td>
+                    <td>{readCell(column, "is_nullable")}</td>
+                    <td>{readCell(column, "column_default") || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {columns.length === 0 && !error && (
+              <p className={styles.emptyState}>No columns found.</p>
+            )}
+          </div>
+
+          <div>
+            <h3 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>
+              Constraints ({constraints.length})
+            </h3>
+            {constraints.length === 0 ? (
+              <p className={styles.emptyState}>No constraints found.</p>
+            ) : (
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th>Constraint Name</th>
+                    <th>Type</th>
+                    <th>Column</th>
+                    <th>Foreign Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {constraints.map((c, index) => (
+                    <tr key={`${c.constraintName}-${c.columnName}-${index}`}>
+                      <td>{c.constraintName}</td>
+                      <td>{c.constraintType}</td>
+                      <td>{c.columnName || "—"}</td>
+                      <td>{c.foreignReference || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div>
+            <h3 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>
+              Indexes ({indexes.length})
+            </h3>
+            {indexes.length === 0 ? (
+              <p className={styles.emptyState}>No indexes found.</p>
+            ) : (
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th>Index Name</th>
+                    <th>Columns</th>
+                    <th>Type</th>
+                    <th>Uniqueness</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {indexes.map((idxItem, index) => (
+                    <tr key={`${idxItem.indexName}-${index}`}>
+                      <td>{idxItem.indexName}</td>
+                      <td>{idxItem.columnNames || "—"}</td>
+                      <td>{idxItem.indexType}</td>
+                      <td>{idxItem.uniqueness}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </main>
       </div>
     </div>

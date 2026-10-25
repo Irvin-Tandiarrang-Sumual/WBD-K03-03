@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"gorm.io/gorm"
 )
 

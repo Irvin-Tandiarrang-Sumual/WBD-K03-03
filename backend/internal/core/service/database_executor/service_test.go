@@ -250,3 +250,42 @@ func TestExplainDatabaseQueryRejectsInvalidQueryAndPropagatesExecutorError(t *te
 		t.Fatalf("error=%v want=%v", err, wantErr)
 	}
 }
+
+func TestExplainAndExecuteAcceptTrailingSemicolon(t *testing.T) {
+	groups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+		return domain.AccessViewOnly, nil
+	}}
+	repository := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+		return domain.Database{ID: 5}, nil
+	}}
+	executor := &executorFake{
+		queryResult: &ports.DatabaseQueryResult{Columns: []string{"QUERY PLAN"}},
+	}
+
+	service := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, executor, groups)
+
+	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT * FROM customers;", false)
+	if err != nil {
+		t.Fatalf("expected SELECT * FROM customers; to succeed in ExplainDatabaseQuery, got %v", err)
+	}
+	if executor.query != "SELECT * FROM customers" {
+		t.Fatalf("expected trailing semicolon stripped, got %q", executor.query)
+	}
+
+	_, err = service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT * FROM customers;")
+	if err != nil {
+		t.Fatalf("expected SELECT * FROM customers; to succeed in ExecuteDatabaseQuery, got %v", err)
+	}
+	if executor.query != "SELECT * FROM customers" {
+		t.Fatalf("expected trailing semicolon stripped, got %q", executor.query)
+	}
+
+	viewEditGroups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+		return domain.AccessViewEdit, nil
+	}}
+	viewEditService := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, executor, viewEditGroups)
+	_, err = viewEditService.ExecuteDatabaseQuery(context.Background(), 5, 9, "UPDATE customers SET name = 'Budi' WHERE id = 1;")
+	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+		t.Fatalf("expected non-SELECT query on ExecuteDatabaseQuery to be rejected even for view_edit, got %v", err)
+	}
+}

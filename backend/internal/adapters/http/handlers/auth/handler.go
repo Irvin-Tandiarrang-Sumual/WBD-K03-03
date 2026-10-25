@@ -15,12 +15,18 @@ import (
 type AuthHandler struct {
 	service      ports.AuthService
 	secureCookie bool
+	userService  ports.UserService
 }
 
-func NewAuthHandler(service ports.AuthService, secureCookie bool) *AuthHandler {
+func NewAuthHandler(service ports.AuthService, secureCookie bool, userService ...ports.UserService) *AuthHandler {
+	var us ports.UserService
+	if len(userService) > 0 {
+		us = userService[0]
+	}
 	return &AuthHandler{
 		service:      service,
 		secureCookie: secureCookie,
+		userService:  us,
 	}
 }
 
@@ -113,4 +119,46 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	)
 
 	c.Status(http.StatusNoContent)
+}
+
+// Me returns the current authenticated user profile.
+//
+//	@Summary		Get current user
+//	@Description	Returns details of the currently authenticated user based on session cookie.
+//	@Tags			Auth
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Success		200	{object}	response.BaseResponse[LoginResponse]	"Current user profile"
+//	@Failure		401	{object}	response.BaseResponse[any]				"Unauthorized"
+//	@Failure		500	{object}	response.BaseResponse[any]				"Internal server error"
+//	@Router			/auth/me [get]
+func (h *AuthHandler) Me(c *gin.Context) {
+	userID, ok := middleware.AuthenticatedUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, response.Error("authentication required"))
+		return
+	}
+
+	if h.userService == nil {
+		c.JSON(http.StatusOK, response.Success("current user profile", LoginResponse{
+			ID: userID,
+		}))
+		return
+	}
+
+	user, err := h.userService.Get(c.Request.Context(), userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrUserNotFound) {
+			c.JSON(http.StatusUnauthorized, response.Error("user not found"))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
+		return
+	}
+
+	c.JSON(http.StatusOK, response.Success("current user profile", LoginResponse{
+		ID:       user.ID,
+		Username: user.Username,
+		Role:     user.Role,
+	}))
 }
