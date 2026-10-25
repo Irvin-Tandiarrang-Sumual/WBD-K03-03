@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
 type UserService interface {
-	List(ctx context.Context) ([]domain.User, error)
+	List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error)
 	Get(ctx context.Context, id uint) (domain.User, error)
 	Create(ctx context.Context, input domain.CreateUserInput) (domain.User, error)
 	Update(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error)
@@ -16,7 +17,7 @@ type UserService interface {
 }
 
 type UserRepository interface {
-	List(ctx context.Context) ([]domain.User, error)
+	List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error)
 
 	FindByID(ctx context.Context, id uint) (domain.User, error)
 

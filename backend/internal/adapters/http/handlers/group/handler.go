@@ -7,6 +7,8 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/ginutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,19 +21,31 @@ func NewGroupHandler(service ports.GroupService) *GroupHandler {
 }
 
 func (h *GroupHandler) List(c *gin.Context) {
-	groups, err := h.service.List(c.Request.Context())
+	params, err := ginutil.ParsePagination(c)
+	if err != nil {
+		writeError(c, domain.ErrInvalidPagination)
+		return
+	}
+
+	groups, totalData, err := h.service.List(c.Request.Context(), params)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	response := make([]GroupResponse, 0, len(groups))
+	data := make([]GroupResponse, 0, len(groups))
 
 	for _, group := range groups {
-		response = append(response, toGroupResponse(group))
+		data = append(data, toGroupResponse(group))
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.NewPagedResponse(
+		http.StatusOK,
+		"groups retrieved successfully",
+		data,
+		params,
+		totalData,
+	))
 }
 
 func (h *GroupHandler) Get(c *gin.Context) {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"gorm.io/gorm"
 )
 
@@ -20,15 +21,22 @@ func NewUserRepository(db *gorm.DB) ports.UserRepository {
 	return &userRepository{db: db}
 }
 
-func (r *userRepository) List(ctx context.Context) ([]domain.User, error) {
+func (r *userRepository) List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
 	var storedUsers []models.User
+	var total int64
+
+	if err := r.db.WithContext(ctx).Model(&models.User{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
 	if err := r.db.
 		WithContext(ctx).
 		Select("id", "username", "role").
 		Order("id ASC").
+		Offset(params.Offset()).
+		Limit(params.Limit).
 		Find(&storedUsers).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	users := make([]domain.User, 0, len(storedUsers))
@@ -37,7 +45,7 @@ func (r *userRepository) List(ctx context.Context) ([]domain.User, error) {
 		users = append(users, toDomain(storedUser))
 	}
 
-	return users, nil
+	return users, total, nil
 }
 
 func (r *userRepository) FindByID(ctx context.Context, id uint) (domain.User, error) {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -25,8 +26,8 @@ func NewUserService(users ports.UserRepository, groups ports.GroupRepository, se
 	}
 }
 
-func (s *userService) List(ctx context.Context) ([]domain.User, error) {
-	return s.users.List(ctx)
+func (s *userService) List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
+	return s.users.List(ctx, params)
 }
 
 func (s *userService) Get(ctx context.Context, id uint) (domain.User, error) {

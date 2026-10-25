@@ -7,6 +7,7 @@ import (
 	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"gorm.io/gorm"
 )
 
@@ -20,16 +21,26 @@ func NewGroupRepository(db *gorm.DB) ports.GroupRepository {
 	return &groupRepository{db: db}
 }
 
-func (r *groupRepository) List(ctx context.Context) ([]domain.Group, error) {
+func (r *groupRepository) List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
 	var storedGroups []models.Group
-	err := r.db.WithContext(ctx).Order("id ASC").Find(&storedGroups).Error
+	var total int64
+
+	if err := r.db.WithContext(ctx).Model(&models.Group{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := r.db.WithContext(ctx).
+		Order("id ASC").
+		Offset(params.Offset()).
+		Limit(params.Limit).
+		Find(&storedGroups).Error
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	groups := make([]domain.Group, 0, len(storedGroups))
 	if len(storedGroups) == 0 {
-		return groups, nil
+		return groups, total, nil
 	}
 
 	groupIDs := make([]uint, 0, len(storedGroups))
@@ -41,7 +52,7 @@ func (r *groupRepository) List(ctx context.Context) ([]domain.Group, error) {
 
 	err = r.db.WithContext(ctx).Where("group_id IN ?", groupIDs).Order("group_id ASC, database_id ASC").Find(&relations).Error
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	accessesByGroup := make(map[uint][]domain.DatabaseAccess)
@@ -62,8 +73,7 @@ func (r *groupRepository) List(ctx context.Context) ([]domain.Group, error) {
 		})
 	}
 
-	return groups, nil
-
+	return groups, total, nil
 }
 
 func (r *groupRepository) FindByID(ctx context.Context, id uint) (domain.Group, error) {

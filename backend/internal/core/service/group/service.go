@@ -7,6 +7,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
 type groupService struct {
@@ -30,8 +31,8 @@ func NewGroupService(
 	}
 }
 
-func (s *groupService) List(ctx context.Context) ([]domain.Group, error) {
-	return s.groups.List(ctx)
+func (s *groupService) List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
+	return s.groups.List(ctx, params)
 }
 
 func (s *groupService) Get(ctx context.Context, id uint) (domain.Group, error) {
@@ -39,7 +40,7 @@ func (s *groupService) Get(ctx context.Context, id uint) (domain.Group, error) {
 }
 
 func (s *groupService) Create(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
-	
+
 	input.Name = strings.TrimSpace(input.Name)
 
 	accesses, err := normalizeAccesses(input.DatabaseAccesses)
@@ -67,7 +68,7 @@ func (s *groupService) Create(ctx context.Context, input domain.CreateGroupInput
 }
 
 func (s *groupService) Update(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
-	
+
 	current, err := s.groups.FindByID(ctx, id)
 	if err != nil {
 		return domain.Group{}, err
@@ -121,7 +122,7 @@ func (s *groupService) Update(ctx context.Context, id uint, input domain.UpdateG
 }
 
 func (s *groupService) Delete(ctx context.Context, id uint) error {
-	
+
 	if _, err := s.groups.FindByID(ctx, id); err != nil {
 		return err
 	}
@@ -155,7 +156,7 @@ func (s *groupService) Delete(ctx context.Context, id uint) error {
 }
 
 func (s *groupService) AddUser(ctx context.Context, groupID uint, userID uint) error {
-	
+
 	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
 		return err
 	}
@@ -166,7 +167,6 @@ func (s *groupService) AddUser(ctx context.Context, groupID uint, userID uint) e
 		return err
 	}
 
-	
 	return s.sessions.RevokeUser(ctx, userID)
 }
 

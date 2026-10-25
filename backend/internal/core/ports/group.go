@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
 type GroupService interface {
-	List(ctx context.Context) ([]domain.Group, error)
+	List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error)
 	Get(ctx context.Context, id uint) (domain.Group, error)
 
 	Create(
@@ -43,7 +44,7 @@ type GroupService interface {
 }
 
 type GroupRepository interface {
-	List(ctx context.Context) ([]domain.Group, error)
+	List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error)
 	FindByID(ctx context.Context, id uint) (domain.Group, error)
 	ExistsAll(ctx context.Context, ids []uint) (bool, error)
 

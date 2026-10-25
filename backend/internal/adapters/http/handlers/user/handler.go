@@ -7,6 +7,8 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/ginutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,19 +21,31 @@ func NewUserHandler(service ports.UserService) *UserHandler {
 }
 
 func (h *UserHandler) List(c *gin.Context) {
-	users, err := h.service.List(c.Request.Context())
+	params, err := ginutil.ParsePagination(c)
+	if err != nil {
+		writeError(c, domain.ErrInvalidPagination)
+		return
+	}
+
+	users, totalData, err := h.service.List(c.Request.Context(), params)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	response := make([]UserResponse, 0, len(users))
+	data := make([]UserResponse, 0, len(users))
 
 	for _, user := range users {
-		response = append(response, toUserResponse(user))
+		data = append(data, toUserResponse(user))
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.NewPagedResponse(
+		http.StatusOK,
+		"users retrieved successfully",
+		data,
+		params,
+		totalData,
+	))
 }
 
 func (h *UserHandler) Get(c *gin.Context) {
@@ -149,7 +163,6 @@ func parseID(c *gin.Context, parameter string) (uint, error) {
 
 	return uint(id), nil
 }
-
 
 type errorResponse struct {
 	Error string `json:"error"`
