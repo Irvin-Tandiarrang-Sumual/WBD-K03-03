@@ -26,7 +26,7 @@ func TestCreateBuildsOpaqueSession(t *testing.T) {
 		},
 	}
 
-	service := 	sessionservice.NewSessionService(repo)
+	service := sessionservice.NewSessionService(repo)
 
 	session, err := service.Create(
 		context.Background(),
@@ -106,7 +106,7 @@ func TestResolveValidSessionTouchesLastActive(t *testing.T) {
 		},
 	}
 
-	service := 	sessionservice.NewSessionService(repo)
+	service := sessionservice.NewSessionService(repo)
 
 	got, err := service.Resolve(
 		context.Background(),
@@ -194,8 +194,6 @@ func TestResolveRejectsAbsoluteExpiredSession(t *testing.T) {
 			}, nil
 		},
 
-		// Absolute-expired session juga dibuang berdasarkan
-		// opaque token yang diterima Resolve().
 		DeleteByTokenFunc: func(
 			_ context.Context,
 			token string,
@@ -289,5 +287,117 @@ func TestRevokeAndRevokeUser(t *testing.T) {
 			token,
 			userID,
 		)
+	}
+}
+func TestCreatePropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("create session failed")
+	repo := &testutil.SessionRepository{
+		CreateFunc: func(context.Context, domain.Session) (domain.Session, error) {
+			return domain.Session{}, wantErr
+		},
+	}
+	service := sessionservice.NewSessionService(repo)
+
+	_, err := service.Create(context.Background(), 5)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Create() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestResolvePropagatesFindError(t *testing.T) {
+	wantErr := errors.New("lookup failed")
+	repo := &testutil.SessionRepository{
+		FindByTokenFunc: func(context.Context, string) (domain.Session, error) {
+			return domain.Session{}, wantErr
+		},
+	}
+	service := sessionservice.NewSessionService(repo)
+
+	_, err := service.Resolve(context.Background(), "token")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Resolve() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestResolvePropagatesExpiredSessionDeleteError(t *testing.T) {
+	now := time.Now().UTC()
+	wantErr := errors.New("delete failed")
+	repo := &testutil.SessionRepository{
+		FindByTokenFunc: func(context.Context, string) (domain.Session, error) {
+			return domain.Session{
+				ID:                 1,
+				IdleTimeout:        time.Minute,
+				LastActive:         now.Add(-2 * time.Minute),
+				AbsoluteExpiration: now.Add(time.Hour),
+			}, nil
+		},
+		DeleteByTokenFunc: func(context.Context, string) error {
+			return wantErr
+		},
+	}
+	service := sessionservice.NewSessionService(repo)
+
+	_, err := service.Resolve(context.Background(), "token")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Resolve() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestResolvePropagatesTouchError(t *testing.T) {
+	now := time.Now().UTC()
+	wantErr := errors.New("touch failed")
+	repo := &testutil.SessionRepository{
+		FindByTokenFunc: func(context.Context, string) (domain.Session, error) {
+			return domain.Session{
+				ID:                 1,
+				IdleTimeout:        time.Hour,
+				LastActive:         now,
+				AbsoluteExpiration: now.Add(time.Hour),
+			}, nil
+		},
+		TouchFunc: func(context.Context, uint, time.Time) error {
+			return wantErr
+		},
+	}
+	service := sessionservice.NewSessionService(repo)
+
+	_, err := service.Resolve(context.Background(), "token")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Resolve() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestRevokeBlankTokenDoesNotCallRepository(t *testing.T) {
+	called := false
+	repo := &testutil.SessionRepository{
+		DeleteByTokenFunc: func(context.Context, string) error {
+			called = true
+			return nil
+		},
+	}
+	service := sessionservice.NewSessionService(repo)
+
+	if err := service.Revoke(context.Background(), "   "); err != nil {
+		t.Fatalf("Revoke() error = %v", err)
+	}
+	if called {
+		t.Fatal("repository must not be called for blank token")
+	}
+}
+
+func TestRevokeAndRevokeUserPropagateRepositoryErrors(t *testing.T) {
+	tokenErr := errors.New("token revoke failed")
+	userErr := errors.New("user revoke failed")
+	repo := &testutil.SessionRepository{
+		DeleteByTokenFunc:  func(context.Context, string) error { return tokenErr },
+		DeleteByUserIDFunc: func(context.Context, uint) error { return userErr },
+	}
+	service := sessionservice.NewSessionService(repo)
+
+	if err := service.Revoke(context.Background(), "token"); !errors.Is(err, tokenErr) {
+		t.Fatalf("Revoke() error = %v, want %v", err, tokenErr)
+	}
+	if err := service.RevokeUser(context.Background(), 9); !errors.Is(err, userErr) {
+		t.Fatalf("RevokeUser() error = %v, want %v", err, userErr)
 	}
 }

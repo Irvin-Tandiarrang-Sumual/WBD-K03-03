@@ -50,7 +50,7 @@ func (h *GroupHandler) List(c *gin.Context) {
 func (h *GroupHandler) Get(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 func (h *GroupHandler) Update(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 func (h *GroupHandler) Delete(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -135,13 +135,13 @@ func (h *GroupHandler) Delete(c *gin.Context) {
 func (h *GroupHandler) AddUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -156,13 +156,13 @@ func (h *GroupHandler) AddUser(c *gin.Context) {
 func (h *GroupHandler) RemoveUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -177,6 +177,7 @@ func (h *GroupHandler) RemoveUser(c *gin.Context) {
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput),
+		errors.Is(err, domain.ErrInvalidPagination),
 		errors.Is(err, domain.ErrInvalidDatabaseAccess),
 		errors.Is(err, domain.ErrInvalidGroupsIDs):
 		c.JSON(http.StatusBadRequest, response.Error(err.Error()))

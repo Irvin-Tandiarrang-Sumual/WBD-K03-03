@@ -50,7 +50,7 @@ func (h *UserHandler) List(c *gin.Context) {
 func (h *UserHandler) Get(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 func (h *UserHandler) Update(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 func (h *UserHandler) Delete(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 func (h *UserHandler) SetRole(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -155,6 +155,7 @@ func (h *UserHandler) SetRole(c *gin.Context) {
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput),
+		errors.Is(err, domain.ErrInvalidPagination),
 		errors.Is(err, domain.ErrInvalidRole),
 		errors.Is(err, domain.ErrInvalidGroupsIDs):
 		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
