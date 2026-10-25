@@ -1,5 +1,7 @@
 import GroupDetail from "@/components/feature/admin/GroupDetail";
 
+export const instant = false;
+
 interface GroupDetailPageProps {
   params: Promise<{ groupId: string }>;
 }
