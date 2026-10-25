@@ -129,9 +129,53 @@ func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) e
 }
 
 func (s *databaseService) GetDatabasesByUserID(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
-	return s.databaseRepository.FindAllByUserID(ctx, userID, params)
+	databases, total, err := s.databaseRepository.FindAllByUserID(ctx, userID, params)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if s.groupRepository != nil {
+		for _, db := range databases {
+			if accessTypes, err := s.groupRepository.ListAccessTypes(ctx, userID, db.ID); err == nil {
+				effective := domain.AccessType("")
+				for _, at := range accessTypes {
+					if at == domain.AccessViewEdit {
+						effective = domain.AccessViewEdit
+						break
+					}
+					if at == domain.AccessViewOnly {
+						effective = domain.AccessViewOnly
+					}
+				}
+				db.AccessType = effective
+			}
+		}
+	}
+
+	return databases, total, nil
 }
 
 func (s *databaseService) GetDatabaseByIDAndUserID(ctx context.Context, databaseID uint, userID uint) (*domain.Database, error) {
-	return s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID)
+	db, err := s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.groupRepository != nil && db != nil {
+		if accessTypes, err := s.groupRepository.ListAccessTypes(ctx, userID, db.ID); err == nil {
+			effective := domain.AccessType("")
+			for _, at := range accessTypes {
+				if at == domain.AccessViewEdit {
+					effective = domain.AccessViewEdit
+					break
+				}
+				if at == domain.AccessViewOnly {
+					effective = domain.AccessViewOnly
+				}
+			}
+			db.AccessType = effective
+		}
+	}
+
+	return db, nil
 }

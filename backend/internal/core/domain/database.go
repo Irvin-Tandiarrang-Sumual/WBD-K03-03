@@ -1,13 +1,14 @@
 package domain
 
 type Database struct {
-	ID       uint
-	Port     uint
-	Host     string
-	User     string
-	Password string
-	Type     string
-	Name     string
+	ID         uint
+	Port       uint
+	Host       string
+	User       string
+	Password   string
+	Type       string
+	Name       string
+	AccessType AccessType
 }
 
 type CreateDatabaseInput struct {
