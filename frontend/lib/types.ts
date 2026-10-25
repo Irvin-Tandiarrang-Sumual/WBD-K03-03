@@ -10,6 +10,7 @@ export interface Database {
   port: number;
   user: string;
   type: DatabaseType | string;
+  accessType?: AccessType;
 }
 
 export interface DatabaseAccess {
@@ -90,7 +91,18 @@ export interface CreateDatabaseInput {
   name: string;
 }
 
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  groupIds: number[];
+}
+
 export interface CreateGroupInput {
   name: string;
   databaseAccesses: DatabaseAccess[];
+}
+
+export interface UpdateGroupInput {
+  name?: string;
+  databaseAccesses?: DatabaseAccess[];
 }

@@ -10,10 +10,11 @@ type CreateDatabaseRequest struct {
 }
 
 type DatabaseResponse struct {
-	ID   uint   `json:"id"`
-	Port uint   `json:"port"`
-	Host string `json:"host"`
-	User string `json:"user"`
-	Type string `json:"type"`
-	Name string `json:"name"`
+	ID         uint   `json:"id"`
+	Port       uint   `json:"port"`
+	Host       string `json:"host"`
+	User       string `json:"user"`
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	AccessType string `json:"accessType,omitempty"`
 }

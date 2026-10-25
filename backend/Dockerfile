@@ -7,7 +7,7 @@ RUN go mod download
 
 COPY backend/ ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /main ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /main ./cmd/api && go clean -cache
 
 ARG SERVER_PORT
 EXPOSE  ${SERVER_PORT}

@@ -263,7 +263,8 @@ func writeError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, response.Error(err.Error()))
 
 	case errors.Is(err, domain.ErrUsernameTaken),
-		errors.Is(err, domain.ErrUserMustHaveGroup):
+		errors.Is(err, domain.ErrUserMustHaveGroup),
+		errors.Is(err, domain.ErrLastAdmin):
 		c.JSON(http.StatusConflict, response.Error(err.Error()))
 
 	default:

@@ -14,6 +14,7 @@ type UserRepository struct {
 	ListFunc                       func(context.Context, pagination.PaginationParams) ([]domain.User, int64, error)
 	FindByIDFunc                   func(context.Context, uint) (domain.User, error)
 	FindByUsernameWithPasswordFunc func(context.Context, string) (domain.User, error)
+	CountByRoleFunc                func(context.Context, string) (int64, error)
 	CreateFunc                     func(context.Context, domain.User, []uint) (domain.User, error)
 	UpdateFunc                     func(context.Context, uint, *string, *string) (domain.User, error)
 	DeleteFunc                     func(context.Context, uint) error
@@ -30,6 +31,13 @@ func (f *UserRepository) FindByID(ctx context.Context, id uint) (domain.User, er
 
 func (f *UserRepository) FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error) {
 	return f.FindByUsernameWithPasswordFunc(ctx, username)
+}
+
+func (f *UserRepository) CountByRole(ctx context.Context, role string) (int64, error) {
+	if f.CountByRoleFunc != nil {
+		return f.CountByRoleFunc(ctx, role)
+	}
+	return 2, nil
 }
 
 func (f *UserRepository) Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {

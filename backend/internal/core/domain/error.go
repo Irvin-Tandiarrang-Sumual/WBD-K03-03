@@ -8,6 +8,7 @@ var (
 	ErrGroupMustHaveDatabase        = errors.New("Group must have access to at least one database")
 	ErrUserNotFound                 = errors.New("User is not found")
 	ErrUserMustHaveGroup            = errors.New("User must have at least one group")
+	ErrLastAdmin                    = errors.New("At least one admin is required")
 	ErrDatabaseNotFound             = errors.New("Database is not found")
 	ErrInvalidInput                 = errors.New("Invalid input")
 	ErrGroupNameTaken               = errors.New("Group name already used")

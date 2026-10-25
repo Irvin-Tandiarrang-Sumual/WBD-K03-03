@@ -235,6 +235,7 @@ func toResponse(database *domain.Database) DatabaseResponse {
 	return DatabaseResponse{
 		ID: database.ID, Port: database.Port, Host: database.Host,
 		User: database.User, Type: database.Type, Name: database.Name,
+		AccessType: database.AccessType,
 	}
 }
 

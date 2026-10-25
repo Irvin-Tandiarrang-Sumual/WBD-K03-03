@@ -8,6 +8,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func SeedTestData(db *gorm.DB) error {
@@ -21,7 +22,11 @@ func SeedDevelopmentData(db *gorm.DB, cipher ports.DatabaseCredentialCipher) err
 }
 
 func seedData(db *gorm.DB, encodePassword func(string) (string, error)) error {
-	return db.Transaction(func(tx *gorm.DB) error {
+	silentDB := db.Session(&gorm.Session{
+		Logger: db.Logger.LogMode(logger.Silent),
+	})
+
+	return silentDB.Transaction(func(tx *gorm.DB) error {
 		databases, err := seedTestDatabases(tx, encodePassword)
 		if err != nil {
 			return err

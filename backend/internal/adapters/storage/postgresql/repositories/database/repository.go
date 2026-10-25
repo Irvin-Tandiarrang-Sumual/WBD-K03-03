@@ -83,9 +83,20 @@ func (r *databaseRepository) FindAllByUserID(ctx context.Context, userID uint, p
 		return nil, 0, err
 	}
 
+	databaseIDs := make([]uint, 0, len(storedDatabases))
+	for _, storedDatabase := range storedDatabases {
+		databaseIDs = append(databaseIDs, storedDatabase.ID)
+	}
+
+	accessByDatabase, err := r.effectiveAccessByDatabase(ctx, userID, databaseIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	databases := make([]*domain.Database, 0, len(storedDatabases))
 	for _, storedDatabase := range storedDatabases {
 		database := toDomain(storedDatabase, "")
+		database.AccessType = accessByDatabase[storedDatabase.ID]
 		databases = append(databases, &database)
 	}
 	return databases, total, nil
@@ -107,8 +118,45 @@ func (r *databaseRepository) FindByIDAndUserID(ctx context.Context, databaseID u
 		return nil, err
 	}
 
+	accessByDatabase, err := r.effectiveAccessByDatabase(ctx, userID, []uint{storedDatabase.ID})
+	if err != nil {
+		return nil, err
+	}
+
 	database := toDomain(storedDatabase, "")
+	database.AccessType = accessByDatabase[storedDatabase.ID]
 	return &database, nil
+}
+
+func (r *databaseRepository) effectiveAccessByDatabase(ctx context.Context, userID uint, databaseIDs []uint) (map[uint]string, error) {
+	accessMap := make(map[uint]string, len(databaseIDs))
+	if len(databaseIDs) == 0 {
+		return accessMap, nil
+	}
+
+	var rows []struct {
+		DatabaseID uint
+		AccessType string
+	}
+	err := r.db.WithContext(ctx).
+		Table("group_databases AS gd").
+		Select("gd.database_id, gd.access_type").
+		Joins("JOIN user_groups AS ug ON ug.group_id = gd.group_id").
+		Where("ug.user_id = ? AND gd.database_id IN ?", userID, databaseIDs).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, row := range rows {
+		if row.AccessType == string(domain.AccessViewEdit) {
+			accessMap[row.DatabaseID] = string(domain.AccessViewEdit)
+		} else if accessMap[row.DatabaseID] == "" {
+			accessMap[row.DatabaseID] = row.AccessType
+		}
+	}
+
+	return accessMap, nil
 }
 
 func (r *databaseRepository) FindByID(ctx context.Context, databaseID uint) (domain.Database, error) {

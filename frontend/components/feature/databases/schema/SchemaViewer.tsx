@@ -11,7 +11,14 @@ interface SchemaViewerProps {
 }
 
 function readRows(body: { data?: { rows?: QueryRow[] } }): QueryRow[] {
-  return body.data?.rows || [];
+  return Array.isArray(body.data?.rows) ? body.data.rows : [];
+}
+
+function readValue(row: QueryRow, name: string): unknown {
+  const matchingKey = Object.keys(row).find(
+    (key) => key.toLowerCase() === name.toLowerCase(),
+  );
+  return matchingKey ? row[matchingKey] : undefined;
 }
 
 export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
@@ -32,16 +39,17 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
           throw new Error("Database not found.");
         }
         setDatabase(accessibleDatabase);
+        const databaseType = String(accessibleDatabase.type).toLowerCase();
         return api.query(
           databaseId,
-          accessibleDatabase.type === "mysql"
+          databaseType === "mysql"
             ? "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name"
             : "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name",
         );
       })
       .then((body) => {
         const names = readRows(body)
-          .map((row) => String(row.table_name || row.TABLE_NAME || ""))
+          .map((row) => String(readValue(row, "table_name") || ""))
           .filter(Boolean);
         setTables(names);
         setActiveTable(names[0] || "");
@@ -56,14 +64,16 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
   }, [databaseId]);
 
   useEffect(() => {
-    if (!activeTable) return;
+    if (!activeTable || !database) {
+      return;
+    }
 
     const escapedTable = activeTable.replaceAll("'", "''");
-    if (!database) return;
+    const databaseType = String(database.type).toLowerCase();
 
     api.query(
       databaseId,
-      database.type === "mysql"
+      databaseType === "mysql"
         ? `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${escapedTable}' ORDER BY ordinal_position`
         : `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name = '${escapedTable}' ORDER BY ordinal_position`,
     )
@@ -76,6 +86,8 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
         );
       });
   }, [databaseId, activeTable, database]);
+
+  const canMigrate = Boolean(database && database.accessType === "view_edit");
 
   return (
     <div className={styles.container}>
@@ -90,6 +102,7 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
               router.push(`/databases/${databaseId}/migrations/new`)
             }
             className={styles.secondaryButton}
+            disabled={!canMigrate}
           >
             Migrate
           </button>
@@ -136,10 +149,10 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
             </thead>
             <tbody>
               {columns.map((column, index) => (
-                <tr key={`${String(column.column_name)}-${index}`}>
-                  <td>{String(column.column_name || "")}</td>
-                  <td>{String(column.data_type || "")}</td>
-                  <td>{String(column.is_nullable || "")}</td>
+                <tr key={`${String(readValue(column, "column_name"))}-${index}`}>
+                  <td>{String(readValue(column, "column_name") || "")}</td>
+                  <td>{String(readValue(column, "data_type") || "")}</td>
+                  <td>{String(readValue(column, "is_nullable") || "")}</td>
                 </tr>
               ))}
             </tbody>

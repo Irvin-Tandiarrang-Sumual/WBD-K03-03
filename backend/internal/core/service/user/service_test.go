@@ -582,3 +582,31 @@ func TestDeletePropagatesDependencyErrors(t *testing.T) {
 		t.Fatalf("error=%v", err)
 	}
 }
+
+
+func TestSetRoleRejectsDemotingLastAdmin(t *testing.T) {
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+			},
+			CountByRoleFunc: func(_ context.Context, role string) (int64, error) {
+				if role != domain.RoleAdmin {
+					t.Fatalf("role = %q, want %q", role, domain.RoleAdmin)
+				}
+				return 1, nil
+			},
+		},
+		&testutil.GroupRepository{
+			CountUserGroupsFunc: func(context.Context, uint) (int64, error) {
+				return 1, nil
+			},
+		},
+		&testutil.SessionService{},
+	)
+
+	_, err := service.SetRole(context.Background(), 1, domain.RoleUser)
+	if !errors.Is(err, domain.ErrLastAdmin) {
+		t.Fatalf("error = %v, want ErrLastAdmin", err)
+	}
+}
