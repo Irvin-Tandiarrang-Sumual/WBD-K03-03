@@ -3,13 +3,58 @@ package user_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func TestListDelegatesToRepository(t *testing.T) {
+	params := pagination.PaginationParams{Page: 1, Limit: 10}
+	want := []domain.User{{ID: 1, Username: "alice"}}
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			ListFunc: func(_ context.Context, got pagination.PaginationParams) ([]domain.User, int64, error) {
+				if got != params {
+					t.Fatalf("params = %+v, want %+v", got, params)
+				}
+				return want, 3, nil
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{},
+	)
+
+	users, total, err := service.List(context.Background(), params)
+	if err != nil || !reflect.DeepEqual(users, want) || total != 3 {
+		t.Fatalf("List() = %#v, %d, %v", users, total, err)
+	}
+}
+
+func TestGetDelegatesToRepository(t *testing.T) {
+	want := domain.User{ID: 4, Username: "alice"}
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+				if id != 4 {
+					t.Fatalf("id = %d, want 4", id)
+				}
+				return want, nil
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{},
+	)
+
+	user, err := service.Get(context.Background(), 4)
+	if err != nil || !reflect.DeepEqual(user, want) {
+		t.Fatalf("Get() = %+v, %v", user, err)
+	}
+}
 
 func TestCreateHashesPasswordAndCreatesRegularUser(t *testing.T) {
 	groups := &testutil.GroupRepository{
@@ -47,7 +92,7 @@ func TestCreateHashesPasswordAndCreatesRegularUser(t *testing.T) {
 		},
 	}
 
-	service := 	userservice.NewUserService(
+	service := userservice.NewUserService(
 		users,
 		groups,
 		sessions,
@@ -343,5 +388,35 @@ func TestSetRoleRejectsRegularUserWithoutGroup(t *testing.T) {
 			"error = %v, want ErrUserMustHaveGroup",
 			err,
 		)
+	}
+}
+
+func TestDeleteRemovesUserAndRevokesSessions(t *testing.T) {
+	deleted := false
+	revoked := false
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 6}, nil
+			},
+			DeleteFunc: func(context.Context, uint) error {
+				deleted = true
+				return nil
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{
+			RevokeUserFunc: func(context.Context, uint) error {
+				revoked = true
+				return nil
+			},
+		},
+	)
+
+	if err := service.Delete(context.Background(), 6); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if !deleted || !revoked {
+		t.Fatalf("deleted=%v revoked=%v, want both true", deleted, revoked)
 	}
 }
