@@ -43,6 +43,13 @@ func (s *databaseService) GetAllDatabases(ctx context.Context, params pagination
 	return s.databaseRepository.FindAll(ctx, params)
 }
 
+func (s *databaseService) GetDatabaseHosts(ctx context.Context) ([]domain.DatabaseHost, error) {
+	if s.databaseRepository == nil {
+		return []domain.DatabaseHost{}, nil
+	}
+	return s.databaseRepository.GetDistinctHosts(ctx)
+}
+
 func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *ports.DatabaseInput) (*domain.Database, error) {
 	if databaseInput == nil {
 		return nil, domain.ErrInvalidDatabaseInput
@@ -62,6 +69,13 @@ func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *por
 	if database.Port == 0 || database.Port > 65535 || database.Host == "" ||
 		database.User == "" || database.Name == "" || database.Type != "postgresql" && database.Type != "mysql" {
 		return nil, domain.ErrInvalidInput
+	}
+
+	// If password is not provided, attempt to reuse credential from existing database on that host & port
+	if database.Password == "" && s.databaseRepository != nil {
+		if pwd, err := s.databaseRepository.FindCredentialByHostAndPort(ctx, database.Host, database.Port, database.User); err == nil && pwd != "" {
+			database.Password = pwd
+		}
 	}
 
 	if s.databaseConnectionTester != nil {

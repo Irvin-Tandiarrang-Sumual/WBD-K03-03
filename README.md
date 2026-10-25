@@ -68,6 +68,7 @@ Jika ingin membangun ulang image tanpa menggunakan cache:
 
 ```bash
 docker compose build --no-cache app
+docker compose build --no-cache frontend
 docker compose up
 ```
 

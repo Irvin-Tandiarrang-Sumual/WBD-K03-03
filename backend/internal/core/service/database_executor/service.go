@@ -9,10 +9,10 @@ import (
 )
 
 type databaseExecutorService struct {
-	databaseService       ports.DatabaseService
-	databaseRepository    ports.DatabaseRepository
-	databaseExecutor     ports.DatabaseExecutor
-	groupService          ports.GroupService
+	databaseService    ports.DatabaseService
+	databaseRepository ports.DatabaseRepository
+	databaseExecutor   ports.DatabaseExecutor
+	groupService       ports.GroupService
 }
 
 var _ ports.DatabaseExecutorService = (*databaseExecutorService)(nil)
@@ -26,7 +26,7 @@ func NewDatabaseExecutorService(
 	return &databaseExecutorService{
 		databaseService:    databaseService,
 		databaseRepository: databaseRepository,
-		databaseExecutor:  databaseExecutor,
+		databaseExecutor:   databaseExecutor,
 		groupService:       groupService,
 	}
 }
@@ -41,11 +41,21 @@ func (s *databaseExecutorService) ExecuteDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	if err != nil {
 		return nil, err
 	}
-	if err := validateSelectQuery(query); err != nil {
-		return nil, err
+	if !access.Allows(domain.AccessViewOnly) {
+		return nil, domain.ErrDatabaseAccessDenied
+	}
+	if !access.Allows(domain.AccessViewEdit) {
+		if err := validateSelectQuery(query); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := validateMutationOrSelectQuery(query); err != nil {
+			return nil, err
+		}
 	}
 	databaseWithCredential, err := s.databaseRepository.FindWithCredentialByID(ctx, database.ID)
 	if err != nil {
@@ -115,6 +125,22 @@ func validateSelectQuery(query string) error {
 		return domain.ErrInvalidDatabaseQuery
 	}
 	if strings.Contains(normalizedQuery, ";") {
+		return domain.ErrInvalidDatabaseQuery
+	}
+	return nil
+}
+
+func validateMutationOrSelectQuery(query string) error {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return domain.ErrInvalidDatabaseQuery
+	}
+	trimmed = strings.TrimSuffix(trimmed, ";")
+	trimmed = strings.TrimSpace(trimmed)
+	if trimmed == "" {
+		return domain.ErrInvalidDatabaseQuery
+	}
+	if strings.Contains(trimmed, ";") {
 		return domain.ErrInvalidDatabaseQuery
 	}
 	return nil

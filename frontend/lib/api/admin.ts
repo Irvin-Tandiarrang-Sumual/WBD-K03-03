@@ -20,14 +20,39 @@ export const adminApi = {
   getGroup: (id: number | string) =>
     request<Group>(`/api/v1/admin/groups/${id}`),
 
+  createGroup: (payload: CreateGroupInput) =>
+    request<Group>("/api/v1/admin/groups", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateGroup: (
+    groupId: number | string,
+    payload: {
+      name?: string;
+      databaseAccesses?: {
+        databaseId: number;
+        accessType: "view_only" | "view_edit";
+      }[];
+    },
+  ) =>
+    request<Group>(`/api/v1/admin/groups/${groupId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteGroup: (groupId: number | string) =>
+    request<void>(`/api/v1/admin/groups/${groupId}`, {
+      method: "DELETE",
+    }),
+
   addUserToGroup: (groupId: number | string, userId: number | string) =>
     request<void>(`/api/v1/admin/groups/${groupId}/users/${userId}`, {
       method: "POST",
     }),
 
-  createGroup: (payload: CreateGroupInput) =>
-    request<Group>("/api/v1/admin/groups", {
-      method: "POST",
-      body: JSON.stringify(payload),
+  removeUserFromGroup: (groupId: number | string, userId: number | string) =>
+    request<void>(`/api/v1/admin/groups/${groupId}/users/${userId}`, {
+      method: "DELETE",
     }),
 };

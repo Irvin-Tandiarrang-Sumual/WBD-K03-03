@@ -126,6 +126,8 @@ type DatabaseRepository struct {
 	FindByIDAndUserIDFunc      func(context.Context, uint, uint) (*domain.Database, error)
 	FindByIDFunc               func(context.Context, uint) (domain.Database, error)
 	FindWithCredentialByIDFunc func(context.Context, uint) (domain.Database, error)
+	FindCredentialByHostAndPortFunc func(context.Context, string, uint, string) (string, error)
+	GetDistinctHostsFunc       func(context.Context) ([]domain.DatabaseHost, error)
 	ExistsAllFunc              func(context.Context, []uint) (bool, error)
 	CreateFunc                 func(context.Context, domain.Database) (domain.Database, error)
 	CreateDatabaseFunc         func(context.Context, *domain.Database) (*domain.Database, error)
@@ -191,6 +193,20 @@ func (f *DatabaseRepository) CreateDatabase(ctx context.Context, database *domai
 		return nil, err
 	}
 	return &createdDatabase, nil
+}
+
+func (f *DatabaseRepository) FindCredentialByHostAndPort(ctx context.Context, host string, port uint, user string) (string, error) {
+	if f.FindCredentialByHostAndPortFunc != nil {
+		return f.FindCredentialByHostAndPortFunc(ctx, host, port, user)
+	}
+	return "", nil
+}
+
+func (f *DatabaseRepository) GetDistinctHosts(ctx context.Context) ([]domain.DatabaseHost, error) {
+	if f.GetDistinctHostsFunc != nil {
+		return f.GetDistinctHostsFunc(ctx)
+	}
+	return nil, nil
 }
 
 func (f *DatabaseRepository) Delete(ctx context.Context, id uint) error {
@@ -355,6 +371,7 @@ type DatabaseService struct {
 	ports.DatabaseService
 	GetDatabaseByIDFunc          func(context.Context, uint) (*domain.Database, error)
 	GetAllDatabasesFunc          func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	GetDatabaseHostsFunc         func(context.Context) ([]domain.DatabaseHost, error)
 	CreateDatabaseFunc           func(context.Context, *ports.DatabaseInput) (*domain.Database, error)
 	DeleteDatabaseFunc           func(context.Context, uint) error
 	GetDatabasesByUserIDFunc     func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error)
@@ -367,6 +384,13 @@ func (f *DatabaseService) GetDatabaseByID(ctx context.Context, databaseID uint) 
 
 func (f *DatabaseService) GetAllDatabases(ctx context.Context, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
 	return f.GetAllDatabasesFunc(ctx, params)
+}
+
+func (f *DatabaseService) GetDatabaseHosts(ctx context.Context) ([]domain.DatabaseHost, error) {
+	if f.GetDatabaseHostsFunc != nil {
+		return f.GetDatabaseHostsFunc(ctx)
+	}
+	return nil, nil
 }
 
 func (f *DatabaseService) CreateDatabase(ctx context.Context, input *ports.DatabaseInput) (*domain.Database, error) {

@@ -73,9 +73,9 @@ func buildApplication() (*application, error) {
 	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))
 	engine.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
+			"status":  "ok",
 			"swagger": "/swagger/index.html",
-			"health": "/health",
+			"health":  "/health",
 		})
 	})
 	engine.GET("/swagger", func(c *gin.Context) {

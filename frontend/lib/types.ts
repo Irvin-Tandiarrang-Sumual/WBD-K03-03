@@ -10,6 +10,7 @@ export interface Database {
   port: number;
   user: string;
   type: DatabaseType | string;
+  access_type?: AccessType;
 }
 
 export interface DatabaseAccess {

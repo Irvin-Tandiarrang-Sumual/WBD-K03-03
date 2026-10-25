@@ -2,7 +2,7 @@ package model
 
 type Database struct {
 	ID       uint   `gorm:"primaryKey"`
-	Port     uint   `gorm:"unique;not null"`
+	Port     uint   `gorm:"not null"`
 	Host     string `gorm:"not null"`
 	User     string `gorm:"not null"`
 	Password string

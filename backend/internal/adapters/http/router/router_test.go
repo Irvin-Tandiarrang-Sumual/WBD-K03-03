@@ -40,6 +40,7 @@ func TestSetupRouterRegistersExpectedRoutes(t *testing.T) {
 	expected := []string{
 		"POST /api/v1/auth/login",
 		"POST /api/v1/auth/logout",
+		"GET /api/v1/auth/me",
 		"GET /api/v1/admin/users",
 		"GET /api/v1/admin/users/:userId",
 		"POST /api/v1/admin/users",

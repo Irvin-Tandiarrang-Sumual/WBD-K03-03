@@ -175,6 +175,8 @@ definitions:
     type: object
   internal_adapters_http_handlers_database.DatabaseResponse:
     properties:
+      access_type:
+        type: string
       host:
         type: string
       id:
@@ -1161,6 +1163,30 @@ paths:
       security:
       - CookieAuth: []
       summary: Logout
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Returns details of the currently authenticated user based on session
+        cookie.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Current user profile
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get current user
       tags:
       - Auth
   /health:

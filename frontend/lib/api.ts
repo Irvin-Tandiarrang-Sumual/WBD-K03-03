@@ -6,6 +6,7 @@ import { migrationApi } from "@/lib/api/migrations";
 
 export const api = {
   ...authApi,
+  me: authApi.me,
   databases: databaseApi.list,
   adminDatabases: databaseApi.listForAdmin,
   database: databaseApi.get,
@@ -14,8 +15,11 @@ export const api = {
   users: adminApi.listUsers,
   groups: adminApi.listGroups,
   group: adminApi.getGroup,
-  addUserToGroup: adminApi.addUserToGroup,
   createGroup: adminApi.createGroup,
+  updateGroup: adminApi.updateGroup,
+  deleteGroup: adminApi.deleteGroup,
+  addUserToGroup: adminApi.addUserToGroup,
+  removeUserFromGroup: adminApi.removeUserFromGroup,
   query: executorApi.query,
   explain: executorApi.explain,
   migrations: migrationApi.list,

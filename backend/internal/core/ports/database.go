@@ -12,6 +12,7 @@ type DatabaseInput = domain.CreateDatabaseInput
 type DatabaseService interface {
 	GetDatabaseByID(ctx context.Context, databaseID uint) (*domain.Database, error)
 	GetAllDatabases(ctx context.Context, params pagination.PaginationParams) ([]*domain.Database, int64, error)
+	GetDatabaseHosts(ctx context.Context) ([]domain.DatabaseHost, error)
 	CreateDatabase(ctx context.Context, database *DatabaseInput) (*domain.Database, error)
 	DeleteDatabase(ctx context.Context, databaseID uint) error
 	GetDatabasesByUserID(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error)
@@ -27,6 +28,8 @@ type DatabaseRepository interface {
 	FindByIDAndUserID(ctx context.Context, databaseID uint, userID uint) (*domain.Database, error)
 
 	FindWithCredentialByID(ctx context.Context, databaseID uint) (domain.Database, error)
+	FindCredentialByHostAndPort(ctx context.Context, host string, port uint, user string) (string, error)
+	GetDistinctHosts(ctx context.Context) ([]domain.DatabaseHost, error)
 	ExistsAll(ctx context.Context, databaseIDs []uint) (bool, error)
 	CreateDatabase(ctx context.Context, database *domain.Database) (*domain.Database, error)
 }

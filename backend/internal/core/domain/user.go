@@ -4,6 +4,7 @@ const (
 	RoleUser  = "user"
 	RoleAdmin = "admin"
 )
+
 type User struct {
 	ID       uint
 	Username string
