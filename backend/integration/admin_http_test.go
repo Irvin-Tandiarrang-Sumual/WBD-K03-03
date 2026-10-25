@@ -180,3 +180,34 @@ func TestIntegrationAdminUserAndGroupHTTPFlow(t *testing.T) {
 		t.Fatalf("deleted group lookup status=%d body=%s", response.Code, response.Body.String())
 	}
 }
+
+func TestIntegrationAdminRejectsLastAdminDeletionAndDuplicateUsername(t *testing.T) {
+	stack := newIntegrationStack(t, domain.AccessViewEdit)
+
+	admin, err := stack.userService.SetRole(t.Context(), stack.user.ID, domain.RoleAdmin)
+	if err != nil {
+		t.Fatalf("promote integration user: %v", err)
+	}
+
+	engine := fullIntegrationRouter(t, stack)
+	cookie := loginFullRouter(t, engine, admin.Username, "secret123")
+
+	// 1. Attempt to create user with existing username -> 409 Conflict
+	dupUserBody := fmt.Sprintf(`{"username":"%s","password":"password123","groupIds":[%d]}`, admin.Username, stack.group.ID)
+	response := requestJSON(t, engine, http.MethodPost, "/api/v1/admin/users", dupUserBody, cookie)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("duplicate username status = %d, want 409 Conflict", response.Code)
+	}
+
+	// 2. Attempt to delete the only admin user -> 409 Conflict
+	response = requestJSON(t, engine, http.MethodDelete, fmt.Sprintf("/api/v1/admin/users/%d", admin.ID), "", cookie)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("delete last admin status = %d, want 409 Conflict", response.Code)
+	}
+
+	// 3. Attempt to demote the only admin to regular user -> 409 Conflict
+	response = requestJSON(t, engine, http.MethodPatch, fmt.Sprintf("/api/v1/admin/users/%d/role", admin.ID), `{"role":"user"}`, cookie)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("demote last admin status = %d, want 409 Conflict", response.Code)
+	}
+}
