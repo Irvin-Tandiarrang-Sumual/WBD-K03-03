@@ -59,7 +59,7 @@ func LoadConfig() (*Config, error) {
 		},
 
 		Session: SessionConfig{
-			CookieSecure: getEnvAsBoolValue("SESSION_COOKIE_SECURE", false),
+			CookieSecure: getEnvAsBoolValue("SESSION_COOKIE_SECURE", true),
 		},
 
 		SeedTestData: getEnvAsBoolValue("SEED_TEST_DATA", false),

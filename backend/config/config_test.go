@@ -24,8 +24,8 @@ func TestLoadConfigUsesDefaults(t *testing.T) {
 	if cfg.Security.DatabaseCredentialKey != "" {
 		t.Fatalf("unexpected default credential key: %q", cfg.Security.DatabaseCredentialKey)
 	}
-	if cfg.Session.CookieSecure {
-		t.Fatal("CookieSecure default = true, want false")
+	if !cfg.Session.CookieSecure {
+		t.Fatal("CookieSecure default = false, want true")
 	}
 	if cfg.SeedTestData {
 		t.Fatal("SeedTestData default = true, want false")
@@ -84,8 +84,8 @@ func TestInvalidEnvironmentValuesFallBackToDefaults(t *testing.T) {
 	if cfg.Server.Port != 8080 {
 		t.Fatalf("Server.Port = %d, want 8080", cfg.Server.Port)
 	}
-	if cfg.Session.CookieSecure {
-		t.Fatal("CookieSecure = true, want fallback false")
+	if !cfg.Session.CookieSecure {
+		t.Fatal("CookieSecure = false, want fallback true")
 	}
 	if cfg.SeedTestData {
 		t.Fatal("SeedTestData = true, want fallback false")

@@ -226,6 +226,7 @@ type SessionRepository struct {
 	CreateFunc         func(context.Context, domain.Session) (domain.Session, error)
 	FindByTokenFunc    func(context.Context, string) (domain.Session, error)
 	TouchFunc          func(context.Context, uint, time.Time) error
+	RotateFunc         func(context.Context, domain.Session) error
 	DeleteFunc         func(context.Context, uint) error
 	DeleteByTokenFunc  func(context.Context, string) error
 	DeleteByUserIDFunc func(context.Context, uint) error
@@ -241,6 +242,16 @@ func (f *SessionRepository) FindByToken(ctx context.Context, token string) (doma
 
 func (f *SessionRepository) Touch(ctx context.Context, id uint, lastActive time.Time) error {
 	return f.TouchFunc(ctx, id, lastActive)
+}
+
+func (f *SessionRepository) Rotate(ctx context.Context, session domain.Session) error {
+	if f.RotateFunc != nil {
+		return f.RotateFunc(ctx, session)
+	}
+	if f.TouchFunc != nil {
+		return f.TouchFunc(ctx, session.ID, session.LastActive)
+	}
+	return nil
 }
 
 func (f *SessionRepository) Delete(ctx context.Context, id uint) error {

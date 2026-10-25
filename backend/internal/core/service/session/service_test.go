@@ -60,6 +60,10 @@ func TestCreateBuildsOpaqueSession(t *testing.T) {
 			"absolute expiration must be after last active",
 		)
 	}
+
+	if saved.RotatedAt.IsZero() {
+		t.Fatal("rotated_at must be initialized on creation")
+	}
 }
 
 func TestResolveValidSessionTouchesLastActive(t *testing.T) {
@@ -75,6 +79,7 @@ func TestResolveValidSessionTouchesLastActive(t *testing.T) {
 				ID:                 3,
 				OpaqueToken:        token,
 				UserID:             9,
+				RotatedAt:          now.Add(-time.Minute),
 				IdleTimeout:        30 * time.Minute,
 				LastActive:         now.Add(-time.Minute),
 				AbsoluteExpiration: now.Add(time.Hour),
@@ -126,6 +131,123 @@ func TestResolveValidSessionTouchesLastActive(t *testing.T) {
 			"UserID = %d, want 9",
 			got.UserID,
 		)
+	}
+}
+
+func TestResolveRotatesTokenAfterIntervalWithoutExtendingAbsoluteExpiration(t *testing.T) {
+	now := time.Now().UTC()
+	originalAbsoluteExp := now.Add(12 * time.Hour)
+	var rotatedSession domain.Session
+
+	repo := &testutil.SessionRepository{
+		FindByTokenFunc: func(_ context.Context, token string) (domain.Session, error) {
+			return domain.Session{
+				ID:                 7,
+				OpaqueToken:        token,
+				UserID:             15,
+				RotatedAt:          now.Add(-(sessionservice.DefaultRotationInterval + time.Minute)),
+				IdleTimeout:        30 * time.Minute,
+				LastActive:         now.Add(-5 * time.Minute),
+				AbsoluteExpiration: originalAbsoluteExp,
+			}, nil
+		},
+		RotateFunc: func(_ context.Context, session domain.Session) error {
+			rotatedSession = session
+			return nil
+		},
+	}
+
+	service := sessionservice.NewSessionService(repo)
+	got, err := service.Resolve(context.Background(), "old-token-123")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	if got.OpaqueToken == "" || got.OpaqueToken == "old-token-123" {
+		t.Fatalf("expected new rotated token, got %q", got.OpaqueToken)
+	}
+	if got.PreviousOpaqueToken != "old-token-123" || rotatedSession.PreviousOpaqueToken != "old-token-123" {
+		t.Fatalf("previous token = %q, want old-token-123", got.PreviousOpaqueToken)
+	}
+	if !got.AbsoluteExpiration.Equal(originalAbsoluteExp) {
+		t.Fatalf("AbsoluteExpiration = %v, want unchanged %v", got.AbsoluteExpiration, originalAbsoluteExp)
+	}
+	if !got.GracePeriodUntil.After(now) {
+		t.Fatalf("expected GracePeriodUntil after now, got %v", got.GracePeriodUntil)
+	}
+}
+
+func TestResolveAllowsPreviousTokenWithinGracePeriod(t *testing.T) {
+	now := time.Now().UTC()
+	touched := false
+
+	repo := &testutil.SessionRepository{
+		FindByTokenFunc: func(_ context.Context, _ string) (domain.Session, error) {
+			return domain.Session{
+				ID:                  11,
+				OpaqueToken:         "new-rotated-token",
+				PreviousOpaqueToken: "old-grace-token",
+				GracePeriodUntil:    now.Add(20 * time.Second),
+				RotatedAt:           now.Add(-10 * time.Second),
+				IdleTimeout:         30 * time.Minute,
+				LastActive:          now.Add(-10 * time.Second),
+				AbsoluteExpiration:  now.Add(time.Hour),
+				UserID:              21,
+			}, nil
+		},
+		TouchFunc: func(_ context.Context, id uint, _ time.Time) error {
+			touched = true
+			if id != 11 {
+				t.Fatalf("id = %d, want 11", id)
+			}
+			return nil
+		},
+	}
+
+	service := sessionservice.NewSessionService(repo)
+	got, err := service.Resolve(context.Background(), "old-grace-token")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want valid during grace period", err)
+	}
+	if !touched {
+		t.Fatal("expected Touch() to be called when resolving via grace period")
+	}
+	if got.OpaqueToken != "new-rotated-token" || got.UserID != 21 {
+		t.Fatalf("got = %+v, want new-rotated-token for user 21", got)
+	}
+}
+
+func TestResolveRejectsPreviousTokenAfterGracePeriodExpires(t *testing.T) {
+	now := time.Now().UTC()
+	deleted := false
+
+	repo := &testutil.SessionRepository{
+		FindByTokenFunc: func(_ context.Context, _ string) (domain.Session, error) {
+			return domain.Session{
+				ID:                  12,
+				OpaqueToken:         "new-rotated-token",
+				PreviousOpaqueToken: "expired-grace-token",
+				GracePeriodUntil:    now.Add(-5 * time.Second),
+				RotatedAt:           now.Add(-35 * time.Second),
+				IdleTimeout:         30 * time.Minute,
+				LastActive:          now.Add(-5 * time.Second),
+				AbsoluteExpiration:  now.Add(time.Hour),
+				UserID:              21,
+			}, nil
+		},
+		DeleteByTokenFunc: func(context.Context, string) error {
+			deleted = true
+			return nil
+		},
+	}
+
+	service := sessionservice.NewSessionService(repo)
+	_, err := service.Resolve(context.Background(), "expired-grace-token")
+	if !errors.Is(err, domain.ErrInvalidSession) {
+		t.Fatalf("error = %v, want ErrInvalidSession after grace period expires", err)
+	}
+	if deleted {
+		t.Fatal("active session must not be deleted when only previous token grace period expired")
 	}
 }
 
@@ -289,6 +411,7 @@ func TestRevokeAndRevokeUser(t *testing.T) {
 		)
 	}
 }
+
 func TestCreatePropagatesRepositoryError(t *testing.T) {
 	wantErr := errors.New("create session failed")
 	repo := &testutil.SessionRepository{

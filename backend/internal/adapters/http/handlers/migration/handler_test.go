@@ -88,6 +88,78 @@ func TestCreateMigrationUsesAuthenticatedUser(t *testing.T) {
 	}
 }
 
+func TestCreateMigrationMultiQuerySuccessFailureAndAccessDenied(t *testing.T) {
+	userID := uint(7)
+	multiSQL := "CREATE TABLE orders (id INT PRIMARY KEY); ALTER TABLE orders ADD COLUMN total INT; INSERT INTO orders (id, total) VALUES (1, 50000);"
+
+	t.Run("success flow returns 201 with combined sql_up and reversed sql_down", func(t *testing.T) {
+		service := &testutil.MigrationService{
+			CreateMigrationFunc: func(_ context.Context, databaseID uint, gotUserID uint, sqlUp string) (*domain.Migration, error) {
+				if databaseID != 4 || gotUserID != 7 || sqlUp != multiSQL {
+					t.Fatalf("databaseID=%d userID=%d sql=%q", databaseID, gotUserID, sqlUp)
+				}
+				return &domain.Migration{
+					ID:         2,
+					DatabaseID: 4,
+					Version:    "2",
+					Status:     "success",
+					SqlUp:      sqlUp,
+					SqlDown:    "DELETE FROM orders WHERE id = 1 AND total = 50000;\nALTER TABLE orders DROP COLUMN total;\nDROP TABLE orders",
+					UserID:     7,
+				}, nil
+			},
+		}
+		payload, _ := json.Marshal(map[string]string{"sql_up": multiSQL})
+		c, w := newMigrationTestContext(http.MethodPost, "/databases/4/migrations", payload, gin.Params{{Key: "database_id", Value: "4"}}, &userID)
+		NewMigrationHandler(service).CreateMigration(c)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		if !bytes.Contains(w.Body.Bytes(), []byte(`"status":"success"`)) {
+			t.Fatalf("expected success status in response body=%s", w.Body.String())
+		}
+	})
+
+	t.Run("failure flow returns recorded failed migration with error message", func(t *testing.T) {
+		service := &testutil.MigrationService{
+			CreateMigrationFunc: func(_ context.Context, _ uint, _ uint, sqlUp string) (*domain.Migration, error) {
+				return &domain.Migration{
+					ID:           3,
+					DatabaseID:   4,
+					Version:      "3",
+					Status:       "fail",
+					ErrorMessage: "execution failed on INSERT INTO orders (id, total) VALUES (1, 50000)",
+					SqlUp:        sqlUp,
+					UserID:       7,
+				}, nil
+			},
+		}
+		payload, _ := json.Marshal(map[string]string{"sql_up": multiSQL})
+		c, w := newMigrationTestContext(http.MethodPost, "/databases/4/migrations", payload, gin.Params{{Key: "database_id", Value: "4"}}, &userID)
+		NewMigrationHandler(service).CreateMigration(c)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		if !bytes.Contains(w.Body.Bytes(), []byte(`"status":"fail"`)) || !bytes.Contains(w.Body.Bytes(), []byte(`"error_message":"execution failed`)) {
+			t.Fatalf("expected failed status and error_message in response body=%s", w.Body.String())
+		}
+	})
+
+	t.Run("access denied flow returns 403 Forbidden", func(t *testing.T) {
+		service := &testutil.MigrationService{
+			CreateMigrationFunc: func(_ context.Context, _ uint, _ uint, _ string) (*domain.Migration, error) {
+				return nil, domain.ErrDatabaseAccessDenied
+			},
+		}
+		payload, _ := json.Marshal(map[string]string{"sql_up": multiSQL})
+		c, w := newMigrationTestContext(http.MethodPost, "/databases/4/migrations", payload, gin.Params{{Key: "database_id", Value: "4"}}, &userID)
+		NewMigrationHandler(service).CreateMigration(c)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status=%d want=%d body=%s", w.Code, http.StatusForbidden, w.Body.String())
+		}
+	})
+}
+
 func TestCreateMigrationRejectsMissingUserAndInvalidJSON(t *testing.T) {
 	handler := NewMigrationHandler(&testutil.MigrationService{})
 

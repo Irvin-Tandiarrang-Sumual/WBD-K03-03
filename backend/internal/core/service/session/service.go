@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	DefaultIdleTimeout      = 30 * time.Minute
-	DefaultAbsoluteLifetime = 24 * time.Hour
+	DefaultIdleTimeout         = 30 * time.Minute
+	DefaultAbsoluteLifetime    = 24 * time.Hour
+	DefaultRotationInterval    = 15 * time.Minute
+	DefaultRotationGracePeriod = 30 * time.Second
 
 	sessionTokenBytes = 32
 )
@@ -41,6 +43,7 @@ func (s *sessionService) Create(ctx context.Context, userID uint) (domain.Sessio
 
 	session := domain.Session{
 		OpaqueToken:        opaqueToken,
+		RotatedAt:          now,
 		IdleTimeout:        DefaultIdleTimeout,
 		LastActive:         now,
 		AbsoluteExpiration: now.Add(DefaultAbsoluteLifetime),
@@ -80,6 +83,44 @@ func (s *sessionService) Resolve(ctx context.Context, opaqueToken string) (domai
 		return domain.Session{}, domain.ErrInvalidSession
 	}
 
+	// Jika request datang menggunakan identifier lama (PreviousOpaqueToken),
+	// periksa apakah masih berada dalam masa grace period.
+	if session.PreviousOpaqueToken != "" &&
+		opaqueToken == session.PreviousOpaqueToken &&
+		opaqueToken != session.OpaqueToken {
+		if session.GracePeriodUntil.IsZero() || !now.Before(session.GracePeriodUntil) {
+			return domain.Session{}, domain.ErrInvalidSession
+		}
+
+		if err := s.sessions.Touch(ctx, session.ID, now); err != nil {
+			return domain.Session{}, err
+		}
+
+		session.LastActive = now
+		return session, nil
+	}
+
+	// Rotasi berkala apabila umur token saat ini telah mencapai DefaultRotationInterval,
+	// tanpa memperpanjang AbsoluteExpiration.
+	if !session.RotatedAt.IsZero() && now.Sub(session.RotatedAt) >= DefaultRotationInterval {
+		newToken, genErr := generateOpaqueToken()
+		if genErr != nil {
+			return domain.Session{}, genErr
+		}
+
+		session.PreviousOpaqueToken = session.OpaqueToken
+		session.OpaqueToken = newToken
+		session.GracePeriodUntil = now.Add(DefaultRotationGracePeriod)
+		session.RotatedAt = now
+		session.LastActive = now
+
+		if err := s.sessions.Rotate(ctx, session); err != nil {
+			return domain.Session{}, err
+		}
+
+		return session, nil
+	}
+
 	if err := s.sessions.Touch(ctx, session.ID, now); err != nil {
 		return domain.Session{}, err
 	}
@@ -103,7 +144,6 @@ func (s *sessionService) RevokeUser(ctx context.Context, userID uint) error {
 
 func generateOpaqueToken() (string, error) {
 	raw := make([]byte, sessionTokenBytes)
-
 	if _, err := io.ReadFull(rand.Reader, raw); err != nil {
 		return "", err
 	}
