@@ -2,7 +2,6 @@ package postgresql
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,7 +9,8 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type ConnectionTester struct{}
@@ -24,14 +24,18 @@ func NewConnectionTester() *ConnectionTester {
 func (t *ConnectionTester) Test(ctx context.Context, database domain.Database) error {
 	dsn := buildDSN(database)
 
-	db, err := sql.Open("pgx", dsn)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return fmt.Errorf("open PostgreSQL connection: %w", err)
 	}
 
-	defer db.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("get PostgreSQL SQL connection: %w", err)
+	}
+	defer sqlDB.Close()
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := sqlDB.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping PostgreSQL database: %w", err)
 	}
 
@@ -45,11 +49,8 @@ func buildDSN(database domain.Database) string {
 		Host:   net.JoinHostPort(database.Host, strconv.Itoa(int(database.Port))),
 		Path:   database.Name,
 	}
-
 	query := connectionURL.Query()
 	query.Set("sslmode", "disable")
-
 	connectionURL.RawQuery = query.Encode()
-
 	return connectionURL.String()
 }

@@ -29,4 +29,8 @@ var (
 	ErrInvalidMigrationInput       = errors.New("Migration input is not valid")
 	ErrMigrationVersionUnavailable = errors.New("Migration version is not available")
 	ErrInvalidPagination           = errors.New("Pagination parameters are not valid")
+	ErrInvalidDatabaseQuery        = errors.New("Database query is not valid")
+	ErrSQLDownGenerationUnsupported = errors.New("SQL down generation is not supported for this statement")
+	ErrInvalidMigrationComparison   = errors.New("Migration comparison is not valid")
+	ErrMigrationRollbackUnavailable = errors.New("Migration rollback is not available")
 )

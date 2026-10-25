@@ -5,7 +5,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Migrate(db *gorm.DB) error {
+func MigrateSystemDatabase(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&model.Database{},
 		&model.Group{},
@@ -14,4 +14,8 @@ func Migrate(db *gorm.DB) error {
 		&model.Session{},
 		&model.Migration{},
 	)
+}
+
+func Migrate(db *gorm.DB) error {
+	return MigrateSystemDatabase(db)
 }

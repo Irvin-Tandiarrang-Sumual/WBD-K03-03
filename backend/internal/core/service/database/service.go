@@ -60,7 +60,7 @@ func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *por
 		database.Type = "postgresql"
 	}
 	if database.Port == 0 || database.Port > 65535 || database.Host == "" ||
-		database.User == "" || database.Name == "" || database.Type != "postgresql" {
+		database.User == "" || database.Name == "" || database.Type != "postgresql" && database.Type != "mysql" {
 		return nil, domain.ErrInvalidInput
 	}
 

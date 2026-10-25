@@ -9,9 +9,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func Seed(db *gorm.DB) error {
+func SeedTestData(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		databases, err := seedDatabases(tx)
+		databases, err := seedTestDatabases(tx)
 		if err != nil {
 			return err
 		}
@@ -21,11 +21,11 @@ func Seed(db *gorm.DB) error {
 			return err
 		}
 
-		return seedUsers(tx, groups)
+		return seedTestUsers(tx, groups)
 	})
 }
 
-func seedDatabases(tx *gorm.DB) (map[string]model.Database, error) {
+func seedTestDatabases(tx *gorm.DB) (map[string]model.Database, error) {
 	databaseSeeds := []model.Database{
 		{Port: 5432, Host: "dummy-postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db1_pg"},
 		{Port: 3306, Host: "dummy-mysql", User: "demo_user", Password: "demo_password", Type: "mysql", Name: "db2_mysql"},
@@ -34,15 +34,15 @@ func seedDatabases(tx *gorm.DB) (map[string]model.Database, error) {
 	databases := make(map[string]model.Database, len(databaseSeeds))
 	for _, databaseSeed := range databaseSeeds {
 		var database model.Database
-		err := tx.Where("port = ?", databaseSeed.Port).First(&database).Error
+		err := tx.Where("name = ?", databaseSeed.Name).First(&database).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			database = databaseSeed
 			err = tx.Create(&database).Error
 		}
 		if err != nil {
-			return nil, fmt.Errorf("seeding database on port %d: %w", databaseSeed.Port, err)
+			return nil, fmt.Errorf("seeding database %s: %w", databaseSeed.Name, err)
 		}
-		databases[databaseKey(databaseSeed.Port)] = database
+		databases[databaseKey(databaseSeed.Name)] = database
 	}
 	return databases, nil
 }
@@ -54,8 +54,8 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database) (map[string]mo
 		accessType string
 		databases  []model.Database
 	}{
-		{"admin", "admin", "view_edit", []model.Database{{ID: databases[databaseKey(5432)].ID}, {ID: databases[databaseKey(3306)].ID}}},
-		{"user", "user", "view_only", []model.Database{{ID: databases[databaseKey(5432)].ID}, {ID: databases[databaseKey(3306)].ID}}},
+		{"admin", "admin", "view_edit", []model.Database{{ID: databases[databaseKey("db1_pg")].ID}, {ID: databases[databaseKey("db2_mysql")].ID}}},
+		{"user", "user", "view_only", []model.Database{{ID: databases[databaseKey("db1_pg")].ID}, {ID: databases[databaseKey("db2_mysql")].ID}}},
 	}
 
 	groups := make(map[string]model.Group, len(groupSeeds))
@@ -85,7 +85,7 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database) (map[string]mo
 	return groups, nil
 }
 
-func seedUsers(tx *gorm.DB, groups map[string]model.Group) error {
+func seedTestUsers(tx *gorm.DB, groups map[string]model.Group) error {
 	userSeeds := []struct {
 		username string
 		password string
@@ -122,6 +122,10 @@ func seedUsers(tx *gorm.DB, groups map[string]model.Group) error {
 	return nil
 }
 
-func databaseKey(port uint) string {
-	return fmt.Sprintf("port:%d", port)
+func databaseKey(name string) string {
+	return fmt.Sprintf("name:%s", name)
+}
+
+func Seed(db *gorm.DB) error {
+	return SeedTestData(db)
 }

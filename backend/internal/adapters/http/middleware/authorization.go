@@ -123,6 +123,9 @@ func RequireDatabaseAccess(groups ports.GroupService, required domain.AccessType
 
 func parseDatabaseID(c *gin.Context) (uint, error) {
 	rawID := c.Param("databaseId")
+	if rawID == "" {
+		rawID = c.Param("database_id")
+	}
 
 	id, err := strconv.ParseUint(rawID, 10, 64)
 	if err != nil || id == 0 {
@@ -139,4 +142,3 @@ func RequireDatabaseView(groups ports.GroupService) gin.HandlerFunc {
 func RequireDatabaseEdit(groups ports.GroupService) gin.HandlerFunc {
 	return RequireDatabaseAccess(groups, domain.AccessViewEdit)
 }
-
