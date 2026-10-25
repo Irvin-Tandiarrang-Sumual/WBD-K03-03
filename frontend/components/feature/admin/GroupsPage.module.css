@@ -7,10 +7,10 @@
   box-sizing:border-box
 }
 .header {
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
-  margin-bottom:28px
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
 }
 .eyebrow {
   color:#3b82f6;
@@ -37,18 +37,41 @@
   color:#d4d4d8
 }
 .grid {
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:15px
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  width: 100%;
+  margin: 2rem auto;
 }
 .card {
-  background:#0a0a0a;
-  border:1px solid #333;
-  border-radius:11px;
-  padding:20px;
-  transition:border-color .2s,
-transform .2s
+  background: #0a0a0a;
+  border: 1px solid #333;
+  border-radius: 11px;
+  padding: 1rem 1.25rem;
+  text-align: center;
+  transition: border-color 0.2s, transform 0.2s;
 }
+
+.card h2 {
+  font-size: 17px;
+  margin: 0 0 0.5rem;
+}
+
+.card p {
+  color: #a1a1aa;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 0;
+  margin: 0 0 0.75rem;
+}
+
+.card a {
+  display: inline-block;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .card:hover {
   border-color:#3b82f6;
   transform:translateY(-2px)
@@ -221,4 +244,58 @@ transform .2s
   padding: 0.1em 0.4em;
   border-radius: 6px;
   margin-bottom: 1em;
+}
+
+.container > input[type="search"] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: white;
+}
+
+.container > form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 28rem;
+  margin: 2rem auto;
+}
+
+.container > form input,
+.container > form select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: white;
+}
+
+.container input::placeholder {
+  color: #aaa;
+}
+
+.container > form button {
+  padding: 0.9rem 1.5rem;
+  font-size: 1rem;
+  background-color: #000000;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.container h1 {
+  text-align: center;
+  margin: 0;
 }

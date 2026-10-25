@@ -1,159 +1,193 @@
-# Database Management Platform
+# Database Management Platform (WBD-K03-03)
 
-## Description
+Platform manajemen database berbasis web  untuk mengelola koneksi database secara dinamis, mengontrol hak akses pengguna berbasis grup (*Role-Based Access Control*), mengeksekusi dan membandingkan migrasi skema (*Schema Diff & Migration*), menganalisis rencana eksekusi query (*EXPLAIN / EXPLAIN ANALYZE*), serta melakukan *automated rollback*.
+
+---
+## Features
+1. **Dynamic Database Creation**:
+2. **Group-Based Access Control**:
+3. **Schema Diff & Candidate Migration Generation**:
+4. **Query Execution Plan Analysis (EXPLAIN / EXPLAIN ANALYZE)**:
+5. **Automated Schema Rollback**:
+---
+
+## Tech Stack & Architecture
+
+- **Backend**: Go 1.23, Gin Web Framework, GORM ORM, PostgreSQL Driver (`pgx`), MySQL Driver (`go-sql-driver/mysql`), Swaggo (OpenAPI/Swagger).
+- **Frontend**: Next.js 15, React 19, TypeScript, CSS Modules.
+- **Database Storage**:
+  - `internal_db`: PostgreSQL 15 untuk menyimpan data pengguna, grup, metadata database, dan riwayat migrasi.
+  - `demo_postgres`: Engine PostgreSQL 15 target demo.
+  - `demo_mysql`: Engine MySQL 8.4 target demo.
+- **Infrastructure**: Docker & Docker Compose.
+
+---
 
 ## Usage
 
-### Prerequisites
+### 1. Prasyarat
+- Docker Engine atau Docker Desktop aktif.
+- Docker Compose v2+.
 
-- Docker Engine atau Docker Desktop
-- Docker Compose
-
-### Configuration
-
-Make sure `.env` ada di root:
-
-```text
-WBD-K03-03/
-├── .env
-├── docker-compose.yml
-├── backend/
-└── frontend/
-```
-
-Sesuai nilai konfigurasi database dan server di `.env` sebelum menjalankan
-aplikasi. Opsi lain adalah dengan
-
+### 2. Konfigurasi Lingkungan (`.env`)
+Salin file konfigurasi contoh di root direktori proyek:
 ```bash
 cp .env.example .env
 ```
+Pastikan variabel lingkungan seperti port dan kredensial database internal sudah sesuai.
 
-### Start App
-
-Jalankan perintah berikut dari root project:
-
+### 3. Menjalankan Seluruh Service
+Jalankan perintah berikut dari direktori root proyek:
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Backend dapat diakses melalui:
+Setelah seluruh kontainer berstatus *healthy*, aplikasi dapat diakses di:
+- **Frontend Web App**: [http://localhost:3000](http://localhost:3000)
+- **Backend API Server**: [http://localhost:8080](http://localhost:8080)
+- **Interactive Swagger UI**: [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
 
-```text
-http://localhost:8080
-```
+### 4. Akun Demo Bawaan
+Sistem secara otomatis menginisialisasi akun awal untuk pengujian:
 
-Jika ingin membangun ulang image tanpa menggunakan cache:
+| Role | Username | Password | Deskripsi |
+|---|---|---|---|
+| **Admin** | `admin` | `admin123` | Memiliki akses penuh ke panel admin, user management, group access control, dan koneksi database. |
+| **Regular User** | `user` | `user123` | Pengguna biasa dengan akses database yang dibatasi oleh grup keanggotaannya. |
 
+> **Catatan Kredensial Engine Demo:**
+> - PostgreSQL Demo: `demo_postgres:5432` (User: `demo_user`, Password: `demo_password`, Database: `db1_pg`).
+> - MySQL Demo: `demo_mysql:3306` (User: `demo_user`, Password: `demo_password`, Database: `db2_mysql`).
+
+### 5. Rebuild
+Jika ada pembaruan kode pada backend atau frontend:
 ```bash
-docker compose build --no-cache app
-docker compose up
+docker compose build --no-cache app frontend && docker compose up -d
 ```
 
-### Stop App
-
-Untuk menghentikan container:
-
+### 6. Menghentikan Service
+Untuk menghentikan kontainer:
 ```bash
 docker compose down
 ```
-
-Untuk menghapus volume dan seluruh data database:
+Untuk menghentikan dan mereset seluruh volume data database:
 ```bash
 docker compose down -v
 ```
 
-## Unit Testing
+---
 
-Unit test backend dapat dijalankan dengan satu command dari root project:
+## Testing
 
+### 1. Menjalankan Unit Test Backend
+Dari direktori root proyek:
 ```bash
 make test
+# atau langsung dari folder backend:
+cd backend && go test ./...
 ```
 
-Target `test` pada [Makefile](./Makefile) root berpindah ke folder `backend`
-dan menjalankan seluruh unit test Go dengan:
+Target Makefile lainnya yang tersedia:
+```bash
+make test-unit        # Menjalankan unit test
+make test-unit-cover  # Menjalankan unit test dan menghasilkan laporan coverage di backend/coverage.out
+make test-integration # Menjalankan integration test
+make test-all         # Menjalankan seluruh unit test dan integration test
+```
 
+### 2. Menjalankan Typecheck Frontend
+Dari direktori `frontend`:
+```bash
+cd frontend && npx tsc --noEmit
+```
+
+---
+
+## 📖 Dokumentasi API & Swagger
+
+Dokumentasi API interaktif tersedia melalui Swagger UI di:
 ```text
-go test ./...
+http://localhost:8080/swagger/index.html
 ```
 
-Integration test yang membutuhkan PostgreSQL eksternal tidak termasuk dalam
-command unit test. Untuk menjalankan seluruh unit test dan integration test,
-gunakan:
+### Panduan Autentikasi Swagger (Cookie-Based Authentication)
+Endpoint selain `POST /api/v1/auth/login` memerlukan cookie sesi (`session=<token>`):
+1. Buka endpoint `POST /api/v1/auth/login` di Swagger UI.
+2. Klik **Try it out**, masukkan username `admin` dan password `admin123`, lalu klik **Execute**.
+3. Buka Developer Tools browser (`F12`), masuk ke tab **Application / Storage** → **Cookies** → salin nilai (*Value*) dari cookie bernama `session`.
+4. Klik tombol **Authorize** di pojok kanan atas halaman Swagger UI.
+5. Masukkan nilai:
+   ```text
+   session=<TOKEN_SESI_ANDA>
+   ```
+6. Klik **Authorize** lalu **Close**. Seluruh endpoint terproteksi kini dapat diuji langsung dari Swagger.
 
+### Memperbarui Swagger Doc
+Jika menambahkan endpoint atau mengubah struct request/response:
 ```bash
-make test-all
+cd backend
+swag init -g cmd/api/main.go -o docs/ --parseDependency --parseInternal
 ```
 
-Target lain yang tersedia:
+---
 
-```bash
-make test-unit        # Sama dengan make test
-make test-unit-cover  # Unit test dengan laporan coverage
-make test-integration # Integration test
-```
+## 📡 Daftar Endpoint API
 
-Target `test-unit-cover` menjalankan package yang memiliki unit test dan
-menghasilkan laporan coverage di `backend/coverage.out`. Laporan tersebut juga
-menampilkan total coverage seluruh package yang dipilih.
-
-### Run with Docker
-
-From the repository root, copy `.env.example` to `.env`:
-```bash
-Copy-Item .env.example .env
-```
-then run:
-
-```bash
-docker compose up --build
-```
-
-The frontend will be available at `http://localhost:3000` by default.
-
-## API Endpoints
-### Access Control
-| Method | Endpoint | Function | Notes |
+### 1. Autentikasi & Akun (`/auth`)
+| Method | Endpoint | Deskripsi | Parameter / Body |
 |---|---|---|---|
-| POST | `api/v1/auth/login` | Mengautentikasi pengguna | Body : `username` dan `password` |
-| POST | `api/v1/auth/logout` | Keluar dari web app | |
+| `POST` | `/api/v1/auth/login` | Login pengguna dan inisialisasi cookie sesi | `{ "username": "...", "password": "..." }` |
+| `POST` | `/api/v1/auth/logout` | Mengakhiri sesi pengguna aktif | — |
+| `GET` | `/api/v1/auth/me` | Mengambil data profil user yang sedang login | — |
 
-### Admin Platform
-| Method | Endpoint | Function | Notes |
+### 2. Panel Admin: Manajemen Pengguna (`/admin/users`)
+| Method | Endpoint | Deskripsi | Catatan |
 |---|---|---|---|
-| GET | `api/v1/admin/users` | Ambil semua user |  |
-| GET | `api/v1/admin/users/:id` | Ambil detail satu user | |
-| POST | `api/v1/admin/users` | Buat user baru | Body: `username`, `password`, `role`, dan `groups` |
-| DELETE | `api/v1/admin/users/:id` | Hapus satu user | Wajib menyertakan `:id` |
-| GET | `api/v1/admin/groups` | Ambil semua group |  |
-| GET | `api/v1/admin/groups/:id` | Ambil detail satu group | |
-| POST | `api/v1/admin/groups` | Buat group baru | Body: `name` dan `databases`, setiap database memiliki `database_id` dan `access_type` |
-| PATCH | `api/v1/admin/groups/:id` | Update sebagian data group | Body dapat berisi `name` atau `databases`, setiap database memiliki `database_id` dan `access_type` |
-| DELETE | `api/v1/admin/groups/:id` | Hapus satu group | Wajib menyertakan `:id` |
-| POST | `api/v1/admin/groups/:group_id/users` | Hubungkan user ke group | Kirim `user_id` dan `group_id` di request body |
-| DELETE | `api/v1/admin/groups/:group_id/users/:user_id` | Putus hubungan user-group |  |
-| GET | `api/v1/admin/databases` | Ambil semua database |  |
-| GET | `api/v1/admin/databases/:id` | Ambil satu database | Menggunakan parameter `:id` |
-| POST | `api/v1/admin/databases` | Buat database baru | Body: `port`, `host`, `user`, `password`, `type`, dan `name` |
-| DELETE | `api/v1/admin/databases/:id` | Hapus satu database | Memperbaiki typo dan menambahkan `:id` |
+| `GET` | `/api/v1/admin/users` | Mengambil daftar seluruh pengguna (paginated) | Query: `page`, `limit` |
+| `GET` | `/api/v1/admin/users/:userId` | Mengambil detail satu pengguna berdasarkan ID | Path: `:userId` |
+| `POST` | `/api/v1/admin/users` | Membuat pengguna baru | Body: `username`, `password`, `groupIds` |
+| `PATCH` | `/api/v1/admin/users/:userId` | Memperbarui data pengguna | Body: `username`, `password` |
+| `DELETE` | `/api/v1/admin/users/:userId` | Menghapus pengguna | Path: `:userId` |
+| `PATCH` | `/api/v1/admin/users/:userId/role` | Mengubah role pengguna (`admin` / `user`) | Body: `role` |
 
-### Database Management & Migration
-| Method | Endpoint | Function | Notes / Features |
+### 3. Panel Admin: Manajemen Grup & Access Control (`/admin/groups`)
+| Method | Endpoint | Deskripsi | Catatan |
 |---|---|---|---|
-| GET | `api/v1/me/databases` | Daftar database | Menampilkan semua database yang dapat diakses user |
-| GET | `api/v1/me/databases/:database_id` | Detail database | Menampilkan detail database dan isi datanya |
-| POST | `api/v1/me/databases/:database_id/query` | Menjalankan SQL `SELECT` | request body : `SQL SELECT` |
-| POST | `api/v1/me/databases/:database_id/explain` | Menganalisis query plan | Gunakan query parameter `analyzer=true` untuk menjalankan `EXPLAIN ANALYZE` |
-| GET | `api/v1/me/databases/:database_id/migrations` | Daftar migrasi | Menampilkan riwayat atau daftar file migrasi |
-| POST | `api/v1/me/databases/:database_id/migrations` | Menjalankan migrasi baru | Membuat dan mengeksekusi migrasi baru pada database |
-| POST | `api/v1/me/databases/migrations/rollback` | Melakukan rollback migrasi | Mengembalikan database ke versi migrasi yang dipilih |
-| GET | `api/v1/me/databases/:database_id/migrations/compare` | Membandingkan dua migrasi | Gunakan query parameter `migration_id_1` dan `migration_id_2` untuk menentukan dua migrasi yang dibandingkan |
-| GET | `api/v1/me/databases/:database_id/migrations/:migration_id` | Detail migrasi | Menampilkan detail satu file migrasi |
+| `GET` | `/api/v1/admin/groups` | Mengambil daftar seluruh access group | Query: `page`, `limit` |
+| `GET` | `/api/v1/admin/groups/:groupId` | Mengambil detail grup beserta daftar hak akses database | Path: `:groupId` |
+| `POST` | `/api/v1/admin/groups` | Membuat grup baru | Body: `name`, `databaseAccesses` |
+| `PATCH` | `/api/v1/admin/groups/:groupId` | Mengubah nama grup atau hak akses database (`view_only` $\leftrightarrow$ `view_edit`) | Body: `name`, `databaseAccesses` |
+| `DELETE` | `/api/v1/admin/groups/:groupId` | Menghapus access group | Path: `:groupId` |
+| `POST` | `/api/v1/admin/groups/:groupId/users/:userId` | Memasukkan user ke dalam grup | Path: `:groupId`, `:userId` |
+| `DELETE` | `/api/v1/admin/groups/:groupId/users/:userId` | Mengeluarkan user dari grup | Path: `:groupId`, `:userId` |
 
+### 4. Panel Admin: Manajemen Database Server (`/admin/databases`)
+| Method | Endpoint | Deskripsi | Catatan |
+|---|---|---|---|
+| `GET` | `/api/v1/admin/databases` | Mengambil seluruh database yang terdaftar | Query: `page`, `limit` |
+| `GET` | `/api/v1/admin/databases/:id` | Mengambil detail database berdasarkan ID | Path: `:id` |
+| `POST` | `/api/v1/admin/databases` | Membuat database baru secara dinamis pada engine target | Body: `host`, `port`, `user`, `password`, `type`, `name` |
+| `DELETE` | `/api/v1/admin/databases/:id` | Menghapus database terdaftar (dicegah jika masih memiliki grup yang terhubung) | Path: `:id` |
 
-## Contributors
-| NIM | NIM |
-|--- | ---|
+### 5. Pengguna: Eksplorasi Database, Query & Migrasi (`/me/databases`)
+| Method | Endpoint | Deskripsi | Hak Akses Minimal |
+|---|---|---|---|
+| `GET` | `/api/v1/me/databases` | Mengambil daftar database yang dapat diakses pengguna | — |
+| `GET` | `/api/v1/me/databases/:database_id` | Mengambil detail database | `view_only` |
+| `POST` | `/api/v1/me/databases/:database_id/query` | Menjalankan query SQL kustom | `view_only` |
+| `POST` | `/api/v1/me/databases/:database_id/explain` | Menganalisis rencana eksekusi query (`EXPLAIN` / `EXPLAIN ANALYZE`) | `view_only` |
+| `GET` | `/api/v1/me/databases/:database_id/migrations` | Mengambil daftar riwayat versi migrasi skema | `view_only` |
+| `POST` | `/api/v1/me/databases/:database_id/migrations` | Mengeksekusi migrasi skema baru | `view_edit` |
+| `GET` | `/api/v1/me/databases/:database_id/migrations/compare` | Membandingkan dua versi migrasi (Schema Diff) | `view_only` |
+| `GET` | `/api/v1/me/databases/:database_id/migrations/:migration_id` | Mengambil detail satu versi migrasi | `view_only` |
+| `POST` | `/api/v1/me/databases/migrations/rollback` | Melakukan rollback skema ke versi target | `view_edit` |
+
+---
+
+## 👥 Kontributor
+
+| NIM | Nama |
+|---|---|
 | 13524006 | Gabriella Botimada Lubis |
 | 13524030 | Irvin Tandiarrang Sumual |
 | 13524033 | Ray Owen Martin |

@@ -13,6 +13,17 @@
   margin-bottom: 20px;
 }
 
+.header h1,
+.header p {
+  margin: 0;
+}
+
+.header p {
+  margin-top: 6px;
+  color: #a1a1aa;
+  font-size: 14px;
+}
+
 .breadcrumb {
   color: #a1a1aa;
   font-size: 0.95rem;
@@ -32,6 +43,20 @@
   color: #fff;
   border: none;
   font-size: 14px;
+}
+
+.secondaryButton {
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 6px;
+  background-color: #1e1e20;
+  color: #e2e8f0;
+  border: 1px solid #3f3f46;
+  font-size: 14px;
+}
+
+.secondaryButton:hover {
+  background-color: #27272a;
 }
 
 .layout {
@@ -155,6 +180,7 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 16px;
+  gap: 16px;
 }
 
 .entryCount {
@@ -184,4 +210,13 @@
 .pageNumber {
   padding: 6px 12px;
   font-size: 14px;
+  color: #d4d4d8;
+}
+
+@media (max-width: 640px) {
+  .header,
+  .pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

@@ -19,6 +19,21 @@ func NewUserHandler(service ports.UserService) *UserHandler {
 	return &UserHandler{service: service}
 }
 
+// List returns a paginated list of users.
+//
+//	@Summary		List users
+//	@Description	Returns a paginated list of all users. Requires admin privileges.
+//	@Tags			Admin - Users
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			page	query		int									false	"Page number (default: 1)"
+//	@Param			limit	query		int									false	"Items per page (default: 10)"
+//	@Success		200		{object}	response.PagedResponse[UserResponse]	"Users retrieved"
+//	@Failure		400		{object}	response.BaseResponse[any]				"Invalid pagination"
+//	@Failure		401		{object}	response.BaseResponse[any]				"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]				"Forbidden (not admin)"
+//	@Failure		500		{object}	response.BaseResponse[any]				"Internal server error"
+//	@Router			/admin/users [get]
 func (h *UserHandler) List(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
@@ -47,10 +62,25 @@ func (h *UserHandler) List(c *gin.Context) {
 	))
 }
 
+// Get returns a single user by ID.
+//
+//	@Summary		Get user
+//	@Description	Returns a single user by their ID. Requires admin privileges.
+//	@Tags			Admin - Users
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			userId	path		int								true	"User ID"
+//	@Success		200		{object}	UserResponse					"User found"
+//	@Failure		400		{object}	response.BaseResponse[any]		"Invalid user ID"
+//	@Failure		401		{object}	response.BaseResponse[any]		"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]		"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
+//	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
+//	@Router			/admin/users/{userId} [get]
 func (h *UserHandler) Get(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -63,6 +93,23 @@ func (h *UserHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, toUserResponse(user))
 }
 
+// Create creates a new user.
+//
+//	@Summary		Create user
+//	@Description	Creates a new user and assigns them to one or more groups. Requires admin privileges.
+//	@Tags			Admin - Users
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			body	body		CreateUserRequest				true	"User data"
+//	@Success		201		{object}	UserResponse					"User created"
+//	@Failure		400		{object}	response.BaseResponse[any]		"Invalid input"
+//	@Failure		401		{object}	response.BaseResponse[any]		"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]		"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]		"Group not found"
+//	@Failure		409		{object}	response.BaseResponse[any]		"Username already taken"
+//	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
+//	@Router			/admin/users [post]
 func (h *UserHandler) Create(c *gin.Context) {
 	var request CreateUserRequest
 
@@ -86,10 +133,28 @@ func (h *UserHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, toUserResponse(createdUser))
 }
 
+// Update updates a user's username and/or password.
+//
+//	@Summary		Update user
+//	@Description	Updates an existing user's username and/or password. Requires admin privileges.
+//	@Tags			Admin - Users
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			userId	path		int								true	"User ID"
+//	@Param			body	body		UpdateUserRequest				true	"Fields to update (all optional)"
+//	@Success		200		{object}	UserResponse					"User updated"
+//	@Failure		400		{object}	response.BaseResponse[any]		"Invalid input"
+//	@Failure		401		{object}	response.BaseResponse[any]		"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]		"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
+//	@Failure		409		{object}	response.BaseResponse[any]		"Username already taken"
+//	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
+//	@Router			/admin/users/{userId} [patch]
 func (h *UserHandler) Update(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -114,10 +179,26 @@ func (h *UserHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, toUserResponse(updatedUser))
 }
 
+// Delete deletes a user by ID.
+//
+//	@Summary		Delete user
+//	@Description	Deletes a user by their ID. Requires admin privileges.
+//	@Tags			Admin - Users
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			userId	path	int	true	"User ID"
+//	@Success		204		"User deleted"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid user ID"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"User not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"User must have at least one group"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/users/{userId} [delete]
 func (h *UserHandler) Delete(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -129,10 +210,27 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// SetRole sets the role of a user.
+//
+//	@Summary		Set user role
+//	@Description	Updates the role of a user (e.g. "admin" or "user"). Requires admin privileges.
+//	@Tags			Admin - Users
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			userId	path		int								true	"User ID"
+//	@Param			body	body		SetRoleRequest					true	"Role to set"
+//	@Success		200		{object}	UserResponse					"Role updated"
+//	@Failure		400		{object}	response.BaseResponse[any]		"Invalid input or invalid role"
+//	@Failure		401		{object}	response.BaseResponse[any]		"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]		"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
+//	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
+//	@Router			/admin/users/{userId}/role [patch]
 func (h *UserHandler) SetRole(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -155,6 +253,7 @@ func (h *UserHandler) SetRole(c *gin.Context) {
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput),
+		errors.Is(err, domain.ErrInvalidPagination),
 		errors.Is(err, domain.ErrInvalidRole),
 		errors.Is(err, domain.ErrInvalidGroupsIDs):
 		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
@@ -164,7 +263,8 @@ func writeError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, response.Error(err.Error()))
 
 	case errors.Is(err, domain.ErrUsernameTaken),
-		errors.Is(err, domain.ErrUserMustHaveGroup):
+		errors.Is(err, domain.ErrUserMustHaveGroup),
+		errors.Is(err, domain.ErrLastAdmin):
 		c.JSON(http.StatusConflict, response.Error(err.Error()))
 
 	default:

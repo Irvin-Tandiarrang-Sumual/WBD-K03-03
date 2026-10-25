@@ -23,6 +23,8 @@ type UserRepository interface {
 
 	FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error)
 
+	CountByRole(ctx context.Context, role string) (int64, error)
+
 	Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error)
 	Update(ctx context.Context, id uint, username *string, passwordHash *string) (domain.User, error)
 	Delete(ctx context.Context, id uint) error

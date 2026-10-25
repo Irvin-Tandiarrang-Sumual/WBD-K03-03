@@ -1,7 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
-import {Suspense} from "react";
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Suspense fallback={<div style={{ height: 60 }} />}>
           <Navbar />
         </Suspense>
-        <main className="container page"> {children}</main>
+        <main className="container page">{children}</main>
       </body>
     </html>
   );

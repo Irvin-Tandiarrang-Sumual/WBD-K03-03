@@ -45,6 +45,21 @@ func (r *migrationRepository) FindAllByDatabaseID(ctx context.Context, databaseI
 func (r *migrationRepository) FindLatestByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
 	var migration model.Migration
 	err := r.db.WithContext(ctx).
+		Where("database_id = ?", databaseID).
+		Order("id DESC").
+		First(&migration).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrMigrationNotFound
+		}
+		return nil, err
+	}
+	return toDomain(migration), nil
+}
+
+func (r *migrationRepository) FindLatestSuccessfulByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
+	var migration model.Migration
+	err := r.db.WithContext(ctx).
 		Where("database_id = ? AND status = ?", databaseID, "success").
 		Order("id DESC").
 		First(&migration).Error
@@ -63,17 +78,30 @@ func (r *migrationRepository) Save(ctx context.Context, migration *domain.Migrat
 	}
 
 	migrationModel := model.Migration{
-		ID:         migration.ID,
-		DatabaseID: int(migration.DatabaseID),
-		Version:    migration.Version,
-		MigratedAt: migration.MigratedAt,
-		Status:     migration.Status,
-		SqlUp:      migration.SqlUp,
-		SqlDown:    migration.SqlDown,
-		Snapshot:   migration.Snapshot,
-		UserID:     int(migration.UserID),
+		ID:           migration.ID,
+		DatabaseID:   int(migration.DatabaseID),
+		Version:      migration.Version,
+		MigratedAt:   migration.MigratedAt,
+		Status:       migration.Status,
+		SqlUp:        migration.SqlUp,
+		SqlDown:      migration.SqlDown,
+		ErrorMessage: migration.ErrorMessage,
+		Snapshot:     migration.Snapshot,
+		UserID:       int(migration.UserID),
 	}
 	if err := r.db.WithContext(ctx).Create(&migrationModel).Error; err != nil {
+		return nil, err
+	}
+	return toDomain(migrationModel), nil
+}
+
+func (r *migrationRepository) Update(ctx context.Context, migration *domain.Migration) (*domain.Migration, error) {
+	if migration == nil || migration.ID == 0 {
+		return nil, domain.ErrInvalidMigrationInput
+	}
+
+	migrationModel := toModel(migration)
+	if err := r.db.WithContext(ctx).Save(&migrationModel).Error; err != nil {
 		return nil, err
 	}
 	return toDomain(migrationModel), nil
@@ -107,17 +135,32 @@ func (r *migrationRepository) FindByVersionAndDatabaseID(ctx context.Context, ve
 	return toDomain(migration), nil
 }
 
-
 func toDomain(migration model.Migration) *domain.Migration {
 	return &domain.Migration{
-		ID:         migration.ID,
-		DatabaseID: uint(migration.DatabaseID),
-		Version:    migration.Version,
-		MigratedAt: migration.MigratedAt,
-		Status:     migration.Status,
-		SqlUp:      migration.SqlUp,
-		SqlDown:    migration.SqlDown,
-		Snapshot:   []byte(migration.Snapshot),
-		UserID:     uint(migration.UserID),
+		ID:           migration.ID,
+		DatabaseID:   uint(migration.DatabaseID),
+		Version:      migration.Version,
+		MigratedAt:   migration.MigratedAt,
+		Status:       migration.Status,
+		SqlUp:        migration.SqlUp,
+		SqlDown:      migration.SqlDown,
+		ErrorMessage: migration.ErrorMessage,
+		Snapshot:     []byte(migration.Snapshot),
+		UserID:       uint(migration.UserID),
+	}
+}
+
+func toModel(migration *domain.Migration) model.Migration {
+	return model.Migration{
+		ID:           migration.ID,
+		DatabaseID:   int(migration.DatabaseID),
+		Version:      migration.Version,
+		MigratedAt:   migration.MigratedAt,
+		Status:       migration.Status,
+		SqlUp:        migration.SqlUp,
+		SqlDown:      migration.SqlDown,
+		ErrorMessage: migration.ErrorMessage,
+		Snapshot:     migration.Snapshot,
+		UserID:       int(migration.UserID),
 	}
 }

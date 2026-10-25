@@ -141,6 +141,53 @@ func (r *databaseRepository) FindWithCredentialByID(ctx context.Context, databas
 	return toDomain(storedDatabase, password), nil
 }
 
+func (r *databaseRepository) FindCredentialByHostAndPort(ctx context.Context, host string, port uint, user string) (string, error) {
+	var storedDatabase model.Database
+	err := r.db.WithContext(ctx).
+		Where("host = ? AND port = ? AND \"user\" = ?", host, port, user).
+		First(&storedDatabase).Error
+	if err != nil {
+		err = r.db.WithContext(ctx).
+			Where("host = ? AND port = ?", host, port).
+			First(&storedDatabase).Error
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return r.cipher.Decrypt(storedDatabase.Password)
+}
+
+func (r *databaseRepository) GetDistinctHosts(ctx context.Context) ([]domain.DatabaseHost, error) {
+	type hostRow struct {
+		Host string `gorm:"column:host"`
+		Port uint   `gorm:"column:port"`
+		User string `gorm:"column:user"`
+		Type string `gorm:"column:type"`
+	}
+
+	var rows []hostRow
+	err := r.db.WithContext(ctx).
+		Model(&model.Database{}).
+		Select("DISTINCT host, port, \"user\", type").
+		Order("host ASC, port ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]domain.DatabaseHost, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, domain.DatabaseHost{
+			Host: row.Host,
+			Port: row.Port,
+			User: row.User,
+			Type: row.Type,
+		})
+	}
+	return result, nil
+}
+
 func (r *databaseRepository) ExistsAll(ctx context.Context, databaseIDs []uint) (bool, error) {
 	if len(databaseIDs) == 0 {
 		return true, nil
@@ -193,8 +240,20 @@ func (r *databaseRepository) CreateDatabase(ctx context.Context, database *domai
 }
 
 func (r *databaseRepository) Delete(ctx context.Context, databaseID uint) error {
+	// 1. Periksa apakah ada group yang masih mengarah ke database ini
+	var groupCount int64
+	if err := r.db.WithContext(ctx).Table("group_databases").Where("database_id = ?", databaseID).Count(&groupCount).Error; err == nil && groupCount > 0 {
+		return domain.ErrDatabaseInUse
+	}
+
+	// 2. Bersihkan data migrasi internal yang berelasi dengan database ini
+	_ = r.db.WithContext(ctx).Where("database_id = ?", databaseID).Delete(&model.Migration{}).Error
+
 	result := r.db.WithContext(ctx).Delete(&model.Database{}, databaseID)
 	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrForeignKeyViolated) {
+			return domain.ErrDatabaseInUse
+		}
 		return result.Error
 	}
 	if result.RowsAffected == 0 {

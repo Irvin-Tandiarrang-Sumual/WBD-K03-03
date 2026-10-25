@@ -3,17 +3,21 @@ package app
 import (
 	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
+	httpmiddleware "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/gin-gonic/gin"
+
+	// Auto-generated Swagger docs — registers spec on init
+	_ "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/docs"
 )
 
 func Run() {
 	application, err := buildApplication()
 	if err != nil {
-		log.Printf("failed to build application: %v", err)
-		return
+		log.Fatalf("failed to build application: %v", err)
 	}
 	defer application.close()
 
@@ -24,7 +28,7 @@ func Run() {
 	)
 
 	if err := application.engine.Run(address); err != nil {
-		log.Printf("failed to run HTTP server: %v", err)
+		log.Fatalf("failed to run HTTP server: %v", err)
 	}
 }
 
@@ -64,8 +68,20 @@ func buildApplication() (*application, error) {
 		return nil, err
 	}
 
-	handlers := buildHandlers(configuration, services)
+	handlers := buildHandlers(configuration, services, systemDatabase)
 	engine := gin.Default()
+	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))
+	engine.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"swagger": "/swagger/index.html",
+			"health":  "/health",
+		})
+	})
+	engine.GET("/swagger", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/swagger/index.html")
+	})
+	engine.GET("/health", handlers.health.Check)
 	router.SetupRouter(
 		engine,
 		handlers.auth,
@@ -74,6 +90,7 @@ func buildApplication() (*application, error) {
 		handlers.database,
 		handlers.databaseExecutor,
 		handlers.migration,
+		handlers.health,
 		services.session,
 		services.user,
 		services.group,

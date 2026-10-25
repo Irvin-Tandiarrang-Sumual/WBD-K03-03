@@ -7,39 +7,39 @@ import (
 )
 
 type DatabaseQueryResult struct {
-	Columns []string
-	Rows    []map[string]any
+	Columns []string         `json:"columns"`
+	Rows    []map[string]any `json:"rows"`
 }
 
 type DatabaseCommandResult struct {
-	RowsAffected int64
+	RowsAffected int64 `json:"rows_affected"`
 }
 
 type DatabaseTableMetadata struct {
-	Schema string
-	Name   string
+	Schema string `json:"schema"`
+	Name   string `json:"name"`
 }
 
 type DatabaseColumnMetadata struct {
-	Schema     string
-	Table      string
-	Name       string
-	DataType   string
-	IsNullable bool
+	Schema     string `json:"schema"`
+	Table      string `json:"table"`
+	Name       string `json:"name"`
+	DataType   string `json:"data_type"`
+	IsNullable bool   `json:"is_nullable"`
 }
 
 type DatabaseIndexMetadata struct {
-	Schema    string
-	Table     string
-	Name      string
-	IsUnique  bool
-	IsPrimary bool
+	Schema    string `json:"schema"`
+	Table     string `json:"table"`
+	Name      string `json:"name"`
+	IsUnique  bool   `json:"is_unique"`
+	IsPrimary bool   `json:"is_primary"`
 }
 
 type DatabaseMetadata struct {
-	Tables  []DatabaseTableMetadata
-	Columns []DatabaseColumnMetadata
-	Indexes []DatabaseIndexMetadata
+	Tables  []DatabaseTableMetadata  `json:"tables"`
+	Columns []DatabaseColumnMetadata `json:"columns"`
+	Indexes []DatabaseIndexMetadata  `json:"indexes"`
 }
 
 type DatabaseExecutorService interface {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	databaserepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/database"
 	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
@@ -16,7 +17,6 @@ import (
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
-	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 )
 
 func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
@@ -36,26 +36,26 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	userRepo := 	userrepository.NewUserRepository(db)
+	userRepo := userrepository.NewUserRepository(db)
 
-	groupRepo := 	grouprepository.NewGroupRepository(db)
+	groupRepo := grouprepository.NewGroupRepository(db)
 
-	databaseRepo := 	databaserepository.NewDatabaseRepository(
+	databaseRepo := databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)
 
-	sessionService := 	sessionservice.NewSessionService(
+	sessionService := sessionservice.NewSessionService(
 		sessionrepository.NewSessionRepository(db),
 	)
 
-	userService := 	userservice.NewUserService(
+	userService := userservice.NewUserService(
 		userRepo,
 		groupRepo,
 		sessionService,
 	)
 
-	groupService := 	groupservice.NewGroupService(
+	groupService := groupservice.NewGroupService(
 		groupRepo,
 		userRepo,
 		databaseRepo,

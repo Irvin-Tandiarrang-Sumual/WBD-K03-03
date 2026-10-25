@@ -68,7 +68,7 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*gorm.
 }
 
 func (m *PoolManager) Invalidate(databaseID uint) error {
-	
+
 	m.mu.Lock()
 
 	pool, exists := m.pools[databaseID]

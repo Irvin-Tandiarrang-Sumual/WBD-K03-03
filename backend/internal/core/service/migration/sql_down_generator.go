@@ -61,21 +61,87 @@ func generateSQLDown(
 }
 
 func generateInsertDown(statement string) (string, error) {
-	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([a-zA-Z0-9_.]+)\s*\(([^)]+)\)\s*VALUES\s*\((.+)\)$`)
+	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([a-zA-Z0-9_.]+)\s*\(([^)]+)\)\s*VALUES\s*(.+)$`)
 	matches := re.FindStringSubmatch(statement)
 	if len(matches) != 4 {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
 	columns := splitSQLValues(matches[2])
-	values := splitSQLValues(matches[3])
-	if len(columns) != len(values) {
+	valueGroups, ok := splitSQLValueGroups(matches[3])
+	if !ok || len(valueGroups) == 0 {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
-	predicates := make([]string, 0, len(columns))
-	for index, column := range columns {
-		predicates = append(predicates, strings.TrimSpace(column)+" = "+strings.TrimSpace(values[index]))
+
+	rowPredicates := make([]string, 0, len(valueGroups))
+	for _, group := range valueGroups {
+		values := splitSQLValues(group)
+		if len(columns) != len(values) {
+			return "", domain.ErrSQLDownGenerationUnsupported
+		}
+		predicates := make([]string, 0, len(columns))
+		for index, column := range columns {
+			predicates = append(predicates, strings.TrimSpace(column)+" = "+strings.TrimSpace(values[index]))
+		}
+		rowPredicates = append(rowPredicates, strings.Join(predicates, " AND "))
 	}
-	return fmt.Sprintf("DELETE FROM %s WHERE %s", matches[1], strings.Join(predicates, " AND ")), nil
+	if len(rowPredicates) == 1 {
+		return fmt.Sprintf("DELETE FROM %s WHERE %s", matches[1], rowPredicates[0]), nil
+	}
+	for index, predicate := range rowPredicates {
+		rowPredicates[index] = "(" + predicate + ")"
+	}
+	return fmt.Sprintf("DELETE FROM %s WHERE %s", matches[1], strings.Join(rowPredicates, " OR ")), nil
+}
+
+func splitSQLValueGroups(input string) ([]string, bool) {
+	groups := make([]string, 0)
+	depth := 0
+	start := -1
+	quoted := false
+
+	for index := 0; index < len(input); index++ {
+		character := input[index]
+		if character == '\'' {
+			if quoted && index+1 < len(input) && input[index+1] == '\'' {
+				index++
+				continue
+			}
+			quoted = !quoted
+			continue
+		}
+		if quoted {
+			continue
+		}
+		switch character {
+		case '(':
+			if depth == 0 {
+				start = index + 1
+			}
+			depth++
+		case ')':
+			depth--
+			if depth < 0 {
+				return nil, false
+			}
+			if depth == 0 {
+				if start < 0 {
+					return nil, false
+				}
+				groups = append(groups, strings.TrimSpace(input[start:index]))
+				start = -1
+			}
+		default:
+			if depth == 0 && character != ',' && !isSQLWhitespace(character) {
+				return nil, false
+			}
+		}
+	}
+
+	return groups, !quoted && depth == 0 && start == -1
+}
+
+func isSQLWhitespace(character byte) bool {
+	return character == ' ' || character == '\t' || character == '\r' || character == '\n'
 }
 
 func generateDeleteDown(ctx context.Context, executor ports.DatabaseExecutor, database domain.Database, statement string) (string, error) {

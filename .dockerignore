@@ -1,0 +1,8 @@
+.git
+.env*
+frontend/node_modules
+frontend/.next
+frontend/out
+**/npm-debug.log*
+backend/coverage.out
+

@@ -4,6 +4,10 @@
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+.container h1 {
+  text-align: center;
+}
+
 .layout {
   display: flex;
   gap: 2rem;
@@ -23,8 +27,8 @@
   margin-bottom: 1rem;
   background-color: #000000;
   border-radius: 8px;
-  max-width: 15rem; 
-  aspect-ratio: 3 / 1; 
+  max-width: 15rem;
+  aspect-ratio: 3 / 1;
   border: 1px solid #e0e0e0;
 }
 
@@ -108,4 +112,65 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 28rem;
+  margin: 2rem auto;
+}
+
+.form input,
+.form select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: white;
+}
+
+.form input::placeholder {
+  color: #aaa;
+}
+
+.form button,
+.card button {
+  padding: 0.9rem 1.5rem;
+  font-size: 1rem;
+  background-color: #000000;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 50rem;
+  margin: 0 auto;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.card h2,
+.card p {
+  margin: 0;
 }

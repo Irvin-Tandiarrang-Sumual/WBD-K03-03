@@ -5,13 +5,24 @@ import (
 	"fmt"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 func SeedTestData(db *gorm.DB) error {
+	return seedData(db, func(password string) (string, error) {
+		return password, nil
+	})
+}
+
+func SeedDevelopmentData(db *gorm.DB, cipher ports.DatabaseCredentialCipher) error {
+	return seedData(db, cipher.Encrypt)
+}
+
+func seedData(db *gorm.DB, encodePassword func(string) (string, error)) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		databases, err := seedTestDatabases(tx)
+		databases, err := seedTestDatabases(tx, encodePassword)
 		if err != nil {
 			return err
 		}
@@ -25,19 +36,32 @@ func SeedTestData(db *gorm.DB) error {
 	})
 }
 
-func seedTestDatabases(tx *gorm.DB) (map[string]model.Database, error) {
+func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error)) (map[string]model.Database, error) {
 	databaseSeeds := []model.Database{
-		{Port: 5432, Host: "dummy-postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db1_pg"},
-		{Port: 3306, Host: "dummy-mysql", User: "demo_user", Password: "demo_password", Type: "mysql", Name: "db2_mysql"},
+		{Port: 5432, Host: "demo_postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db1_pg"},
+		{Port: 3306, Host: "demo_mysql", User: "demo_user", Password: "demo_password", Type: "mysql", Name: "db2_mysql"},
 	}
 
 	databases := make(map[string]model.Database, len(databaseSeeds))
 	for _, databaseSeed := range databaseSeeds {
+		encodedPassword, encodeErr := encodePassword(databaseSeed.Password)
+		if encodeErr != nil {
+			return nil, fmt.Errorf("encoding password for database %s: %w", databaseSeed.Name, encodeErr)
+		}
+		databaseSeed.Password = encodedPassword
+
 		var database model.Database
 		err := tx.Where("name = ?", databaseSeed.Name).First(&database).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			database = databaseSeed
 			err = tx.Create(&database).Error
+		} else if err == nil {
+			err = tx.Model(&database).Updates(map[string]any{
+				"host":     databaseSeed.Host,
+				"user":     databaseSeed.User,
+				"password": databaseSeed.Password,
+				"type":     databaseSeed.Type,
+			}).Error
 		}
 		if err != nil {
 			return nil, fmt.Errorf("seeding database %s: %w", databaseSeed.Name, err)

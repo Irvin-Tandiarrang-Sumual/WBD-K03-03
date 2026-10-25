@@ -67,6 +67,18 @@ func (r *userRepository) FindByID(ctx context.Context, id uint) (domain.User, er
 	return toDomain(storedUser), nil
 }
 
+func (r *userRepository) CountByRole(ctx context.Context, role string) (int64, error) {
+	var count int64
+
+	err := r.db.
+		WithContext(ctx).
+		Model(&models.User{}).
+		Where("role = ?", role).
+		Count(&count).Error
+
+	return count, err
+}
+
 func (r *userRepository) Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {
 	var created domain.User
 

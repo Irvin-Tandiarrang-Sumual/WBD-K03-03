@@ -126,8 +126,19 @@ func (s *userService) Update(ctx context.Context, id uint, input domain.UpdateUs
 }
 
 func (s *userService) Delete(ctx context.Context, id uint) error {
-	if _, err := s.users.FindByID(ctx, id); err != nil {
+	current, err := s.users.FindByID(ctx, id)
+	if err != nil {
 		return err
+	}
+
+	if current.Role == domain.RoleAdmin {
+		adminCount, err := s.users.CountByRole(ctx, domain.RoleAdmin)
+		if err != nil {
+			return err
+		}
+		if adminCount <= 1 {
+			return domain.ErrLastAdmin
+		}
 	}
 
 	if err := s.users.Delete(ctx, id); err != nil {
@@ -163,6 +174,16 @@ func (s *userService) SetRole(ctx context.Context, id uint, role string) (domain
 
 		if groupCount == 0 {
 			return domain.User{}, domain.ErrUserMustHaveGroup
+		}
+
+		if current.Role == domain.RoleAdmin {
+			adminCount, err := s.users.CountByRole(ctx, domain.RoleAdmin)
+			if err != nil {
+				return domain.User{}, err
+			}
+			if adminCount <= 1 {
+				return domain.User{}, domain.ErrLastAdmin
+			}
 		}
 	}
 

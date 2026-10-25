@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
+	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	databaserepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/database"
 	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
@@ -14,7 +15,6 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
-	models "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 )
 
 func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
@@ -87,20 +87,20 @@ func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	groupRepo := 	grouprepository.NewGroupRepository(db)
+	groupRepo := grouprepository.NewGroupRepository(db)
 
-	userRepo := 	userrepository.NewUserRepository(db)
+	userRepo := userrepository.NewUserRepository(db)
 
-	databaseRepo := 	databaserepository.NewDatabaseRepository(
+	databaseRepo := databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)
 
-	sessionService := 	sessionservice.NewSessionService(
+	sessionService := sessionservice.NewSessionService(
 		sessionrepository.NewSessionRepository(db),
 	)
 
-	service := 	groupservice.NewGroupService(
+	service := groupservice.NewGroupService(
 		groupRepo,
 		userRepo,
 		databaseRepo,
@@ -145,7 +145,7 @@ func TestIntegrationGroupFindByIDLoadsAllDatabaseAccesses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	groupRepo := 	grouprepository.NewGroupRepository(db)
+	groupRepo := grouprepository.NewGroupRepository(db)
 
 	group, err := groupRepo.FindByID(
 		context.Background(),
@@ -183,7 +183,7 @@ func TestIntegrationDatabaseCredentialIsEncryptedAtRest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repo := 	databaserepository.NewDatabaseRepository(
+	repo := databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)

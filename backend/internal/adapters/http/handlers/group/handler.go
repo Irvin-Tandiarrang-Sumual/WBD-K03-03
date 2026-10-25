@@ -19,6 +19,21 @@ func NewGroupHandler(service ports.GroupService) *GroupHandler {
 	return &GroupHandler{service: service}
 }
 
+// List returns a paginated list of groups.
+//
+//	@Summary		List groups
+//	@Description	Returns a paginated list of all groups. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			page	query		int									false	"Page number (default: 1)"
+//	@Param			limit	query		int									false	"Items per page (default: 10)"
+//	@Success		200		{object}	response.PagedResponse[GroupResponse]	"Groups retrieved"
+//	@Failure		400		{object}	response.BaseResponse[any]				"Invalid pagination"
+//	@Failure		401		{object}	response.BaseResponse[any]				"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]				"Forbidden (not admin)"
+//	@Failure		500		{object}	response.BaseResponse[any]				"Internal server error"
+//	@Router			/admin/groups [get]
 func (h *GroupHandler) List(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
@@ -47,10 +62,25 @@ func (h *GroupHandler) List(c *gin.Context) {
 	))
 }
 
+// Get returns a single group by ID.
+//
+//	@Summary		Get group
+//	@Description	Returns a single group by its ID. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			groupId	path		int							true	"Group ID"
+//	@Success		200		{object}	GroupResponse				"Group found"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid group ID"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/groups/{groupId} [get]
 func (h *GroupHandler) Get(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -63,6 +93,23 @@ func (h *GroupHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, toGroupResponse(group))
 }
 
+// Create creates a new group.
+//
+//	@Summary		Create group
+//	@Description	Creates a new group with database access permissions. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			body	body		CreateGroupRequest			true	"Group data"
+//	@Success		201		{object}	GroupResponse				"Group created"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid input or invalid database access type"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Database not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"Group name already taken"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/groups [post]
 func (h *GroupHandler) Create(c *gin.Context) {
 	var request CreateGroupRequest
 
@@ -85,10 +132,28 @@ func (h *GroupHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, toGroupResponse(group))
 }
 
+// Update updates a group's name and/or database access permissions.
+//
+//	@Summary		Update group
+//	@Description	Updates an existing group. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			groupId	path		int							true	"Group ID"
+//	@Param			body	body		UpdateGroupRequest			true	"Fields to update (all optional)"
+//	@Success		200		{object}	GroupResponse				"Group updated"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid input"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"Group name already taken"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/groups/{groupId} [patch]
 func (h *GroupHandler) Update(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -117,10 +182,26 @@ func (h *GroupHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, toGroupResponse(group))
 }
 
+// Delete deletes a group by ID.
+//
+//	@Summary		Delete group
+//	@Description	Deletes a group by its ID. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			groupId	path	int	true	"Group ID"
+//	@Success		204		"Group deleted"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid group ID"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"Group still has users / must have database"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/groups/{groupId} [delete]
 func (h *GroupHandler) Delete(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -132,16 +213,33 @@ func (h *GroupHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// AddUser adds a user to a group.
+//
+//	@Summary		Add user to group
+//	@Description	Adds an existing user to an existing group. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			groupId	path	int	true	"Group ID"
+//	@Param			userId	path	int	true	"User ID"
+//	@Success		204		"User added to group"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid input"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Group or user not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"Membership already exists"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/groups/{groupId}/users/{userId} [post]
 func (h *GroupHandler) AddUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -153,16 +251,33 @@ func (h *GroupHandler) AddUser(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// RemoveUser removes a user from a group.
+//
+//	@Summary		Remove user from group
+//	@Description	Removes an existing user from an existing group. Requires admin privileges.
+//	@Tags			Admin - Groups
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			groupId	path	int	true	"Group ID"
+//	@Param			userId	path	int	true	"User ID"
+//	@Success		204		"User removed from group"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid input"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Group or user not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"Membership not found / user must remain in a group"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/admin/groups/{groupId}/users/{userId} [delete]
 func (h *GroupHandler) RemoveUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, err)
+		writeError(c, domain.ErrInvalidInput)
 		return
 	}
 
@@ -177,6 +292,7 @@ func (h *GroupHandler) RemoveUser(c *gin.Context) {
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput),
+		errors.Is(err, domain.ErrInvalidPagination),
 		errors.Is(err, domain.ErrInvalidDatabaseAccess),
 		errors.Is(err, domain.ErrInvalidGroupsIDs):
 		c.JSON(http.StatusBadRequest, response.Error(err.Error()))

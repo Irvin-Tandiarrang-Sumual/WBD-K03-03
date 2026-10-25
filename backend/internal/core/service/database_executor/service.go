@@ -9,10 +9,10 @@ import (
 )
 
 type databaseExecutorService struct {
-	databaseService       ports.DatabaseService
-	databaseRepository    ports.DatabaseRepository
-	databaseExecutor     ports.DatabaseExecutor
-	groupService          ports.GroupService
+	databaseService    ports.DatabaseService
+	databaseRepository ports.DatabaseRepository
+	databaseExecutor   ports.DatabaseExecutor
+	groupService       ports.GroupService
 }
 
 var _ ports.DatabaseExecutorService = (*databaseExecutorService)(nil)
@@ -26,7 +26,7 @@ func NewDatabaseExecutorService(
 	return &databaseExecutorService{
 		databaseService:    databaseService,
 		databaseRepository: databaseRepository,
-		databaseExecutor:  databaseExecutor,
+		databaseExecutor:   databaseExecutor,
 		groupService:       groupService,
 	}
 }
@@ -51,7 +51,8 @@ func (s *databaseExecutorService) ExecuteDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	return s.databaseExecutor.ExecuteQuery(ctx, databaseWithCredential, query)
+	cleanQuery := stripTrailingSemicolons(query)
+	return s.databaseExecutor.ExecuteQuery(ctx, databaseWithCredential, cleanQuery)
 }
 
 func (s *databaseExecutorService) ExplainDatabaseQuery(
@@ -68,15 +69,15 @@ func (s *databaseExecutorService) ExplainDatabaseQuery(
 	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
 		return nil, err
 	}
-	if err := validateSelectQuery(query); err != nil {
+	cleanedQuery := stripLeadingExplain(stripTrailingSemicolons(query))
+	if err := validateSelectQuery(cleanedQuery); err != nil {
 		return nil, err
 	}
-
 	databaseWithCredential, err := s.databaseRepository.FindWithCredentialByID(ctx, database.ID)
 	if err != nil {
 		return nil, err
 	}
-	return s.databaseExecutor.ExplainQuery(ctx, databaseWithCredential, query, analyze)
+	return s.databaseExecutor.ExplainQuery(ctx, databaseWithCredential, cleanedQuery, analyze)
 }
 
 func (s *databaseExecutorService) requireDatabaseAccess(
@@ -103,15 +104,45 @@ func (s *databaseExecutorService) getAccessibleDatabase(
 	return s.databaseService.GetDatabaseByIDAndUserID(ctx, databaseID, userID)
 }
 
+func stripTrailingSemicolons(query string) string {
+	trimmed := strings.TrimSpace(query)
+	for strings.HasSuffix(trimmed, ";") {
+		trimmed = strings.TrimSpace(strings.TrimSuffix(trimmed, ";"))
+	}
+	return trimmed
+}
+
+func stripLeadingExplain(query string) string {
+	trimmed := strings.TrimSpace(query)
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "explain analyze ") {
+		return strings.TrimSpace(trimmed[len("explain analyze "):])
+	}
+	if strings.HasPrefix(lower, "explain ") {
+		return strings.TrimSpace(trimmed[len("explain "):])
+	}
+	return trimmed
+}
+
+func hasKeywordPrefix(normalizedQuery, keyword string) bool {
+	if !strings.HasPrefix(normalizedQuery, keyword) {
+		return false
+	}
+	rest := normalizedQuery[len(keyword):]
+	if rest == "" {
+		return false
+	}
+	first := rest[0]
+	return first == ' ' || first == '\n' || first == '\t' || first == '\r' || first == '*' || first == '('
+}
+
 func validateSelectQuery(query string) error {
-	normalizedQuery := strings.TrimSpace(strings.ToLower(query))
+	normalizedQuery := strings.ToLower(stripTrailingSemicolons(query))
 	if normalizedQuery == "" {
 		return domain.ErrInvalidDatabaseQuery
 	}
-	if !strings.HasPrefix(normalizedQuery, "select ") &&
-		!strings.HasPrefix(normalizedQuery, "select\n") &&
-		!strings.HasPrefix(normalizedQuery, "with ") &&
-		!strings.HasPrefix(normalizedQuery, "with\n") {
+	if !hasKeywordPrefix(normalizedQuery, "select") &&
+		!hasKeywordPrefix(normalizedQuery, "with") {
 		return domain.ErrInvalidDatabaseQuery
 	}
 	if strings.Contains(normalizedQuery, ";") {

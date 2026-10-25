@@ -21,6 +21,22 @@ func NewMigrationHandler(service ports.MigrationService) *MigrationHandler {
 	return &MigrationHandler{service: service}
 }
 
+// GetMigrationsByDatabaseID returns paginated migrations for a database.
+//
+//	@Summary		List migrations
+//	@Description	Returns a paginated list of migrations for a specific database. Requires view access.
+//	@Tags			Me - Migrations
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			database_id	path		int										true	"Database ID"
+//	@Param			page		query		int										false	"Page number (default: 1)"
+//	@Param			limit		query		int										false	"Items per page (default: 10)"
+//	@Success		200			{object}	response.PagedResponse[MigrationResponse]	"Migrations retrieved"
+//	@Failure		400			{object}	response.BaseResponse[any]				"Invalid database ID or pagination"
+//	@Failure		401			{object}	response.BaseResponse[any]				"Unauthorized"
+//	@Failure		403			{object}	response.BaseResponse[any]				"Forbidden (no view access)"
+//	@Failure		500			{object}	response.BaseResponse[any]				"Internal server error"
+//	@Router			/me/databases/{database_id}/migrations [get]
 func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 	databaseID, err := ginutil.ParseUintParam(c, "database_id")
 	if err != nil {
@@ -47,6 +63,23 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewPagedResponse(http.StatusOK, "migrations retrieved successfully", data, params, totalData))
 }
 
+// CreateMigration runs a new SQL migration on a database.
+//
+//	@Summary		Create migration
+//	@Description	Runs a SQL migration (sql_up) on the specified database and records the result. Requires edit access.
+//	@Tags			Me - Migrations
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			database_id	path		int										true	"Database ID"
+//	@Param			body		body		CreateMigrationRequest					true	"SQL up migration"
+//	@Success		201			{object}	response.BaseResponse[MigrationResponse]	"Migration created"
+//	@Failure		400			{object}	response.BaseResponse[any]				"Invalid database ID or migration input"
+//	@Failure		401			{object}	response.BaseResponse[any]				"Unauthorized"
+//	@Failure		403			{object}	response.BaseResponse[any]				"Forbidden (no edit access)"
+//	@Failure		409			{object}	response.BaseResponse[any]				"Migration version conflict"
+//	@Failure		500			{object}	response.BaseResponse[any]				"Internal server error"
+//	@Router			/me/databases/{database_id}/migrations [post]
 func (h *MigrationHandler) CreateMigration(c *gin.Context) {
 	databaseID, err := ginutil.ParseUintParam(c, "database_id")
 	if err != nil {
@@ -71,9 +104,29 @@ func (h *MigrationHandler) CreateMigration(c *gin.Context) {
 		writeErrorResponse(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, response.Success("migration created successfully", toResponse(migration)))
+	message := "migration created successfully"
+	if migration.Status == "fail" {
+		message = "migration failed and was recorded"
+	}
+	c.JSON(http.StatusCreated, response.Success(message, toResponse(migration)))
 }
 
+// GetMigrationByIDAndDatabaseID returns a single migration by ID.
+//
+//	@Summary		Get migration
+//	@Description	Returns a specific migration by its ID within a database. Requires view access.
+//	@Tags			Me - Migrations
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			database_id		path		int										true	"Database ID"
+//	@Param			migration_id	path		int										true	"Migration ID"
+//	@Success		200				{object}	response.BaseResponse[MigrationResponse]	"Migration retrieved"
+//	@Failure		400				{object}	response.BaseResponse[any]				"Invalid database or migration ID"
+//	@Failure		401				{object}	response.BaseResponse[any]				"Unauthorized"
+//	@Failure		403				{object}	response.BaseResponse[any]				"Forbidden (no view access)"
+//	@Failure		404				{object}	response.BaseResponse[any]				"Migration not found"
+//	@Failure		500				{object}	response.BaseResponse[any]				"Internal server error"
+//	@Router			/me/databases/{database_id}/migrations/{migration_id} [get]
 func (h *MigrationHandler) GetMigrationByIDAndDatabaseID(c *gin.Context) {
 	migrationID, err := ginutil.ParseUintParam(c, "migration_id")
 	if err != nil {
@@ -93,6 +146,23 @@ func (h *MigrationHandler) GetMigrationByIDAndDatabaseID(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success("migration retrieved successfully", toResponse(migration)))
 }
 
+// CompareMigrations compares two migrations within a database.
+//
+//	@Summary		Compare migrations
+//	@Description	Compares the sql_up and sql_down of two migrations within a database. Requires view access.
+//	@Tags			Me - Migrations
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			database_id		path		int											true	"Database ID"
+//	@Param			migration_id_1	query		int											true	"First migration ID"
+//	@Param			migration_id_2	query		int											true	"Second migration ID"
+//	@Success		200				{object}	response.BaseResponse[MigrationComparisonResponse]	"Comparison result"
+//	@Failure		400				{object}	response.BaseResponse[any]					"Invalid database ID or migration IDs"
+//	@Failure		401				{object}	response.BaseResponse[any]					"Unauthorized"
+//	@Failure		403				{object}	response.BaseResponse[any]					"Forbidden (no view access)"
+//	@Failure		404				{object}	response.BaseResponse[any]					"Migration not found"
+//	@Failure		500				{object}	response.BaseResponse[any]					"Internal server error"
+//	@Router			/me/databases/{database_id}/migrations/compare [get]
 func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 	databaseID, err := ginutil.ParseUintParam(c, "database_id")
 	if err != nil {
@@ -133,6 +203,22 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 	}))
 }
 
+// RollbackMigrations rolls back migrations to a target migration.
+//
+//	@Summary		Rollback migrations
+//	@Description	Rolls back all migrations up to and including the target migration ID.
+//	@Tags			Me - Migrations
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			body	body		RollbackMigrationRequest						true	"Rollback target"
+//	@Success		200		{object}	response.BaseResponse[[]MigrationResponse]		"Migrations rolled back"
+//	@Failure		400		{object}	response.BaseResponse[any]						"Invalid input"
+//	@Failure		401		{object}	response.BaseResponse[any]						"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]						"Forbidden"
+//	@Failure		409		{object}	response.BaseResponse[any]						"Rollback unavailable or version conflict"
+//	@Failure		500		{object}	response.BaseResponse[any]						"Internal server error"
+//	@Router			/me/databases/migrations/rollback [post]
 func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
 	userID, err := currentUserID(c)
 	if err != nil {
@@ -173,7 +259,8 @@ func toResponse(migration *domain.Migration) MigrationResponse {
 	return MigrationResponse{
 		ID: migration.ID, DatabaseID: migration.DatabaseID, Version: migration.Version,
 		Status: migration.Status, SqlUp: migration.SqlUp, SqlDown: migration.SqlDown,
-		UserID: migration.UserID,
+		ErrorMessage: migration.ErrorMessage,
+		UserID:       migration.UserID,
 	}
 }
 

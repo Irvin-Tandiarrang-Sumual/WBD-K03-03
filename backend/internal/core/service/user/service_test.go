@@ -420,3 +420,193 @@ func TestDeleteRemovesUserAndRevokesSessions(t *testing.T) {
 		t.Fatalf("deleted=%v revoked=%v, want both true", deleted, revoked)
 	}
 }
+
+func TestCreateRejectsInvalidInputs(t *testing.T) {
+	tests := []domain.CreateUserInput{
+		{Username: " ", Password: "secret", GroupIDs: []uint{1}},
+		{Username: "user", Password: "", GroupIDs: []uint{1}},
+		{Username: "user", Password: "secret"},
+		{Username: "user", Password: string(make([]byte, 73)), GroupIDs: []uint{1}},
+	}
+	for index, input := range tests {
+		service := userservice.NewUserService(&testutil.UserRepository{}, &testutil.GroupRepository{}, &testutil.SessionService{})
+		_, err := service.Create(context.Background(), input)
+		if !errors.Is(err, domain.ErrInvalidInput) {
+			t.Fatalf("case %d error=%v", index, err)
+		}
+	}
+}
+
+func TestCreatePropagatesGroupAndRepositoryErrors(t *testing.T) {
+	groupErr := errors.New("group lookup")
+	service := userservice.NewUserService(
+		&testutil.UserRepository{},
+		&testutil.GroupRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return false, groupErr }},
+		&testutil.SessionService{},
+	)
+	_, err := service.Create(context.Background(), domain.CreateUserInput{Username: "user", Password: "secret", GroupIDs: []uint{1}})
+	if !errors.Is(err, groupErr) {
+		t.Fatalf("error=%v", err)
+	}
+
+	repositoryErr := domain.ErrUsernameTaken
+	service = userservice.NewUserService(
+		&testutil.UserRepository{CreateFunc: func(context.Context, domain.User, []uint) (domain.User, error) { return domain.User{}, repositoryErr }},
+		&testutil.GroupRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return true, nil }},
+		&testutil.SessionService{},
+	)
+	_, err = service.Create(context.Background(), domain.CreateUserInput{Username: "user", Password: "secret", GroupIDs: []uint{1}})
+	if !errors.Is(err, repositoryErr) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestUpdateValidationAndErrors(t *testing.T) {
+	findErr := domain.ErrUserNotFound
+	service := userservice.NewUserService(
+		&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{}, findErr }},
+		&testutil.GroupRepository{}, &testutil.SessionService{},
+	)
+	_, err := service.Update(context.Background(), 1, domain.UpdateUserInput{})
+	if !errors.Is(err, findErr) {
+		t.Fatalf("error=%v", err)
+	}
+
+	blank := " "
+	emptyPassword := ""
+	tooLong := string(make([]byte, 73))
+	for _, input := range []domain.UpdateUserInput{{Username: &blank}, {Password: &emptyPassword}, {Password: &tooLong}} {
+		service = userservice.NewUserService(
+			&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 1}, nil }},
+			&testutil.GroupRepository{}, &testutil.SessionService{},
+		)
+		_, err = service.Update(context.Background(), 1, input)
+		if !errors.Is(err, domain.ErrInvalidInput) {
+			t.Fatalf("input=%+v error=%v", input, err)
+		}
+	}
+}
+
+func TestUpdateWithoutPasswordDoesNotRevokeSession(t *testing.T) {
+	name := " renamed "
+	revoked := false
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 1}, nil },
+			UpdateFunc: func(_ context.Context, _ uint, username *string, passwordHash *string) (domain.User, error) {
+				if username == nil || *username != "renamed" || passwordHash != nil {
+					t.Fatalf("username=%v password=%v", username, passwordHash)
+				}
+				return domain.User{ID: 1, Username: *username}, nil
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { revoked = true; return nil }},
+	)
+	_, err := service.Update(context.Background(), 1, domain.UpdateUserInput{Username: &name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revoked {
+		t.Fatal("username-only update must not revoke sessions")
+	}
+}
+
+func TestUpdatePropagatesRepositoryAndRevokeErrors(t *testing.T) {
+	updateErr := errors.New("update failed")
+	password := "new-secret"
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 1}, nil },
+			UpdateFunc:   func(context.Context, uint, *string, *string) (domain.User, error) { return domain.User{}, updateErr },
+		},
+		&testutil.GroupRepository{}, &testutil.SessionService{},
+	)
+	_, err := service.Update(context.Background(), 1, domain.UpdateUserInput{Password: &password})
+	if !errors.Is(err, updateErr) {
+		t.Fatalf("error=%v", err)
+	}
+
+	revokeErr := errors.New("revoke failed")
+	service = userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 1}, nil },
+			UpdateFunc:   func(context.Context, uint, *string, *string) (domain.User, error) { return domain.User{ID: 1}, nil },
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { return revokeErr }},
+	)
+	_, err = service.Update(context.Background(), 1, domain.UpdateUserInput{Password: &password})
+	if !errors.Is(err, revokeErr) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestSetRoleNoopDoesNotRevoke(t *testing.T) {
+	revoked := false
+	service := userservice.NewUserService(
+		&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+			return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+		}},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { revoked = true; return nil }},
+	)
+	user, err := service.SetRole(context.Background(), 1, " ADMIN ")
+	if err != nil || user.Role != domain.RoleAdmin {
+		t.Fatalf("user=%+v err=%v", user, err)
+	}
+	if revoked {
+		t.Fatal("unchanged role must not revoke sessions")
+	}
+}
+
+func TestDeletePropagatesDependencyErrors(t *testing.T) {
+	findErr := domain.ErrUserNotFound
+	service := userservice.NewUserService(
+		&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{}, findErr }},
+		&testutil.GroupRepository{}, &testutil.SessionService{},
+	)
+	if err := service.Delete(context.Background(), 1); !errors.Is(err, findErr) {
+		t.Fatalf("error=%v", err)
+	}
+
+	deleteErr := errors.New("delete failed")
+	service = userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 1}, nil },
+			DeleteFunc:   func(context.Context, uint) error { return deleteErr },
+		},
+		&testutil.GroupRepository{}, &testutil.SessionService{},
+	)
+	if err := service.Delete(context.Background(), 1); !errors.Is(err, deleteErr) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+
+func TestSetRoleRejectsDemotingLastAdmin(t *testing.T) {
+	service := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+			},
+			CountByRoleFunc: func(_ context.Context, role string) (int64, error) {
+				if role != domain.RoleAdmin {
+					t.Fatalf("role = %q, want %q", role, domain.RoleAdmin)
+				}
+				return 1, nil
+			},
+		},
+		&testutil.GroupRepository{
+			CountUserGroupsFunc: func(context.Context, uint) (int64, error) {
+				return 1, nil
+			},
+		},
+		&testutil.SessionService{},
+	)
+
+	_, err := service.SetRole(context.Background(), 1, domain.RoleUser)
+	if !errors.Is(err, domain.ErrLastAdmin) {
+		t.Fatalf("error = %v, want ErrLastAdmin", err)
+	}
+}
