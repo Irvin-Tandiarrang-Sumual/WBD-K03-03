@@ -6,7 +6,7 @@ import { api, unwrapPaged } from "@/lib/api";
 import type { Database } from "@/lib/types";
 import styles from "./DatabaseList.module.css";
 
-const ITEMS_PER_PAGE = 4;
+const ITEMS_PER_PAGE = 8;
 
 export default function DatabaseList() {
   const [databases, setDatabases] = useState<Database[]>([]);

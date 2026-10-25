@@ -41,6 +41,33 @@ services:
       interval: 2s
       timeout: 5s
       retries: 20
+  demo_postgres_extra:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: db3_pg_empty
+      POSTGRES_USER: demo_user
+      POSTGRES_PASSWORD: demo_password
+    volumes:
+      - ./docker/postgres-connections/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_user -d db3_pg_empty"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+  demo_mysql_extra:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: db5_mysql_analytics
+      MYSQL_USER: demo_user
+      MYSQL_PASSWORD: demo_password
+      MYSQL_ROOT_PASSWORD: root_password
+    volumes:
+      - ./docker/mysql-connections/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u demo_user -pdemo_password --silent"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
   app:
     build:
       context: .
@@ -61,6 +88,10 @@ services:
       demo_postgres:
         condition: service_healthy
       demo_mysql:
+        condition: service_healthy
+      demo_postgres_extra:
+        condition: service_healthy
+      demo_mysql_extra:
         condition: service_healthy
     restart: unless-stopped
 

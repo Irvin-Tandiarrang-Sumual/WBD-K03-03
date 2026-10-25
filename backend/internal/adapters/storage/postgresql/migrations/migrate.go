@@ -16,6 +16,16 @@ func MigrateSystemDatabase(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
+	if db.Migrator().HasConstraint(&model.Database{}, "uni_databases_port") {
+		if err := db.Migrator().DropConstraint(&model.Database{}, "uni_databases_port"); err != nil {
+			return err
+		}
+	}
+	if db.Migrator().HasIndex(&model.Database{}, "uni_databases_port") {
+		if err := db.Migrator().DropIndex(&model.Database{}, "uni_databases_port"); err != nil {
+			return err
+		}
+	}
 
 	// Older versions accidentally made database_id unique by itself, which
 	// prevented a database from having more than one migration record.

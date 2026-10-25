@@ -40,14 +40,22 @@ export default function ConnectionsPage() {
     }));
   }
 
+  function updateDatabaseType(type: DatabaseType) {
+    setForm((current) => ({
+      ...current,
+      type,
+      port: type === "mysql" ? 3306 : 5432,
+    }));
+  }
+
   async function createDatabase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
     try {
-      await api.createDatabase(form);
+      const createdDatabase = await api.createDatabase(form);
       setForm(emptyForm);
-      load();
+      setDatabases((current) => [...current, createdDatabase]);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -113,7 +121,7 @@ export default function ConnectionsPage() {
         <select
           value={form.type}
           onChange={(event) =>
-            updateForm("type", event.target.value as DatabaseType)
+            updateDatabaseType(event.target.value as DatabaseType)
           }
         >
           <option value="postgresql">PostgreSQL</option>

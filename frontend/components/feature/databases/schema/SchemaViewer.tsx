@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
-import type { QueryRow } from "@/lib/types";
+import { api, unwrapPaged } from "@/lib/api";
+import type { Database, QueryRow } from "@/lib/types";
 import styles from "./SchemaViewer.module.css";
 
 interface SchemaViewerProps {
@@ -19,13 +19,26 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
   const [tables, setTables] = useState<string[]>([]);
   const [activeTable, setActiveTable] = useState("");
   const [columns, setColumns] = useState<QueryRow[]>([]);
+  const [database, setDatabase] = useState<Database | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.query(
-      databaseId,
-      "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name",
-    )
+    api.databases(1, 100)
+      .then((body) => {
+        const accessibleDatabase = unwrapPaged(body).find(
+          (item) => String(item.id) === databaseId,
+        );
+        if (!accessibleDatabase) {
+          throw new Error("Database not found.");
+        }
+        setDatabase(accessibleDatabase);
+        return api.query(
+          databaseId,
+          accessibleDatabase.type === "mysql"
+            ? "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name"
+            : "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name",
+        );
+      })
       .then((body) => {
         const names = readRows(body)
           .map((row) => String(row.table_name || row.TABLE_NAME || ""))
@@ -46,9 +59,13 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
     if (!activeTable) return;
 
     const escapedTable = activeTable.replaceAll("'", "''");
+    if (!database) return;
+
     api.query(
       databaseId,
-      `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name = '${escapedTable}' ORDER BY ordinal_position`,
+      database.type === "mysql"
+        ? `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${escapedTable}' ORDER BY ordinal_position`
+        : `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name = '${escapedTable}' ORDER BY ordinal_position`,
     )
       .then((body) => setColumns(readRows(body)))
       .catch((requestError: unknown) => {
@@ -58,7 +75,7 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
             : "Unable to load columns.",
         );
       });
-  }, [databaseId, activeTable]);
+  }, [databaseId, activeTable, database]);
 
   return (
     <div className={styles.container}>

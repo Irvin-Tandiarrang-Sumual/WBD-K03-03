@@ -179,10 +179,30 @@ func (r *databaseRepository) CreateDatabase(ctx context.Context, database *domai
 		Type:     database.Type,
 		Name:     database.Name,
 	}
-	if err := r.db.WithContext(ctx).Create(&storedDatabase).Error; err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return nil, domain.ErrDatabaseAlreadyExists
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&storedDatabase).Error; err != nil {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				return domain.ErrDatabaseAlreadyExists
+			}
+			return err
 		}
+
+		var adminGroup model.Group
+		if err := tx.Where("name = ?", "admin").First(&adminGroup).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		return tx.Create(&model.GroupDatabase{
+			GroupID:    adminGroup.ID,
+			DatabaseID: storedDatabase.ID,
+			AccessType: string(domain.AccessViewEdit),
+		}).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 

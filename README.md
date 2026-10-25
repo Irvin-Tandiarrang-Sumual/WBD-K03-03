@@ -64,6 +64,15 @@ tabel contoh `customers` serta `orders` untuk mencoba tampilan schema dan data.
 Database MySQL `db2_mysql` juga dijalankan oleh Docker Compose dan berisi tabel
 `products` serta `inventory_movements`.
 
+Tiga koneksi tambahan tersedia di halaman Databases untuk pengujian frontend:
+
+- `db3_pg_empty`: PostgreSQL valid tanpa user table untuk menguji empty state.
+- `db4_pg_sales`: PostgreSQL berisi tabel customer dan order penjualan.
+- `db5_mysql_analytics`: MySQL berisi tabel event dan metrik harian.
+
+Schema ketiganya dibuat oleh file SQL di folder `docker/postgres-connections`
+dan `docker/mysql-connections` ketika container pertama kali dibuat.
+
 Jika ingin membangun ulang image tanpa menggunakan cache:
 
 ```bash

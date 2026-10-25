@@ -165,6 +165,9 @@ func writeDatabaseErrorResponse(c *gin.Context, err error) {
 		errors.Is(err, domain.ErrDatabaseInUse):
 		status = http.StatusConflict
 		message = err.Error()
+	case errors.Is(err, domain.ErrDatabaseConnectionFailed):
+		status = http.StatusBadRequest
+		message = err.Error()
 	case errors.Is(err, domain.ErrCurrentUserUnavailable):
 		status = http.StatusNotImplemented
 		message = err.Error()

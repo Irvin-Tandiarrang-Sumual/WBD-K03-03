@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -66,7 +67,7 @@ func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *por
 
 	if s.databaseConnectionTester != nil {
 		if err := s.databaseConnectionTester.Test(ctx, database); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", domain.ErrDatabaseConnectionFailed, err)
 		}
 	}
 

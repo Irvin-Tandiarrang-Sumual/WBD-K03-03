@@ -7,6 +7,7 @@ export async function request<T>(
 ): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
+    cache: options.cache ?? "no-store",
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
