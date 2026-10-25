@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -87,4 +88,99 @@ func (s *migrationService) GetMigrationByIDAndDatabaseID(ctx context.Context, mi
 		return nil, 0, err
 	}
 	return migration, 1, nil
+}
+
+func (s *migrationService) CompareMigrations(ctx context.Context, databaseID uint, userID uint, firstMigrationID uint, secondMigrationID uint) (*ports.MigrationComparison, error) {
+	if databaseID == 0 || userID == 0 || firstMigrationID == 0 || secondMigrationID == 0 || firstMigrationID == secondMigrationID {
+		return nil, domain.ErrInvalidMigrationComparison
+	}
+	if _, err := s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID); err != nil {
+		return nil, err
+	}
+	firstMigration, err := s.repository.FindByIDAndDatabaseID(ctx, firstMigrationID, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	secondMigration, err := s.repository.FindByIDAndDatabaseID(ctx, secondMigrationID, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	return &ports.MigrationComparison{
+		FirstMigration:  firstMigration,
+		SecondMigration: secondMigration,
+		SQLUpEqual:      firstMigration.SqlUp == secondMigration.SqlUp,
+		SQLDownEqual:    firstMigration.SqlDown == secondMigration.SqlDown,
+	}, nil
+}
+
+func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID uint, userID uint, targetMigrationID uint) ([]*domain.Migration, error) {
+	if databaseID == 0 || userID == 0 || targetMigrationID == 0 {
+		return nil, domain.ErrInvalidMigrationInput
+	}
+	if _, err := s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID); err != nil {
+		return nil, err
+	}
+	database, err := s.databaseRepository.FindWithCredentialByID(ctx, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	target, err := s.repository.FindByIDAndDatabaseID(ctx, targetMigrationID, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	targetVersion, err := strconv.Atoi(target.Version)
+	if err != nil {
+		return nil, domain.ErrMigrationVersionUnavailable
+	}
+	latest, err := s.repository.FindLatestByDatabaseID(ctx, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	latestVersion, err := strconv.Atoi(latest.Version)
+	if err != nil || targetVersion > latestVersion {
+		return nil, domain.ErrMigrationRollbackUnavailable
+	}
+
+	rolledBack := make([]*domain.Migration, 0)
+	for version := latestVersion; version > targetVersion; version-- {
+		migration, err := s.repository.FindByVersionAndDatabaseID(ctx, strconv.Itoa(version), databaseID)
+		if err != nil {
+			return nil, err
+		}
+		if migration.SqlDown == "" {
+			return nil, domain.ErrMigrationRollbackUnavailable
+		}
+		if _, err := s.databaseExecutor.ExecuteCommand(ctx, database, migration.SqlDown); err != nil {
+			return nil, err
+		}
+		rolledBack = append(rolledBack, migration)
+	}
+
+	if len(rolledBack) == 0 {
+		return rolledBack, nil
+	}
+
+	sqlUpStatements := make([]string, 0, len(rolledBack))
+	sqlDownStatements := make([]string, 0, len(rolledBack))
+	for _, migration := range rolledBack {
+		sqlUpStatements = append(sqlUpStatements, migration.SqlDown)
+	}
+	for index := len(rolledBack) - 1; index >= 0; index-- {
+		migration := rolledBack[index]
+		sqlDownStatements = append(sqlDownStatements, migration.SqlUp)
+	}
+
+	rollbackMigration, err := s.repository.Save(ctx, &domain.Migration{
+		DatabaseID: databaseID,
+		Version:    strconv.Itoa(latestVersion + 1),
+		Status:     "success",
+		SqlUp:      strings.Join(sqlUpStatements, ";\n"),
+		SqlDown:    strings.Join(sqlDownStatements, ";\n"),
+		UserID:     userID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rolledBack = append(rolledBack, rollbackMigration)
+	return rolledBack, nil
 }

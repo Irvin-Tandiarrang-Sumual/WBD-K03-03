@@ -45,7 +45,7 @@ func (r *migrationRepository) FindAllByDatabaseID(ctx context.Context, databaseI
 func (r *migrationRepository) FindLatestByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
 	var migration model.Migration
 	err := r.db.WithContext(ctx).
-		Where("database_id = ?", databaseID).
+		Where("database_id = ? AND status = ?", databaseID, "success").
 		Order("id DESC").
 		First(&migration).Error
 	if err != nil {
@@ -92,6 +92,21 @@ func (r *migrationRepository) FindByIDAndDatabaseID(ctx context.Context, migrati
 	}
 	return toDomain(migration), nil
 }
+
+func (r *migrationRepository) FindByVersionAndDatabaseID(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
+	var migration model.Migration
+	err := r.db.WithContext(ctx).
+		Where("version = ? AND database_id = ?", version, databaseID).
+		First(&migration).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrMigrationNotFound
+		}
+		return nil, err
+	}
+	return toDomain(migration), nil
+}
+
 
 func toDomain(migration model.Migration) *domain.Migration {
 	return &domain.Migration{
