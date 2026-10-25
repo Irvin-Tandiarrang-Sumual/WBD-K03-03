@@ -104,9 +104,11 @@ func writeDatabaseExecutorErrorResponse(c *gin.Context, err error) {
 		errors.Is(err, domain.ErrInvalidDatabaseQuery):
 		status = http.StatusBadRequest
 		message = err.Error()
-	case errors.Is(err, domain.ErrDatabaseNotFound),
-		errors.Is(err, domain.ErrDatabaseAccessDenied):
+	case errors.Is(err, domain.ErrDatabaseNotFound):
 		status = http.StatusNotFound
+		message = err.Error()
+	case errors.Is(err, domain.ErrDatabaseAccessDenied):
+		status = http.StatusForbidden
 		message = err.Error()
 	case errors.Is(err, domain.ErrCurrentUserUnavailable):
 		status = http.StatusNotImplemented

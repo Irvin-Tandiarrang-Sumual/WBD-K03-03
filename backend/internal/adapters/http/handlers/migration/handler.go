@@ -196,6 +196,9 @@ func writeErrorResponse(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrMigrationVersionUnavailable):
 		status = http.StatusConflict
 		message = err.Error()
+	case errors.Is(err, domain.ErrDatabaseAccessDenied):
+		status = http.StatusForbidden
+		message = err.Error()
 	case errors.Is(err, domain.ErrCurrentUserUnavailable):
 		status = http.StatusNotImplemented
 		message = err.Error()
