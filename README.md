@@ -62,6 +62,20 @@ Untuk menghapus volume dan seluruh data database:
 docker compose down -v
 ```
 
+### Run with Docker
+
+From the repository root, copy `.env.example` to `.env`:
+```bash
+Copy-Item .env.example .env
+```
+then run:
+
+```bash
+docker compose up --build
+```
+
+The frontend will be available at `http://localhost:3000` by default.
+
 ## API Endpoints
 ### Access Control
 | Method | Endpoint | Function | Notes |
