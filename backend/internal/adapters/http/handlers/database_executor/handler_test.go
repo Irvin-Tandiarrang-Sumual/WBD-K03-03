@@ -237,3 +237,38 @@ func TestExplainDatabaseQueryMapsServiceError(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestExplainDatabaseQueryRejectsInvalidInputs(t *testing.T) {
+	handler := NewDatabaseExecutorHandler(&fakeExecutorService{})
+	userID := uint(7)
+
+	// Invalid database ID
+	ctx1, rec1 := executorContext("/databases/bad/explain", &userID)
+	ctx1.Params = gin.Params{{Key: "database_id", Value: "bad"}}
+	ctx1.Request = httptest.NewRequest(http.MethodPost, "/databases/bad/explain", bytes.NewBufferString(`{"query":"SELECT 1"}`))
+	ctx1.Request.Header.Set("Content-Type", "application/json")
+	handler.ExplainDatabaseQuery(ctx1)
+	if rec1.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=400", rec1.Code)
+	}
+
+	// Missing user context
+	ctx2, rec2 := executorContext("/databases/1/explain", nil)
+	ctx2.Params = gin.Params{{Key: "database_id", Value: "1"}}
+	ctx2.Request = httptest.NewRequest(http.MethodPost, "/databases/1/explain", bytes.NewBufferString(`{"query":"SELECT 1"}`))
+	ctx2.Request.Header.Set("Content-Type", "application/json")
+	handler.ExplainDatabaseQuery(ctx2)
+	if rec2.Code != http.StatusNotImplemented {
+		t.Fatalf("status=%d want=501", rec2.Code)
+	}
+
+	// Invalid JSON body
+	ctx3, rec3 := executorContext("/databases/1/explain", &userID)
+	ctx3.Params = gin.Params{{Key: "database_id", Value: "1"}}
+	ctx3.Request = httptest.NewRequest(http.MethodPost, "/databases/1/explain", bytes.NewBufferString(`{"query":`))
+	ctx3.Request.Header.Set("Content-Type", "application/json")
+	handler.ExplainDatabaseQuery(ctx3)
+	if rec3.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=400", rec3.Code)
+	}
+}

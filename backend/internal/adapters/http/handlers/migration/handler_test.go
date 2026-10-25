@@ -244,3 +244,124 @@ func TestMigrationErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateMigrationRecordsFailedMigrationResponse(t *testing.T) {
+	userID := uint(5)
+	service := &testutil.MigrationService{
+		CreateMigrationFunc: func(ctx context.Context, databaseID uint, gotUserID uint, sqlUp string) (*domain.Migration, error) {
+			return &domain.Migration{
+				ID:           101,
+				DatabaseID:   databaseID,
+				Version:      "3",
+				Status:       "fail",
+				ErrorMessage: "syntax error at or near 'INVALID'",
+				SqlUp:        sqlUp,
+				UserID:       gotUserID,
+			}, nil
+		},
+	}
+	body := []byte(`{"sql_up":"INVALID SQL STATEMENT"}`)
+	c, w := newMigrationTestContext(http.MethodPost, "/me/databases/1/migrations", body, gin.Params{{Key: "database_id", Value: "1"}}, &userID)
+	NewMigrationHandler(service).CreateMigration(c)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d want=201", w.Code)
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte("migration failed and was recorded")) {
+		t.Fatalf("body missing failed message: %s", w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte(`"status":"fail"`)) {
+		t.Fatalf("body missing fail status: %s", w.Body.String())
+	}
+}
+
+func TestCreateMigrationPropagatesServiceAndUserErrors(t *testing.T) {
+	service := &testutil.MigrationService{
+		CreateMigrationFunc: func(context.Context, uint, uint, string) (*domain.Migration, error) {
+			return nil, domain.ErrDatabaseAccessDenied
+		},
+	}
+	body := []byte(`{"sql_up":"CREATE TABLE test(id int)"}`)
+
+	// Missing user context
+	c1, w1 := newMigrationTestContext(http.MethodPost, "/me/databases/1/migrations", body, gin.Params{{Key: "database_id", Value: "1"}}, nil)
+	NewMigrationHandler(service).CreateMigration(c1)
+	if w1.Code != http.StatusNotImplemented {
+		t.Fatalf("status=%d want=501", w1.Code)
+	}
+
+	// Service error (403 Access Denied)
+	userID := uint(5)
+	c2, w2 := newMigrationTestContext(http.MethodPost, "/me/databases/1/migrations", body, gin.Params{{Key: "database_id", Value: "1"}}, &userID)
+	NewMigrationHandler(service).CreateMigration(c2)
+	if w2.Code != http.StatusForbidden {
+		t.Fatalf("status=%d want=403", w2.Code)
+	}
+}
+
+func TestGetMigrationsByDatabaseIDPropagatesServiceError(t *testing.T) {
+	service := &testutil.MigrationService{
+		GetMigrationsByDatabaseIDFunc: func(context.Context, uint, pagination.PaginationParams) ([]*domain.Migration, int64, error) {
+			return nil, 0, errors.New("db error")
+		},
+	}
+	c, w := newMigrationTestContext(http.MethodGet, "/me/databases/1/migrations", nil, gin.Params{{Key: "database_id", Value: "1"}}, nil)
+	NewMigrationHandler(service).GetMigrationsByDatabaseID(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d want=500", w.Code)
+	}
+}
+
+func TestGetMigrationByIDAndDatabaseIDPropagatesServiceError(t *testing.T) {
+	service := &testutil.MigrationService{
+		GetMigrationByIDAndDatabaseIDFunc: func(context.Context, uint, uint) (*domain.Migration, int64, error) {
+			return nil, 0, domain.ErrMigrationNotFound
+		},
+	}
+	c, w := newMigrationTestContext(http.MethodGet, "/me/databases/1/migrations/99", nil, gin.Params{
+		{Key: "database_id", Value: "1"},
+		{Key: "migration_id", Value: "99"},
+	}, nil)
+	NewMigrationHandler(service).GetMigrationByIDAndDatabaseID(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want=404", w.Code)
+	}
+}
+
+func TestCompareMigrationsPropagatesServiceAndUserErrors(t *testing.T) {
+	service := &testutil.MigrationService{
+		CompareMigrationsFunc: func(context.Context, uint, uint, uint, uint) (*ports.MigrationComparison, error) {
+			return nil, domain.ErrInvalidMigrationComparison
+		},
+	}
+
+	// Missing user context
+	c1, w1 := newMigrationTestContext(http.MethodGet, "/me/databases/1/migrations/compare?first=1&second=2", nil, gin.Params{{Key: "database_id", Value: "1"}}, nil)
+	NewMigrationHandler(service).CompareMigrations(c1)
+	if w1.Code != http.StatusNotImplemented {
+		t.Fatalf("status=%d want=501", w1.Code)
+	}
+
+	// Service error (400 Bad Request)
+	userID := uint(5)
+	c2, w2 := newMigrationTestContext(http.MethodGet, "/me/databases/1/migrations/compare?first=1&second=2", nil, gin.Params{{Key: "database_id", Value: "1"}}, &userID)
+	NewMigrationHandler(service).CompareMigrations(c2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=400", w2.Code)
+	}
+}
+
+func TestRollbackMigrationsPropagatesServiceError(t *testing.T) {
+	userID := uint(7)
+	service := &testutil.MigrationService{
+		RollbackMigrationsFunc: func(context.Context, uint, uint, uint) ([]*domain.Migration, error) {
+			return nil, domain.ErrMigrationRollbackUnavailable
+		},
+	}
+	body := []byte(`{"database_id":1,"target_migration_id":2}`)
+	c, w := newMigrationTestContext(http.MethodPost, "/migrations/rollback", body, nil, &userID)
+	NewMigrationHandler(service).RollbackMigrations(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=409", w.Code)
+	}
+}

@@ -765,3 +765,155 @@ func TestDeleteRejectsLastGroupForRegularUser(t *testing.T) {
 		t.Fatal("group must not be deleted when it is a regular user's last group")
 	}
 }
+
+func TestCreateGroupHandlesDatabaseExistsErrorAndDuplicateAccess(t *testing.T) {
+	// Database ExistsAll error
+	dbErr := errors.New("database repo error")
+	service := groupservice.NewGroupService(
+		&testutil.GroupRepository{},
+		&testutil.UserRepository{},
+		&testutil.DatabaseRepository{
+			ExistsAllFunc: func(context.Context, []uint) (bool, error) {
+				return false, dbErr
+			},
+		},
+		&testutil.SessionService{},
+	)
+	_, err := service.Create(context.Background(), domain.CreateGroupInput{
+		Name: "dev-team",
+		DatabaseAccesses: []domain.DatabaseAccess{
+			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
+		},
+	})
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("error=%v, want dbErr", err)
+	}
+
+	// Duplicate database ID in access inputs
+	_, err = service.Create(context.Background(), domain.CreateGroupInput{
+		Name: "dev-team",
+		DatabaseAccesses: []domain.DatabaseAccess{
+			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
+			{DatabaseID: 1, AccessType: domain.AccessViewEdit},
+		},
+	})
+	if !errors.Is(err, domain.ErrInvalidDatabaseAccess) {
+		t.Fatalf("error=%v, want ErrInvalidDatabaseAccess", err)
+	}
+}
+
+func TestUpdateGroupRejectsBlankNameAndHandlesDatabaseExistsError(t *testing.T) {
+	service := groupservice.NewGroupService(
+		&testutil.GroupRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.Group, error) {
+				return domain.Group{ID: 1, Name: "current"}, nil
+			},
+		},
+		&testutil.UserRepository{},
+		&testutil.DatabaseRepository{},
+		&testutil.SessionService{},
+	)
+
+	// Blank name
+	blank := "   "
+	_, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{Name: &blank})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("error=%v, want ErrInvalidInput", err)
+	}
+
+	// Database ExistsAll error during update
+	dbErr := errors.New("db check failed")
+	serviceDbErr := groupservice.NewGroupService(
+		&testutil.GroupRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.Group, error) {
+				return domain.Group{ID: 1, Name: "current"}, nil
+			},
+		},
+		&testutil.UserRepository{},
+		&testutil.DatabaseRepository{
+			ExistsAllFunc: func(context.Context, []uint) (bool, error) {
+				return false, dbErr
+			},
+		},
+		&testutil.SessionService{},
+	)
+	accesses := []domain.DatabaseAccess{{DatabaseID: 2, AccessType: domain.AccessViewOnly}}
+	_, err = serviceDbErr.Update(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &accesses})
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("error=%v, want dbErr", err)
+	}
+}
+
+func TestDeleteGroupHandlesDependencyErrors(t *testing.T) {
+	// ListUserIDs error
+	listErr := errors.New("list users error")
+	serviceListErr := groupservice.NewGroupService(
+		&testutil.GroupRepository{
+			FindByIDFunc:    func(context.Context, uint) (domain.Group, error) { return domain.Group{ID: 1}, nil },
+			ListUserIDsFunc: func(context.Context, uint) ([]uint, error) { return nil, listErr },
+		},
+		&testutil.UserRepository{},
+		&testutil.DatabaseRepository{},
+		&testutil.SessionService{},
+	)
+	if err := serviceListErr.Delete(context.Background(), 1); !errors.Is(err, listErr) {
+		t.Fatalf("error=%v, want listErr", err)
+	}
+
+	// User FindByID error inside loop
+	userErr := errors.New("user find error")
+	serviceUserErr := groupservice.NewGroupService(
+		&testutil.GroupRepository{
+			FindByIDFunc:    func(context.Context, uint) (domain.Group, error) { return domain.Group{ID: 1}, nil },
+			ListUserIDsFunc: func(context.Context, uint) ([]uint, error) { return []uint{10}, nil },
+		},
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{}, userErr },
+		},
+		&testutil.DatabaseRepository{},
+		&testutil.SessionService{},
+	)
+	if err := serviceUserErr.Delete(context.Background(), 1); !errors.Is(err, userErr) {
+		t.Fatalf("error=%v, want userErr", err)
+	}
+
+	// CountUserGroups error inside loop
+	countErr := errors.New("count groups error")
+	serviceCountErr := groupservice.NewGroupService(
+		&testutil.GroupRepository{
+			FindByIDFunc:        func(context.Context, uint) (domain.Group, error) { return domain.Group{ID: 1}, nil },
+			ListUserIDsFunc:     func(context.Context, uint) ([]uint, error) { return []uint{10}, nil },
+			CountUserGroupsFunc: func(context.Context, uint) (int64, error) { return 0, countErr },
+		},
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 10, Role: "user"}, nil },
+		},
+		&testutil.DatabaseRepository{},
+		&testutil.SessionService{},
+	)
+	if err := serviceCountErr.Delete(context.Background(), 1); !errors.Is(err, countErr) {
+		t.Fatalf("error=%v, want countErr", err)
+	}
+}
+
+func TestAddAndRemoveUserPropagatesDependencyErrors(t *testing.T) {
+	userErr := errors.New("user lookup failed")
+	service := groupservice.NewGroupService(
+		&testutil.GroupRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.Group, error) { return domain.Group{ID: 1}, nil },
+		},
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{}, userErr },
+		},
+		&testutil.DatabaseRepository{},
+		&testutil.SessionService{},
+	)
+	// AddUser user lookup error
+	if err := service.AddUser(context.Background(), 1, 5); !errors.Is(err, userErr) {
+		t.Fatalf("AddUser error=%v, want userErr", err)
+	}
+	// RemoveUser user lookup error
+	if err := service.RemoveUser(context.Background(), 1, 5); !errors.Is(err, userErr) {
+		t.Fatalf("RemoveUser error=%v, want userErr", err)
+	}
+}

@@ -185,6 +185,20 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 			return nil, domain.ErrMigrationRollbackUnavailable
 		}
 		if _, err := s.databaseExecutor.ExecuteCommand(ctx, database, migration.SqlDown); err != nil {
+			latestAttempt, findErr := s.repository.FindLatestByDatabaseID(ctx, databaseID)
+			if findErr == nil && latestAttempt != nil {
+				if latestAttemptVersion, parseErr := strconv.Atoi(latestAttempt.Version); parseErr == nil {
+					failedMigration := &domain.Migration{
+						DatabaseID:   databaseID,
+						Version:      strconv.Itoa(latestAttemptVersion + 1),
+						Status:       "fail",
+						ErrorMessage: err.Error(),
+						SqlUp:        migration.SqlDown,
+						UserID:       userID,
+					}
+					_, _ = s.repository.Save(ctx, failedMigration)
+				}
+			}
 			return nil, err
 		}
 		rolledBack = append(rolledBack, migration)

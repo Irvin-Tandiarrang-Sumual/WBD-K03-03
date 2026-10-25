@@ -124,6 +124,15 @@ func TestGetDatabasesByUserIDRejectsMissingUser(t *testing.T) {
 	}
 }
 
+func TestGetDatabasesByUserIDRejectsInvalidPagination(t *testing.T) {
+	userID := uint(9)
+	c, w := newDatabaseTestContext(http.MethodGet, "/me/databases?page=invalid", nil, nil, &userID)
+	NewDatabaseHandler(&testutil.DatabaseService{}).GetDatabasesByUserID(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400 for invalid pagination", w.Code)
+	}
+}
+
 func TestGetDatabaseByIDAndUserIDDelegatesBothIDs(t *testing.T) {
 	userID := uint(12)
 	service := &testutil.DatabaseService{
@@ -217,5 +226,128 @@ func TestDatabaseErrorMapping(t *testing.T) {
 				t.Fatalf("status=%d want=%d body=%s", w.Code, tt.want, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestGetDatabaseByIDPropagatesServiceError(t *testing.T) {
+	service := &testutil.DatabaseService{
+		GetDatabaseByIDFunc: func(context.Context, uint) (*domain.Database, error) {
+			return nil, domain.ErrDatabaseNotFound
+		},
+	}
+	c, w := newDatabaseTestContext(http.MethodGet, "/databases/9", nil, gin.Params{{Key: "id", Value: "9"}}, nil)
+	NewDatabaseHandler(service).GetDatabaseByID(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestGetAllDatabasesPropagatesServiceError(t *testing.T) {
+	service := &testutil.DatabaseService{
+		GetAllDatabasesFunc: func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			return nil, 0, errors.New("db query failed")
+		},
+	}
+	c, w := newDatabaseTestContext(http.MethodGet, "/databases", nil, nil, nil)
+	NewDatabaseHandler(service).GetAllDatabases(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestGetDatabasesByUserIDPropagatesServiceError(t *testing.T) {
+	userID := uint(5)
+	service := &testutil.DatabaseService{
+		GetDatabasesByUserIDFunc: func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			return nil, 0, errors.New("service failure")
+		},
+	}
+	c, w := newDatabaseTestContext(http.MethodGet, "/me/databases", nil, nil, &userID)
+	NewDatabaseHandler(service).GetDatabasesByUserID(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestGetDatabaseByIDAndUserIDRejectsInvalidIDAndMissingUser(t *testing.T) {
+	service := &testutil.DatabaseService{}
+	userID := uint(5)
+
+	// Invalid ID
+	c1, w1 := newDatabaseTestContext(http.MethodGet, "/me/databases/bad", nil, gin.Params{{Key: "database_id", Value: "bad"}}, &userID)
+	NewDatabaseHandler(service).GetDatabaseByIDAndUserID(c1)
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400 for bad id", w1.Code)
+	}
+
+	// Missing user context
+	c2, w2 := newDatabaseTestContext(http.MethodGet, "/me/databases/1", nil, gin.Params{{Key: "database_id", Value: "1"}}, nil)
+	NewDatabaseHandler(service).GetDatabaseByIDAndUserID(c2)
+	if w2.Code != http.StatusNotImplemented {
+		t.Fatalf("status=%d, want 501 for missing user context", w2.Code)
+	}
+}
+
+func TestGetDatabaseByIDAndUserIDPropagatesServiceError(t *testing.T) {
+	userID := uint(10)
+	service := &testutil.DatabaseService{
+		GetDatabaseByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+			return nil, domain.ErrDatabaseNotFound
+		},
+	}
+	c, w := newDatabaseTestContext(http.MethodGet, "/me/databases/10", nil, gin.Params{{Key: "database_id", Value: "10"}}, &userID)
+	NewDatabaseHandler(service).GetDatabaseByIDAndUserID(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestCreateDatabasePropagatesServiceError(t *testing.T) {
+	service := &testutil.DatabaseService{
+		CreateDatabaseFunc: func(context.Context, *ports.DatabaseInput) (*domain.Database, error) {
+			return nil, domain.ErrDatabaseAlreadyExists
+		},
+	}
+	body := []byte(`{"host":"localhost","port":5432,"user":"postgres","password":"secret","type":"postgresql","name":"app"}`)
+	c, w := newDatabaseTestContext(http.MethodPost, "/databases", body, nil, nil)
+	NewDatabaseHandler(service).CreateDatabase(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want 409", w.Code)
+	}
+}
+
+func TestDeleteDatabaseRejectsInvalidIDAndPropagatesServiceError(t *testing.T) {
+	service := &testutil.DatabaseService{
+		DeleteDatabaseFunc: func(context.Context, uint) error {
+			return domain.ErrDatabaseInUse
+		},
+	}
+
+	// Invalid ID
+	c1, w1 := newDatabaseTestContext(http.MethodDelete, "/databases/invalid", nil, gin.Params{{Key: "id", Value: "invalid"}}, nil)
+	NewDatabaseHandler(service).DeleteDatabase(c1)
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", w1.Code)
+	}
+
+	// In use error (409)
+	c2, w2 := newDatabaseTestContext(http.MethodDelete, "/databases/8", nil, gin.Params{{Key: "id", Value: "8"}}, nil)
+	NewDatabaseHandler(service).DeleteDatabase(c2)
+	if w2.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want 409", w2.Code)
+	}
+}
+
+func TestDatabaseErrorMappingConnectionErrors(t *testing.T) {
+	c1, w1 := newDatabaseTestContext(http.MethodGet, "/", nil, nil, nil)
+	writeDatabaseErrorResponse(c1, errors.New("dial tcp 127.0.0.1:5432: connect: connection refused"))
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400 for connection refused", w1.Code)
+	}
+
+	c2, w2 := newDatabaseTestContext(http.MethodGet, "/", nil, nil, nil)
+	writeDatabaseErrorResponse(c2, nil)
+	if w2.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want 500 for nil error", w2.Code)
 	}
 }
