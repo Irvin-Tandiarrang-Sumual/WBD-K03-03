@@ -20,6 +20,11 @@ import {
   type TableConstraintItem,
   type TableIndexItem,
 } from "@/lib/schemaMetadata";
+import {
+  enrichMigrationsWithSnapshots,
+  fetchLiveDatabaseSnapshot,
+  type SchemaSnapshot,
+} from "@/lib/schemaSnapshot";
 import styles from "./DatabaseDetailView.module.css";
 interface DatabaseDetailViewProps {
   databaseId: string;
@@ -62,6 +67,8 @@ export default function DatabaseDetailView({
   const [queryError, setQueryError] = useState("");
   // Migrations tab states
   const [migrations, setMigrations] = useState<Migration[]>([]);
+  const [snapshotsById, setSnapshotsById] = useState<Record<number, SchemaSnapshot>>({});
+  const [expandedSnapshotId, setExpandedSnapshotId] = useState<number | null>(null);
   const [migrationsLoading, setMigrationsLoading] = useState(false);
   const [migrationsError, setMigrationsError] = useState("");
   // Load database metadata
@@ -200,29 +207,30 @@ export default function DatabaseDetailView({
       });
   }, [databaseId, activeTable, dataPage]);
 
-  // Load migrations when switching to migrations tab
+  // Load migrations & baseline snapshot
   useEffect(() => {
-    if (activeTab === "migrations") {
-      setMigrationsLoading(true);
+    setMigrationsLoading(true);
 
-      api
-
-        .migrations(databaseId)
-
-        .then((body) => {
-          setMigrations(body.data || []);
-        })
-        .catch((err: unknown) => {
-          setMigrationsError(
-            err instanceof Error ? err.message : "Failed to load migrations.",
-          );
-        })
-
-        .finally(() => {
-          setMigrationsLoading(false);
-        });
-    }
-  }, [activeTab, databaseId]);
+    Promise.all([
+      api.migrations(databaseId, 1, 100),
+      fetchLiveDatabaseSnapshot(databaseId, db?.type),
+    ])
+      .then(([body, liveSnapshot]) => {
+        const rawList = body.data || [];
+        const { migrations: enriched, snapshotsById: enrichedSnapshots } =
+          enrichMigrationsWithSnapshots(rawList, liveSnapshot, Number(databaseId));
+        setMigrations(enriched);
+        setSnapshotsById(enrichedSnapshots);
+      })
+      .catch((err: unknown) => {
+        setMigrationsError(
+          err instanceof Error ? err.message : "Failed to load migrations.",
+        );
+      })
+      .finally(() => {
+        setMigrationsLoading(false);
+      });
+  }, [activeTab, databaseId, db?.type]);
 
   // Handle SQL execution
   // Toast & Modal Confirmation for Dangerous Actions
@@ -239,8 +247,14 @@ export default function DatabaseDetailView({
     try {
       await api.rollback(Number(databaseId), targetRollback.id);
       toast.success(`Rollback ke migrasi versi ${targetRollback.version} berhasil dieksekusi!`, "Rollback Berhasil");
-      const refreshed = await api.migrations(databaseId, 1, 100);
-      setMigrations(refreshed.data || []);
+      const [refreshed, liveSnapshot] = await Promise.all([
+        api.migrations(databaseId, 1, 100),
+        fetchLiveDatabaseSnapshot(databaseId, db?.type),
+      ]);
+      const { migrations: enriched, snapshotsById: enrichedSnapshots } =
+        enrichMigrationsWithSnapshots(refreshed.data || [], liveSnapshot, Number(databaseId));
+      setMigrations(enriched);
+      setSnapshotsById(enrichedSnapshots);
       setRollbackModalOpen(false);
       setTargetRollback(null);
     } catch (err: unknown) {
@@ -1135,48 +1149,33 @@ Apakah Anda yakin ingin mengeksekusi query ini pada database?`}
               flexWrap: "wrap",
               gap: "1rem",
             }}
-
           >
             <div>
-              <h2 className={styles.sectionTitle}>Riwayat Migrasi</h2>
+              <h2 className={styles.sectionTitle}>Riwayat Migrasi & Schema Snapshot</h2>
               <p style={{ color: "#a1a1aa", fontSize: "0.85rem", margin: "0.25rem 0 0" }}>
-                Kelola versi skema dan migrasi database.
+                Migrasi pertama merupakan <strong>Initial Schema Snapshot (Describe Tables)</strong>. Setiap versi menyimpan snapshot struktur tabel dalam format JSON.
               </p>
             </div>
-            {isViewEdit ? (
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
               <button
                 type="button"
-
-                className={styles.primaryButton}
-
+                className={isViewEdit ? styles.primaryButton : styles.secondaryButton}
                 onClick={() =>
                   router.push(`/databases/${databaseId}/migrations/new`)
                 }
-
               >
-                + Buat Migrasi Baru
+                {isViewEdit
+                  ? "+ Buat Migrasi & Lihat Schema Diff"
+                  : "🔍 Lihat Schema Snapshot Diff"}
               </button>
-            ) : (
-              <span
-                style={{
-                  fontSize: "0.8rem",
-                  color: "#fde047",
-                  backgroundColor: "#713f12",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                }}
-
-              >
-                Membuat migrasi butuh izin View & Edit
-              </span>
-            )}
+            </div>
           </div>
           {migrationsError && (
             <div className={styles.alertError}>{migrationsError}</div>
           )}
 
           {migrationsLoading ? (
-            <p style={{ color: "#a1a1aa" }}>Memuat riwayat migrasi...</p>
+            <p style={{ color: "#a1a1aa" }}>Memuat riwayat migrasi & snapshot...</p>
           ) : migrations.length === 0 ? (
             <p style={{ color: "#a1a1aa" }}>Belum ada file migrasi pada database ini.</p>
           ) : (
@@ -1187,46 +1186,102 @@ Apakah Anda yakin ingin mengeksekusi query ini pada database?`}
                     <th>ID</th>
                     <th>Versi</th>
                     <th>Status</th>
-                    <th>User ID</th>
+                    <th>Snapshot Schema</th>
+                    <th>SQL Up / Deskripsi</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {migrations.map((m) => (
-                    <tr key={m.id}>
-                      <td>{m.id}</td>
-                      <td>
-                        <strong>{m.version}</strong>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            color: m.status === "success" ? "#86efac" : "#fca5a5",
-                            fontWeight: 600,
-                          }}
+                  {migrations.map((m) => {
+                    const snap = snapshotsById[m.id];
+                    const tableCount = Object.keys(snap?.tables ?? {}).length;
+                    const isExpanded = expandedSnapshotId === m.id;
 
-                        >
-                          {m.status}
-                        </span>
-                      </td>
-                      <td>{m.user_id}</td>
-                      <td>
-                        {isViewEdit && (
-                          <button
-                            type="button"
-                            className={styles.secondaryButton}
-                            style={{ fontSize: "0.75rem", padding: "2px 6px" }}
-                            onClick={() => {
-                              setTargetRollback({ id: m.id, version: m.version });
-                              setRollbackModalOpen(true);
+                    return (
+                      <tr key={m.id}>
+                        <td>{m.id > 0 ? `#${m.id}` : " Baseline"}</td>
+                        <td>
+                          <strong>Versi {m.version}</strong>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              color: m.status === "success" ? "#86efac" : "#fca5a5",
+                              fontWeight: 600,
                             }}
                           >
-                            Rollback ke sini
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                            {m.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.8rem", color: "#a1a1aa" }}>
+                              {tableCount} Tabel
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                              onClick={() =>
+                                setExpandedSnapshotId(isExpanded ? null : m.id)
+                              }
+                            >
+                              {isExpanded ? "Tutup JSON" : "{ } Lihat JSON"}
+                            </button>
+                          </div>
+                          {isExpanded && snap && (
+                            <pre
+                              style={{
+                                marginTop: "0.5rem",
+                                padding: "0.65rem",
+                                backgroundColor: "#09090b",
+                                border: "1px solid #27272a",
+                                borderRadius: "6px",
+                                color: "#a7f3d0",
+                                fontSize: "0.75rem",
+                                maxHeight: "240px",
+                                overflowY: "auto",
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              {JSON.stringify(snap, null, 2)}
+                            </pre>
+                          )}
+                        </td>
+                        <td>
+                          <code
+                            style={{
+                              fontSize: "0.78rem",
+                              color: "#d4d4d8",
+                              display: "block",
+                              maxWidth: "320px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={m.sql_up}
+                          >
+                            {m.sql_up.split("\n")[0]}
+                          </code>
+                        </td>
+                        <td>
+                          {isViewEdit && m.id > 0 && m.status === "success" && (
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              style={{ fontSize: "0.75rem", padding: "2px 6px" }}
+                              onClick={() => {
+                                setTargetRollback({ id: m.id, version: m.version });
+                                setRollbackModalOpen(true);
+                              }}
+                            >
+                              Rollback ke sini
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

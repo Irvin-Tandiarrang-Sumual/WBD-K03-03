@@ -64,6 +64,11 @@ func TestGenerateSQLDownForDDLAndInsert(t *testing.T) {
 			sql:  "INSERT INTO users (id, name) VALUES (1, 'Ada')",
 			want: "DELETE FROM users WHERE id = 1 AND name = 'Ada'",
 		},
+		{
+			name: "multiple statements reversed in sql_down",
+			sql:  "CREATE TABLE users (id integer, name VARCHAR(50)); ALTER TABLE users ADD COLUMN email VARCHAR(100); INSERT INTO users (id, name, email) VALUES (1, 'Ada;Grace', 'ada@example.com');",
+			want: "DELETE FROM users WHERE id = 1 AND name = 'Ada;Grace' AND email = 'ada@example.com';\nALTER TABLE users DROP COLUMN email;\nDROP TABLE users",
+		},
 	}
 
 	for _, test := range tests {

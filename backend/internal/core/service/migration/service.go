@@ -33,7 +33,31 @@ func NewMigrationService(
 }
 
 func (s *migrationService) GetMigrationsByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error) {
-	return s.repository.FindAllByDatabaseID(ctx, databaseID, params)
+	migrations, total, err := s.repository.FindAllByDatabaseID(ctx, databaseID, params)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if total == 0 && len(migrations) == 0 && s.databaseRepository != nil && s.databaseExecutor != nil {
+		if dbWithCred, credErr := s.databaseRepository.FindWithCredentialByID(ctx, databaseID); credErr == nil && dbWithCred.Host != "" {
+			if snapshotBytes, snapshotStruct, snapErr := captureDatabaseSnapshot(ctx, s.databaseExecutor, dbWithCred); snapErr == nil && len(snapshotBytes) > 0 {
+				baseline := &domain.Migration{
+					DatabaseID: databaseID,
+					Version:    "1",
+					Status:     "success",
+					SqlUp:      formatSnapshotAsBaselineSQL(snapshotStruct),
+					SqlDown:    "-- Baseline schema snapshot (initial state)",
+					Snapshot:   snapshotBytes,
+					UserID:     1,
+				}
+				if saved, saveErr := s.repository.Save(ctx, baseline); saveErr == nil && saved != nil {
+					return s.repository.FindAllByDatabaseID(ctx, databaseID, params)
+				}
+			}
+		}
+	}
+
+	return migrations, total, nil
 }
 
 func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint, userID uint, sqlUp string) (*domain.Migration, error) {
@@ -62,6 +86,23 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 		return nil, err
 	}
 
+	if latest == nil && databaseWithCredential.Host != "" {
+		if baselineBytes, baselineStruct, snapErr := captureDatabaseSnapshot(ctx, s.databaseExecutor, databaseWithCredential); snapErr == nil && len(baselineBytes) > 0 {
+			baseline := &domain.Migration{
+				DatabaseID: databaseID,
+				Version:    "1",
+				Status:     "success",
+				SqlUp:      formatSnapshotAsBaselineSQL(baselineStruct),
+				SqlDown:    "-- Baseline schema snapshot (initial state)",
+				Snapshot:   baselineBytes,
+				UserID:     userID,
+			}
+			if savedBaseline, saveErr := s.repository.Save(ctx, baseline); saveErr == nil && savedBaseline != nil {
+				latest = savedBaseline
+			}
+		}
+	}
+
 	version := "1"
 	if latest != nil {
 		latestVersion, parseErr := strconv.Atoi(latest.Version)
@@ -83,20 +124,86 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 		return nil, err
 	}
 
-	sqlDown, generationErr := generateSQLDown(ctx, s.databaseExecutor, databaseWithCredential, sqlUp)
-	if generationErr != nil {
-		migration.ErrorMessage = generationErr.Error()
+	statements := splitSQLStatements(sqlUp)
+	if len(statements) == 0 {
+		migration.ErrorMessage = domain.ErrInvalidMigrationInput.Error()
 		return s.repository.Update(ctx, migration)
 	}
-	migration.SqlDown = sqlDown
 
-	if _, executionErr := s.databaseExecutor.ExecuteCommand(ctx, databaseWithCredential, sqlUp); executionErr != nil {
-		migration.ErrorMessage = executionErr.Error()
-		return s.repository.Update(ctx, migration)
+	for _, statement := range statements {
+		if validationErr := validateSingleStatementSupported(databaseWithCredential, statement); validationErr != nil {
+			migration.ErrorMessage = validationErr.Error()
+			return s.repository.Update(ctx, migration)
+		}
+	}
+
+	if len(statements) == 1 {
+		sqlDown, generationErr := generateSingleSQLDown(ctx, s.databaseExecutor, databaseWithCredential, statements[0])
+		if generationErr != nil {
+			migration.ErrorMessage = generationErr.Error()
+			return s.repository.Update(ctx, migration)
+		}
+		migration.SqlDown = sqlDown
+
+		if _, executionErr := s.databaseExecutor.ExecuteCommand(ctx, databaseWithCredential, sqlUp); executionErr != nil {
+			migration.ErrorMessage = executionErr.Error()
+			return s.repository.Update(ctx, migration)
+		}
+	} else {
+		executedDowns := make([]string, 0, len(statements))
+		for _, statement := range statements {
+			downStmt, generationErr := generateSingleSQLDown(ctx, s.databaseExecutor, databaseWithCredential, statement)
+			if generationErr != nil {
+				rollbackExecutedStatements(ctx, s.databaseExecutor, databaseWithCredential, executedDowns)
+				migration.ErrorMessage = generationErr.Error()
+				return s.repository.Update(ctx, migration)
+			}
+
+			if _, executionErr := s.databaseExecutor.ExecuteCommand(ctx, databaseWithCredential, statement); executionErr != nil {
+				rollbackExecutedStatements(ctx, s.databaseExecutor, databaseWithCredential, executedDowns)
+				migration.ErrorMessage = executionErr.Error()
+				return s.repository.Update(ctx, migration)
+			}
+
+			if strings.TrimSpace(downStmt) != "" {
+				executedDowns = append(executedDowns, downStmt)
+			}
+		}
+
+		reversedDowns := make([]string, 0, len(executedDowns))
+		for index := len(executedDowns) - 1; index >= 0; index-- {
+			reversedDowns = append(reversedDowns, executedDowns[index])
+		}
+		migration.SqlDown = strings.Join(reversedDowns, ";\n")
+	}
+
+	if snapshotBytes, _, snapErr := captureDatabaseSnapshot(ctx, s.databaseExecutor, databaseWithCredential); snapErr == nil && len(snapshotBytes) > 0 {
+		migration.Snapshot = snapshotBytes
 	}
 
 	migration.Status = "success"
 	return s.repository.Update(ctx, migration)
+}
+
+func rollbackExecutedStatements(
+	ctx context.Context,
+	executor ports.DatabaseExecutor,
+	database domain.Database,
+	executedDowns []string,
+) {
+	for index := len(executedDowns) - 1; index >= 0; index-- {
+		downScript := executedDowns[index]
+		subStatements := splitSQLStatements(downScript)
+		if len(subStatements) <= 1 {
+			if strings.TrimSpace(downScript) != "" {
+				_, _ = executor.ExecuteCommand(ctx, database, downScript)
+			}
+			continue
+		}
+		for _, subStmt := range subStatements {
+			_, _ = executor.ExecuteCommand(ctx, database, subStmt)
+		}
+	}
 }
 
 func (s *migrationService) GetMigrationByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint) (*domain.Migration, int64, error) {
@@ -173,34 +280,44 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 	}
 
 	rolledBack := make([]*domain.Migration, 0)
+	compensatingUps := make([]string, 0)
+
 	for version := latestVersion; version > targetVersion; version-- {
 		migration, err := s.repository.FindByVersionAndDatabaseID(ctx, strconv.Itoa(version), databaseID)
 		if err != nil {
+			rollbackExecutedStatements(ctx, s.databaseExecutor, database, compensatingUps)
 			return nil, err
 		}
 		if migration.Status != "success" {
 			continue
 		}
 		if migration.SqlDown == "" {
+			rollbackExecutedStatements(ctx, s.databaseExecutor, database, compensatingUps)
 			return nil, domain.ErrMigrationRollbackUnavailable
 		}
-		if _, err := s.databaseExecutor.ExecuteCommand(ctx, database, migration.SqlDown); err != nil {
-			latestAttempt, findErr := s.repository.FindLatestByDatabaseID(ctx, databaseID)
-			if findErr == nil && latestAttempt != nil {
-				if latestAttemptVersion, parseErr := strconv.Atoi(latestAttempt.Version); parseErr == nil {
-					failedMigration := &domain.Migration{
-						DatabaseID:   databaseID,
-						Version:      strconv.Itoa(latestAttemptVersion + 1),
-						Status:       "fail",
-						ErrorMessage: err.Error(),
-						SqlUp:        migration.SqlDown,
-						UserID:       userID,
-					}
-					_, _ = s.repository.Save(ctx, failedMigration)
+
+		downStatements := splitSQLStatements(migration.SqlDown)
+		upStatements := splitSQLStatements(migration.SqlUp)
+
+		if len(downStatements) <= 1 {
+			if _, err := s.databaseExecutor.ExecuteCommand(ctx, database, migration.SqlDown); err != nil {
+				rollbackExecutedStatements(ctx, s.databaseExecutor, database, compensatingUps)
+				return nil, err
+			}
+			compensatingUps = append(compensatingUps, migration.SqlUp)
+		} else {
+			for idx, downStmt := range downStatements {
+				if _, err := s.databaseExecutor.ExecuteCommand(ctx, database, downStmt); err != nil {
+					rollbackExecutedStatements(ctx, s.databaseExecutor, database, compensatingUps)
+					return nil, err
+				}
+				correspondingUpIndex := len(upStatements) - 1 - idx
+				if correspondingUpIndex >= 0 && correspondingUpIndex < len(upStatements) {
+					compensatingUps = append(compensatingUps, upStatements[correspondingUpIndex])
 				}
 			}
-			return nil, err
 		}
+
 		rolledBack = append(rolledBack, migration)
 	}
 
@@ -227,12 +344,18 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 		return nil, domain.ErrMigrationVersionUnavailable
 	}
 
+	snapshotBytes, _, _ := captureDatabaseSnapshot(ctx, s.databaseExecutor, database)
+	if len(snapshotBytes) == 0 && len(target.Snapshot) > 0 {
+		snapshotBytes = target.Snapshot
+	}
+
 	rollbackMigration, err := s.repository.Save(ctx, &domain.Migration{
 		DatabaseID: databaseID,
 		Version:    strconv.Itoa(latestAttemptVersion + 1),
 		Status:     "success",
 		SqlUp:      strings.Join(sqlUpStatements, ";\n"),
 		SqlDown:    strings.Join(sqlDownStatements, ";\n"),
+		Snapshot:   snapshotBytes,
 		UserID:     userID,
 	})
 	if err != nil {
