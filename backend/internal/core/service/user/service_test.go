@@ -610,3 +610,108 @@ func TestSetRoleRejectsDemotingLastAdmin(t *testing.T) {
 		t.Fatalf("error = %v, want ErrLastAdmin", err)
 	}
 }
+
+func TestDeleteRejectsLastAdminAndHandlesCountErrors(t *testing.T) {
+	// Rejects deleting the last admin
+	serviceLastAdmin := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+			},
+			CountByRoleFunc: func(context.Context, string) (int64, error) {
+				return 1, nil
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{},
+	)
+	err := serviceLastAdmin.Delete(context.Background(), 1)
+	if !errors.Is(err, domain.ErrLastAdmin) {
+		t.Fatalf("error=%v, want ErrLastAdmin", err)
+	}
+
+	// CountByRole error during admin deletion
+	countErr := errors.New("count query failed")
+	serviceCountErr := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+			},
+			CountByRoleFunc: func(context.Context, string) (int64, error) {
+				return 0, countErr
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{},
+	)
+	if err := serviceCountErr.Delete(context.Background(), 1); !errors.Is(err, countErr) {
+		t.Fatalf("error=%v, want countErr", err)
+	}
+
+	// RevokeUser error during deletion
+	revokeErr := errors.New("session revoke failed")
+	serviceRevokeErr := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 2, Role: domain.RoleUser}, nil
+			},
+			DeleteFunc: func(context.Context, uint) error {
+				return nil
+			},
+		},
+		&testutil.GroupRepository{},
+		&testutil.SessionService{
+			RevokeUserFunc: func(context.Context, uint) error {
+				return revokeErr
+			},
+		},
+	)
+	if err := serviceRevokeErr.Delete(context.Background(), 2); !errors.Is(err, revokeErr) {
+		t.Fatalf("error=%v, want revokeErr", err)
+	}
+}
+
+func TestSetRolePropagatesCountAndAdminErrors(t *testing.T) {
+	// CountUserGroups error when demoting to user
+	groupCountErr := errors.New("group count error")
+	serviceGroupErr := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+			},
+		},
+		&testutil.GroupRepository{
+			CountUserGroupsFunc: func(context.Context, uint) (int64, error) {
+				return 0, groupCountErr
+			},
+		},
+		&testutil.SessionService{},
+	)
+	_, err := serviceGroupErr.SetRole(context.Background(), 1, domain.RoleUser)
+	if !errors.Is(err, groupCountErr) {
+		t.Fatalf("error=%v, want groupCountErr", err)
+	}
+
+	// CountByRole error when demoting admin
+	adminCountErr := errors.New("admin count error")
+	serviceAdminErr := userservice.NewUserService(
+		&testutil.UserRepository{
+			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
+				return domain.User{ID: 1, Role: domain.RoleAdmin}, nil
+			},
+			CountByRoleFunc: func(context.Context, string) (int64, error) {
+				return 0, adminCountErr
+			},
+		},
+		&testutil.GroupRepository{
+			CountUserGroupsFunc: func(context.Context, uint) (int64, error) {
+				return 2, nil
+			},
+		},
+		&testutil.SessionService{},
+	)
+	_, err = serviceAdminErr.SetRole(context.Background(), 1, domain.RoleUser)
+	if !errors.Is(err, adminCountErr) {
+		t.Fatalf("error=%v, want adminCountErr", err)
+	}
+}

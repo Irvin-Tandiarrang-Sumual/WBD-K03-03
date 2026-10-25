@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -256,10 +257,15 @@ func currentUserID(c *gin.Context) (uint, error) {
 }
 
 func toResponse(migration *domain.Migration) MigrationResponse {
+	var snapshot json.RawMessage
+	if len(migration.Snapshot) > 0 && json.Valid(migration.Snapshot) {
+		snapshot = json.RawMessage(migration.Snapshot)
+	}
 	return MigrationResponse{
 		ID: migration.ID, DatabaseID: migration.DatabaseID, Version: migration.Version,
 		Status: migration.Status, SqlUp: migration.SqlUp, SqlDown: migration.SqlDown,
 		ErrorMessage: migration.ErrorMessage,
+		Snapshot:     snapshot,
 		UserID:       migration.UserID,
 	}
 }

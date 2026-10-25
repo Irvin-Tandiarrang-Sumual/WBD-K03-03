@@ -289,3 +289,42 @@ func TestExplainAndExecuteAcceptTrailingSemicolon(t *testing.T) {
 		t.Fatalf("expected non-SELECT query on ExecuteDatabaseQuery to be rejected even for view_edit, got %v", err)
 	}
 }
+
+func TestExplainDatabaseQueryHandlesLeadingExplainAnalyzeAndCredentialError(t *testing.T) {
+	groups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+		return domain.AccessViewOnly, nil
+	}}
+	repository := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+		return domain.Database{ID: 5}, nil
+	}}
+	executor := &executorFake{
+		queryResult: &ports.DatabaseQueryResult{Columns: []string{"QUERY PLAN"}},
+	}
+	service := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, executor, groups)
+
+	// Explain Analyze stripped
+	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "EXPLAIN ANALYZE SELECT id FROM users;", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if executor.query != "SELECT id FROM users" {
+		t.Fatalf("expected stripped query 'SELECT id FROM users', got %q", executor.query)
+	}
+
+	// Just keyword "select" without space or target is rejected
+	_, err = service.ExplainDatabaseQuery(context.Background(), 5, 9, "select", false)
+	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+		t.Fatalf("expected ErrInvalidDatabaseQuery, got %v", err)
+	}
+
+	// FindWithCredentialByID error propagation
+	credErr := errors.New("cred lookup failure")
+	repoCredErr := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+		return domain.Database{}, credErr
+	}}
+	serviceCredErr := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repoCredErr, executor, groups)
+	_, err = serviceCredErr.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1", false)
+	if !errors.Is(err, credErr) {
+		t.Fatalf("expected credErr, got %v", err)
+	}
+}

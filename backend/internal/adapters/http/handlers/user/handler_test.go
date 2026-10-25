@@ -222,6 +222,7 @@ func TestUserErrorMapping(t *testing.T) {
 		{name: "group missing", err: domain.ErrGroupNotFound, want: http.StatusNotFound},
 		{name: "username taken", err: domain.ErrUsernameTaken, want: http.StatusConflict},
 		{name: "last group", err: domain.ErrUserMustHaveGroup, want: http.StatusConflict},
+		{name: "last admin", err: domain.ErrLastAdmin, want: http.StatusConflict},
 		{name: "unknown", err: errors.New("boom"), want: http.StatusInternalServerError},
 	}
 
@@ -233,5 +234,103 @@ func TestUserErrorMapping(t *testing.T) {
 				t.Fatalf("status = %d, want %d; body=%s", w.Code, tt.want, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestListPropagatesServiceError(t *testing.T) {
+	service := &testutil.UserService{
+		ListFunc: func(context.Context, pagination.PaginationParams) ([]domain.User, int64, error) {
+			return nil, 0, errors.New("database unreachable")
+		},
+	}
+	c, w := newUserTestContext(http.MethodGet, "/users", nil, nil)
+	NewUserHandler(service).List(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", w.Code)
+	}
+}
+
+func TestGetPropagatesServiceError(t *testing.T) {
+	service := &testutil.UserService{
+		GetFunc: func(context.Context, uint) (domain.User, error) {
+			return domain.User{}, domain.ErrUserNotFound
+		},
+	}
+	c, w := newUserTestContext(http.MethodGet, "/users/99", nil, gin.Params{{Key: "userId", Value: "99"}})
+	NewUserHandler(service).Get(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestCreatePropagatesServiceError(t *testing.T) {
+	service := &testutil.UserService{
+		CreateFunc: func(context.Context, domain.CreateUserInput) (domain.User, error) {
+			return domain.User{}, domain.ErrUsernameTaken
+		},
+	}
+	c, w := newUserTestContext(http.MethodPost, "/users", []byte(`{"username":"existing","password":"password123","groupIds":[1]}`), nil)
+	NewUserHandler(service).Create(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", w.Code)
+	}
+}
+
+func TestUpdateRejectsInvalidJSONAndPropagatesError(t *testing.T) {
+	service := &testutil.UserService{
+		UpdateFunc: func(context.Context, uint, domain.UpdateUserInput) (domain.User, error) {
+			return domain.User{}, domain.ErrUserNotFound
+		},
+	}
+	handler := NewUserHandler(service)
+
+	// Invalid JSON
+	c1, w1 := newUserTestContext(http.MethodPatch, "/users/5", []byte(`{"username":`), gin.Params{{Key: "userId", Value: "5"}})
+	handler.Update(c1)
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for bad json", w1.Code)
+	}
+
+	// Service error (404)
+	c2, w2 := newUserTestContext(http.MethodPatch, "/users/5", []byte(`{"username":"new"}`), gin.Params{{Key: "userId", Value: "5"}})
+	handler.Update(c2)
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w2.Code)
+	}
+}
+
+func TestDeletePropagatesServiceError(t *testing.T) {
+	service := &testutil.UserService{
+		DeleteFunc: func(context.Context, uint) error {
+			return domain.ErrLastAdmin
+		},
+	}
+	c, w := newUserTestContext(http.MethodDelete, "/users/1", nil, gin.Params{{Key: "userId", Value: "1"}})
+	NewUserHandler(service).Delete(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 for deleting last admin", w.Code)
+	}
+}
+
+func TestSetRoleRejectsInvalidJSONAndPropagatesError(t *testing.T) {
+	service := &testutil.UserService{
+		SetRoleFunc: func(context.Context, uint, string) (domain.User, error) {
+			return domain.User{}, domain.ErrInvalidRole
+		},
+	}
+	handler := NewUserHandler(service)
+
+	// Invalid JSON
+	c1, w1 := newUserTestContext(http.MethodPatch, "/users/3/role", []byte(`{"role":`), gin.Params{{Key: "userId", Value: "3"}})
+	handler.SetRole(c1)
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for bad json", w1.Code)
+	}
+
+	// Service error (ErrInvalidRole -> 400)
+	c2, w2 := newUserTestContext(http.MethodPatch, "/users/3/role", []byte(`{"role":"superadmin"}`), gin.Params{{Key: "userId", Value: "3"}})
+	handler.SetRole(c2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for invalid role", w2.Code)
 	}
 }
