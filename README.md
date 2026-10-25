@@ -84,6 +84,111 @@ Untuk menghapus volume dan seluruh data database:
 docker compose down -v
 ```
 
+## API Documentation (Swagger)
+
+Aplikasi ini menyediakan dokumentasi API interaktif berbasis Swagger / OpenAPI untuk mempermudah eksplorasi dan pengujian endpoint backend.
+
+### 1. Akses Swagger UI
+
+Pastikan container backend atau server lokal sudah berjalan:
+```bash
+docker compose up
+```
+
+Buka URL berikut pada browser:
+```text
+http://localhost:8080/swagger/index.html
+```
+
+> **Catatan**: Spesifikasi mentah OpenAPI dalam format JSON juga dapat diakses langsung di:
+> `http://localhost:8080/swagger/doc.json`
+
+---
+
+### 2. Cara Menguji Endpoint (Dasar)
+
+1. **Pilih Endpoint**: Endpoint dikelompokkan berdasarkan kategori (seperti `auth`, `admin`, `databases`, `migrations`). Klik pada salah satu endpoint untuk melihat rinciannya.
+2. **Mulai Testing**: Klik tombol **Try it out** di pojok kanan atas blok endpoint tersebut.
+3. **Isi Parameter / Body**: Masukkan parameter query, path parameter, atau request body JSON sesuai contoh skema yang tertera.
+4. **Eksekusi**: Klik tombol **Execute** (berwarna biru).
+5. **Periksa Respons**: Hasil request akan ditampilkan di bagian **Responses**, meliputi:
+   - **HTTP Status Code** (misal `200 OK`, `201 Created`, `400 Bad Request`, `401 Unauthorized`).
+   - **Response Body** (JSON respons data / pesan error).
+   - **Response Headers**.
+
+---
+
+### 3. Panduan Autentikasi (Cookie-Based Authentication)
+
+Endpoint selain `POST /api/v1/auth/login` memerlukan sesi login aktif menggunakan **Cookie-based authentication** (`session=<token>`). Ikuti panduan langkah demi langkah di bawah ini untuk mengautentikasi Swagger UI:
+
+#### Akun Demo yang Tersedia
+- **Admin** (memiliki izin penuh ke seluruh endpoint `/admin/*` dan `/me/*`):
+  - **Username**: `admin`
+  - **Password**: `admin123`
+- **User Biasa** (akses terbatas ke endpoint `/me/*`):
+  - **Username**: `user`
+  - **Password**: `user123`
+
+#### Langkah-Langkah Autentikasi:
+1. **Lakukan Login via Swagger**:
+   - Expand endpoint `POST /api/v1/auth/login`.
+   - Klik **Try it out**.
+   - Masukkan kredensial pada Request body:
+     ```json
+     {
+       "username": "admin",
+       "password": "admin123"
+     }
+     ```
+   - Klik **Execute** dan pastikan status respons `200 OK`.
+
+2. **Dapatkan Token Sesi**:
+   Ambil string token sesi dari cookie browser melalui salah satu cara berikut:
+   - **Opsi A (Melalui DevTools Storage / Cookies — Disarankan)**:
+     1. Buka Developer Tools browser (`F12` atau klik kanan → *Inspect*).
+     2. Buka tab **Application** (Chrome/Edge/Brave) atau **Storage** (Firefox).
+     3. Pada panel kiri, expand menu **Cookies** → klik `http://localhost:8080`.
+     4. Salin (copy) teks nilai pada kolom **Value** dari cookie dengan nama `session`.
+   - **Opsi B (Melalui DevTools Network)**:
+     1. Buka tab **Network** pada Developer Tools.
+     2. Klik request `login` yang baru saja dieksekusi.
+     3. Pada panel kanan, lihat bagian **Response Headers**.
+     4. Cari header `Set-Cookie:` yang berisi format `session=<TOKEN>; ...` dan salin token tersebut.
+
+3. **Pasang Token ke Swagger UI (Authorize)**:
+   - Gulir ke paling atas halaman Swagger UI, lalu klik tombol 🔒 **Authorize** (di pojok kanan atas).
+   - Pada modal dialog **CookieAuth (apiKey)**, ketikkan nilai dengan format:
+     ```text
+     session=<TOKEN>
+     ```
+     *(Penting: Harus menyertakan awalan `session=` diikuti nilai token yang sudah disalin)*
+   - Klik tombol **Authorize**, lalu klik **Close**.
+   - Ikon gembok 🔒 pada endpoint yang terproteksi sekarang akan berstatus terkunci/aktif. Semua request berikutnya akan otomatis membawa header cookie tersebut.
+
+4. **Logout**:
+   - Untuk mengakhiri sesi, eksekusi endpoint `POST /api/v1/auth/logout`.
+   - Buka kembali modal 🔒 **Authorize** di pojok kanan atas, lalu klik tombol **Logout** untuk menghapus token dari Swagger UI.
+
+---
+
+### 4. Update documentation
+
+Jika Anda melakukan perubahan pada route handler, struct request/response, atau menambahkan anotasi Swagger baru di backend:
+
+1. Pastikan CLI `swag` sudah terpasang:
+   ```bash
+   go install github.com/swaggo/swag/cmd/swag@latest
+   ```
+
+2. Jalankan perintah pembuatan dokumentasi dari dalam direktori `backend/`:
+   ```bash
+   cd backend
+   swag init -g cmd/api/main.go -o docs/ --parseDependency --parseInternal
+   ```
+
+3. File `docs.go`, `swagger.json`, dan `swagger.yaml` di dalam folder `backend/docs/` akan diperbarui secara otomatis. Refresh browser Anda untuk melihat perubahan terbaru pada Swagger UI.
+
 ## Unit Testing
 
 Unit test backend dapat dijalankan dengan satu command dari root project:

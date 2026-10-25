@@ -7,6 +7,7 @@ import (
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
 	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
+	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
@@ -25,6 +26,7 @@ func TestSetupRouterRegistersExpectedRoutes(t *testing.T) {
 		databasehandler.NewDatabaseHandler(&testutil.DatabaseService{}),
 		databaseexecutorhandler.NewDatabaseExecutorHandler(nil),
 		migrationhandler.NewMigrationHandler(&testutil.MigrationService{}),
+		healthhandler.NewHealthHandler(nil),
 		&testutil.SessionService{},
 		&testutil.UserService{},
 		&testutil.GroupService{},
@@ -64,6 +66,8 @@ func TestSetupRouterRegistersExpectedRoutes(t *testing.T) {
 		"GET /api/v1/me/databases/:database_id/migrations/compare",
 		"GET /api/v1/me/databases/:database_id/migrations/:migration_id",
 		"POST /api/v1/me/databases/migrations/rollback",
+		"GET /api/v1/health",
+		"GET /swagger/*any",
 	}
 
 	for _, route := range expected {
