@@ -40,7 +40,7 @@ func Error(message string) BaseResponse[any] {
 
 func NewPagedResponse[T any](code int, status string, data []T, params pagination.PaginationParams, totalData int64) PagedResponse[T] {
 	totalPage := int(totalData) / params.Limit
-	if int(totalData) % params.Limit != 0 {
+	if int(totalData)%params.Limit != 0 {
 		totalPage++
 	}
 

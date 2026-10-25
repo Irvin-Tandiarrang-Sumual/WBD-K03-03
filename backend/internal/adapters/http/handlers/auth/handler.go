@@ -8,6 +8,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,24 +28,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var request LoginRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": domain.ErrInvalidInput.Error(),
-		})
+		c.JSON(http.StatusBadRequest, response.Error(domain.ErrInvalidInput.Error()))
 		return
 	}
 
 	user, session, err := h.service.Login(c.Request.Context(), request.Username, request.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": err.Error(),
-			})
+			c.JSON(http.StatusUnauthorized, response.Error(err.Error()))
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "internal server error",
-		})
+		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
 		return
 	}
 
@@ -65,11 +60,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		true,
 	)
 
-	c.JSON(http.StatusOK, LoginResponse{
+	c.JSON(http.StatusOK, response.Success("login successful", LoginResponse{
 		ID:       user.ID,
 		Username: user.Username,
 		Role:     user.Role,
-	})
+	}))
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
@@ -77,9 +72,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	if err == nil && opaqueToken != "" {
 		if err := h.service.Logout(c.Request.Context(), opaqueToken); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "internal server error",
-			})
+			c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
 			return
 		}
 	}

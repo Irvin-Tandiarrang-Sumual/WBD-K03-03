@@ -3,7 +3,6 @@ package user
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -49,7 +48,7 @@ func (h *UserHandler) List(c *gin.Context) {
 }
 
 func (h *UserHandler) Get(c *gin.Context) {
-	userID, err := parseID(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -88,7 +87,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 }
 
 func (h *UserHandler) Update(c *gin.Context) {
-	userID, err := parseID(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -116,7 +115,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 }
 
 func (h *UserHandler) Delete(c *gin.Context) {
-	userID, err := parseID(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -131,7 +130,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 }
 
 func (h *UserHandler) SetRole(c *gin.Context) {
-	userID, err := parseID(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -153,39 +152,22 @@ func (h *UserHandler) SetRole(c *gin.Context) {
 	c.JSON(http.StatusOK, toUserResponse(updatedUser))
 }
 
-func parseID(c *gin.Context, parameter string) (uint, error) {
-	rawID := c.Param(parameter)
-
-	id, err := strconv.ParseUint(rawID, 10, 64)
-	if err != nil || id == 0 {
-		return 0, domain.ErrInvalidInput
-	}
-
-	return uint(id), nil
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput),
 		errors.Is(err, domain.ErrInvalidRole),
 		errors.Is(err, domain.ErrInvalidGroupsIDs):
-		c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
+		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 
 	case errors.Is(err, domain.ErrUserNotFound),
 		errors.Is(err, domain.ErrGroupNotFound):
-		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
+		c.JSON(http.StatusNotFound, response.Error(err.Error()))
 
 	case errors.Is(err, domain.ErrUsernameTaken),
 		errors.Is(err, domain.ErrUserMustHaveGroup):
-		c.JSON(http.StatusConflict, errorResponse{Error: err.Error()})
+		c.JSON(http.StatusConflict, response.Error(err.Error()))
 
 	default:
-		c.JSON(http.StatusInternalServerError, errorResponse{
-			Error: "internal server error",
-		})
+		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
 	}
 }

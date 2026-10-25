@@ -3,7 +3,6 @@ package group
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -49,7 +48,7 @@ func (h *GroupHandler) List(c *gin.Context) {
 }
 
 func (h *GroupHandler) Get(c *gin.Context) {
-	groupID, err := parseID(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -87,7 +86,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 }
 
 func (h *GroupHandler) Update(c *gin.Context) {
-	groupID, err := parseID(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -119,7 +118,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 }
 
 func (h *GroupHandler) Delete(c *gin.Context) {
-	groupID, err := parseID(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -134,13 +133,13 @@ func (h *GroupHandler) Delete(c *gin.Context) {
 }
 
 func (h *GroupHandler) AddUser(c *gin.Context) {
-	groupID, err := parseID(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	userID, err := parseID(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -155,13 +154,13 @@ func (h *GroupHandler) AddUser(c *gin.Context) {
 }
 
 func (h *GroupHandler) RemoveUser(c *gin.Context) {
-	groupID, err := parseID(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	userID, err := parseID(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, err)
 		return
@@ -175,43 +174,26 @@ func (h *GroupHandler) RemoveUser(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func parseID(c *gin.Context, parameter string) (uint, error) {
-	rawID := c.Param(parameter)
-
-	id, err := strconv.ParseUint(rawID, 10, 64)
-	if err != nil || id == 0 {
-		return 0, domain.ErrInvalidInput
-	}
-
-	return uint(id), nil
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput),
 		errors.Is(err, domain.ErrInvalidDatabaseAccess),
 		errors.Is(err, domain.ErrInvalidGroupsIDs):
-		c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
+		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 
 	case errors.Is(err, domain.ErrGroupNotFound),
 		errors.Is(err, domain.ErrUserNotFound),
 		errors.Is(err, domain.ErrDatabaseNotFound):
-		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
+		c.JSON(http.StatusNotFound, response.Error(err.Error()))
 
 	case errors.Is(err, domain.ErrGroupNameTaken),
 		errors.Is(err, domain.ErrMembershipExists),
 		errors.Is(err, domain.ErrMembershipNotFound),
 		errors.Is(err, domain.ErrGroupMustHaveDatabase),
 		errors.Is(err, domain.ErrUserMustHaveGroup):
-		c.JSON(http.StatusConflict, errorResponse{Error: err.Error()})
+		c.JSON(http.StatusConflict, response.Error(err.Error()))
 
 	default:
-		c.JSON(http.StatusInternalServerError, errorResponse{
-			Error: "internal server error",
-		})
+		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
 	}
 }
