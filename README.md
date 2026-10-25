@@ -62,6 +62,41 @@ Untuk menghapus volume dan seluruh data database:
 docker compose down -v
 ```
 
+## Unit Testing
+
+Unit test backend dapat dijalankan dengan satu command dari root project:
+
+```bash
+make test
+```
+
+Target `test` pada [Makefile](./Makefile) root berpindah ke folder `backend`
+dan menjalankan seluruh unit test Go dengan:
+
+```text
+go test ./...
+```
+
+Integration test yang membutuhkan PostgreSQL eksternal tidak termasuk dalam
+command unit test. Untuk menjalankan seluruh unit test dan integration test,
+gunakan:
+
+```bash
+make test-all
+```
+
+Target lain yang tersedia:
+
+```bash
+make test-unit        # Sama dengan make test
+make test-unit-cover  # Unit test dengan laporan coverage
+make test-integration # Integration test
+```
+
+Target `test-unit-cover` menjalankan package yang memiliki unit test dan
+menghasilkan laporan coverage di `backend/coverage.out`. Laporan tersebut juga
+menampilkan total coverage seluruh package yang dipilih.
+
 ### Run with Docker
 
 From the repository root, copy `.env.example` to `.env`:
