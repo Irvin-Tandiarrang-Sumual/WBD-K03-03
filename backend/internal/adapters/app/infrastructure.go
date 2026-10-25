@@ -17,7 +17,7 @@ func buildSystemDatabase(configuration *config.Config) (*gorm.DB, func(), error)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := migrations.Migrate(systemDatabase); err != nil {
+	if err := migrations.MigrateSystemDatabase(systemDatabase); err != nil {
 		sqlDatabase, closeErr := systemDatabase.DB()
 		if closeErr == nil {
 			_ = sqlDatabase.Close()
