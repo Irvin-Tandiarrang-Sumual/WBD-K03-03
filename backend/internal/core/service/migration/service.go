@@ -15,17 +15,20 @@ type migrationService struct {
 	repository         ports.MigrationRepository
 	databaseRepository ports.DatabaseRepository
 	databaseExecutor   ports.DatabaseExecutor
+	groupService       ports.GroupService
 }
 
 func NewMigrationService(
 	repository ports.MigrationRepository,
 	databaseRepository ports.DatabaseRepository,
 	databaseExecutor ports.DatabaseExecutor,
+	groupService ports.GroupService,
 ) ports.MigrationService {
 	return &migrationService{
 		repository:         repository,
 		databaseRepository: databaseRepository,
 		databaseExecutor:   databaseExecutor,
+		groupService:       groupService,
 	}
 }
 
@@ -38,7 +41,14 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 		return nil, domain.ErrInvalidMigrationInput
 	}
 
-	_, err := s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID)
+	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	if !access.Allows(domain.AccessViewEdit) {
+		return nil, domain.ErrDatabaseAccessDenied
+	}
+	_, err = s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +126,13 @@ func (s *migrationService) CompareMigrations(ctx context.Context, databaseID uin
 func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID uint, userID uint, targetMigrationID uint) ([]*domain.Migration, error) {
 	if databaseID == 0 || userID == 0 || targetMigrationID == 0 {
 		return nil, domain.ErrInvalidMigrationInput
+	}
+	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	if !access.Allows(domain.AccessViewEdit) {
+		return nil, domain.ErrDatabaseAccessDenied
 	}
 	if _, err := s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID); err != nil {
 		return nil, err

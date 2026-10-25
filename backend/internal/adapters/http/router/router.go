@@ -3,6 +3,7 @@ package router
 import (
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
 	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
+	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
@@ -18,8 +19,10 @@ func SetUpRouter(
 	groups *grouphandler.GroupHandler,
 	databases *databasehandler.DatabaseHandler,
 	databaseExecutor *databaseexecutorhandler.DatabaseExecutorHandler,
+	migrations *migrationhandler.MigrationHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
+	groupService ports.GroupService,
 ) {
 	api := r.Group("/api/v1")
 
@@ -134,14 +137,41 @@ func SetUpRouter(
 	)
 	meDatabases.GET(
 		"/:database_id",
+		middleware.RequireDatabaseView(groupService),
 		databases.GetDatabaseByIDAndUserID,
 	)
 	meDatabases.POST(
 		"/:database_id/query",
+		middleware.RequireDatabaseView(groupService),
 		databaseExecutor.ExecuteDatabaseQuery,
 	)
 	meDatabases.POST(
 		"/:database_id/explain",
+		middleware.RequireDatabaseView(groupService),
 		databaseExecutor.ExplainDatabaseQuery,
+	)
+	meDatabases.GET(
+		"/:database_id/migrations",
+		middleware.RequireDatabaseView(groupService),
+		migrations.GetMigrationsByDatabaseID,
+	)
+	meDatabases.POST(
+		"/:database_id/migrations",
+		middleware.RequireDatabaseEdit(groupService),
+		migrations.CreateMigration,
+	)
+	meDatabases.GET(
+		"/:database_id/migrations/compare",
+		middleware.RequireDatabaseView(groupService),
+		migrations.CompareMigrations,
+	)
+	meDatabases.GET(
+		"/:database_id/migrations/:migration_id",
+		middleware.RequireDatabaseView(groupService),
+		migrations.GetMigrationByIDAndDatabaseID,
+	)
+	meDatabases.POST(
+		"/migrations/rollback",
+		migrations.RollbackMigrations,
 	)
 }

@@ -12,6 +12,7 @@ type databaseExecutorService struct {
 	databaseService       ports.DatabaseService
 	databaseRepository    ports.DatabaseRepository
 	databaseExecutor     ports.DatabaseExecutor
+	groupService          ports.GroupService
 }
 
 var _ ports.DatabaseExecutorService = (*databaseExecutorService)(nil)
@@ -20,11 +21,13 @@ func NewDatabaseExecutorService(
 	databaseService ports.DatabaseService,
 	databaseRepository ports.DatabaseRepository,
 	databaseExecutor ports.DatabaseExecutor,
+	groupService ports.GroupService,
 ) ports.DatabaseExecutorService {
 	return &databaseExecutorService{
 		databaseService:    databaseService,
 		databaseRepository: databaseRepository,
 		databaseExecutor:  databaseExecutor,
+		groupService:       groupService,
 	}
 }
 
@@ -36,6 +39,9 @@ func (s *databaseExecutorService) ExecuteDatabaseQuery(
 ) (*ports.DatabaseQueryResult, error) {
 	database, err := s.getAccessibleDatabase(ctx, databaseID, userID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
 		return nil, err
 	}
 	if err := validateSelectQuery(query); err != nil {
@@ -59,14 +65,34 @@ func (s *databaseExecutorService) ExplainDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
+	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+		return nil, err
+	}
 	if err := validateSelectQuery(query); err != nil {
 		return nil, err
 	}
+
 	databaseWithCredential, err := s.databaseRepository.FindWithCredentialByID(ctx, database.ID)
 	if err != nil {
 		return nil, err
 	}
 	return s.databaseExecutor.ExplainQuery(ctx, databaseWithCredential, query, analyze)
+}
+
+func (s *databaseExecutorService) requireDatabaseAccess(
+	ctx context.Context,
+	userID uint,
+	databaseID uint,
+	required domain.AccessType,
+) error {
+	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	if err != nil {
+		return err
+	}
+	if !access.Allows(required) {
+		return domain.ErrDatabaseAccessDenied
+	}
+	return nil
 }
 
 func (s *databaseExecutorService) getAccessibleDatabase(

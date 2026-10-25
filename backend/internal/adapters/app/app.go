@@ -11,6 +11,7 @@ import (
 	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
 	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
+	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 
@@ -23,11 +24,13 @@ import (
 	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
 	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
+	migrationrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/migration"
 
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
 	databaseexecutorservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_executor"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
+	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
 
@@ -139,6 +142,14 @@ func Run() {
 		databaseService,
 		databaseRepository,
 		databaseExecutor,
+		groupService,
+	)
+	migrationRepository := migrationrepository.NewMigrationRepository(db)
+	migrationService := migrationservice.NewMigrationService(
+		migrationRepository,
+		databaseRepository,
+		databaseExecutor,
+		groupService,
 	)
 
 	authHandler := authhandler.NewAuthHandler(
@@ -160,6 +171,7 @@ func Run() {
 	databaseExecutorHandler := databaseexecutorhandler.NewDatabaseExecutorHandler(
 		databaseExecutorService,
 	)
+	migrationHandler := migrationhandler.NewMigrationHandler(migrationService)
 
 	r := gin.Default()
 
@@ -170,8 +182,10 @@ func Run() {
 		groupHandler,
 		databaseHandler,
 		databaseExecutorHandler,
+		migrationHandler,
 		sessionService,
 		userService,
+		groupService,
 	)
 
 	address := fmt.Sprintf(
