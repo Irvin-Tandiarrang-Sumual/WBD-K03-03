@@ -39,6 +39,7 @@ export interface Migration {
   sql_up: string;
   sql_down: string;
   error_message: string;
+  snapshot?: unknown;
   user_id: number;
 }
 

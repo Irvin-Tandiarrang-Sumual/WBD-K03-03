@@ -16,7 +16,92 @@ func generateSQLDown(
 	database domain.Database,
 	sqlUp string,
 ) (string, error) {
-	statement := strings.TrimSpace(strings.TrimSuffix(sqlUp, ";"))
+	statements := splitSQLStatements(sqlUp)
+	if len(statements) == 0 {
+		return "", domain.ErrInvalidMigrationInput
+	}
+
+	for _, statement := range statements {
+		if err := validateSingleStatementSupported(database, statement); err != nil {
+			return "", err
+		}
+	}
+
+	downStatements := make([]string, 0, len(statements))
+	for _, statement := range statements {
+		down, err := generateSingleSQLDown(ctx, executor, database, statement)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(down) != "" {
+			downStatements = append(downStatements, down)
+		}
+	}
+
+	for left, right := 0, len(downStatements)-1; left < right; left, right = left+1, right-1 {
+		downStatements[left], downStatements[right] = downStatements[right], downStatements[left]
+	}
+
+	return strings.Join(downStatements, ";\n"), nil
+}
+
+func validateSingleStatementSupported(database domain.Database, rawStatement string) error {
+	statement := strings.TrimSpace(strings.TrimSuffix(rawStatement, ";"))
+	lowerStatement := strings.ToLower(statement)
+	if statement == "" || strings.HasPrefix(lowerStatement, "select ") {
+		return domain.ErrInvalidMigrationInput
+	}
+
+	switch {
+	case strings.HasPrefix(lowerStatement, "create table "):
+		if _, ok := captureIdentifier(statement, `(?i)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)`); !ok {
+			return domain.ErrSQLDownGenerationUnsupported
+		}
+		return nil
+	case strings.HasPrefix(lowerStatement, "create index "),
+		strings.HasPrefix(lowerStatement, "create unique index "):
+		if _, ok := captureIdentifier(statement, `(?i)^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)`); !ok {
+			return domain.ErrSQLDownGenerationUnsupported
+		}
+		if database.Type == "mysql" {
+			if _, tableOK := captureIdentifier(statement, `(?i)\s+ON\s+([a-zA-Z0-9_.]+)\s*\(`); !tableOK {
+				return domain.ErrSQLDownGenerationUnsupported
+			}
+		}
+		return nil
+	case strings.HasPrefix(lowerStatement, "alter table "):
+		if _, _, ok := parseAddColumn(statement); !ok {
+			return domain.ErrSQLDownGenerationUnsupported
+		}
+		return nil
+	case strings.HasPrefix(lowerStatement, "insert into "):
+		_, err := generateInsertDown(statement)
+		return err
+	case strings.HasPrefix(lowerStatement, "delete from "):
+		re := regexp.MustCompile(`(?is)^DELETE\s+FROM\s+([a-zA-Z0-9_.]+)\s+WHERE\s+(.+)$`)
+		if len(re.FindStringSubmatch(statement)) != 3 {
+			return domain.ErrSQLDownGenerationUnsupported
+		}
+		return nil
+	case strings.HasPrefix(lowerStatement, "update "):
+		re := regexp.MustCompile(`(?is)^UPDATE\s+([a-zA-Z0-9_.]+)\s+SET\s+(.+)\s+WHERE\s+(.+)$`)
+		matches := re.FindStringSubmatch(statement)
+		if len(matches) != 4 || len(parseAssignments(matches[2])) == 0 {
+			return domain.ErrSQLDownGenerationUnsupported
+		}
+		return nil
+	default:
+		return domain.ErrSQLDownGenerationUnsupported
+	}
+}
+
+func generateSingleSQLDown(
+	ctx context.Context,
+	executor ports.DatabaseExecutor,
+	database domain.Database,
+	rawStatement string,
+) (string, error) {
+	statement := strings.TrimSpace(strings.TrimSuffix(rawStatement, ";"))
 	lowerStatement := strings.ToLower(statement)
 	if statement == "" || strings.HasPrefix(lowerStatement, "select ") {
 		return "", domain.ErrInvalidMigrationInput
@@ -58,6 +143,90 @@ func generateSQLDown(
 	default:
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
+}
+
+func splitSQLStatements(sqlScript string) []string {
+	statements := make([]string, 0)
+	var current strings.Builder
+
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBacktick := false
+	inLineComment := false
+	inBlockComment := false
+
+	for index := 0; index < len(sqlScript); index++ {
+		ch := sqlScript[index]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+				current.WriteByte(ch)
+			}
+			continue
+		}
+
+		if inBlockComment {
+			if ch == '*' && index+1 < len(sqlScript) && sqlScript[index+1] == '/' {
+				inBlockComment = false
+				index++
+			}
+			continue
+		}
+
+		if !inSingleQuote && !inDoubleQuote && !inBacktick {
+			if ch == '-' && index+1 < len(sqlScript) && sqlScript[index+1] == '-' {
+				inLineComment = true
+				index++
+				continue
+			}
+			if ch == '/' && index+1 < len(sqlScript) && sqlScript[index+1] == '*' {
+				inBlockComment = true
+				index++
+				continue
+			}
+		}
+
+		if ch == '\'' && !inDoubleQuote && !inBacktick {
+			current.WriteByte(ch)
+			if inSingleQuote && index+1 < len(sqlScript) && sqlScript[index+1] == '\'' {
+				index++
+				current.WriteByte(sqlScript[index])
+				continue
+			}
+			inSingleQuote = !inSingleQuote
+			continue
+		}
+
+		if ch == '"' && !inSingleQuote && !inBacktick {
+			inDoubleQuote = !inDoubleQuote
+			current.WriteByte(ch)
+			continue
+		}
+
+		if ch == '`' && !inSingleQuote && !inDoubleQuote {
+			inBacktick = !inBacktick
+			current.WriteByte(ch)
+			continue
+		}
+
+		if ch == ';' && !inSingleQuote && !inDoubleQuote && !inBacktick {
+			trimmed := strings.TrimSpace(current.String())
+			if trimmed != "" {
+				statements = append(statements, trimmed)
+			}
+			current.Reset()
+			continue
+		}
+
+		current.WriteByte(ch)
+	}
+
+	if trimmed := strings.TrimSpace(current.String()); trimmed != "" {
+		statements = append(statements, trimmed)
+	}
+
+	return statements
 }
 
 func generateInsertDown(statement string) (string, error) {

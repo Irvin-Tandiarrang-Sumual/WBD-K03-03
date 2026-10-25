@@ -83,8 +83,9 @@ func (f *migrationRepositoryFake) Update(_ context.Context, migration *domain.Mi
 
 type migrationExecutorFake struct {
 	ports.DatabaseExecutor
-	commands   []string
-	commandErr error
+	commands      []string
+	commandErr    error
+	failOnCommand string
 }
 
 func (f *migrationExecutorFake) ExecuteQuery(context.Context, domain.Database, string, ...any) (*ports.DatabaseQueryResult, error) {
@@ -93,6 +94,9 @@ func (f *migrationExecutorFake) ExecuteQuery(context.Context, domain.Database, s
 
 func (f *migrationExecutorFake) ExecuteCommand(_ context.Context, _ domain.Database, command string, _ ...any) (*ports.DatabaseCommandResult, error) {
 	f.commands = append(f.commands, command)
+	if f.failOnCommand != "" && command == f.failOnCommand {
+		return nil, errors.New("execution failed on " + command)
+	}
 	if f.commandErr != nil {
 		return nil, f.commandErr
 	}
@@ -101,6 +105,10 @@ func (f *migrationExecutorFake) ExecuteCommand(_ context.Context, _ domain.Datab
 
 func (f *migrationExecutorFake) ExplainQuery(context.Context, domain.Database, string, bool, ...any) (*ports.DatabaseQueryResult, error) {
 	return &ports.DatabaseQueryResult{}, nil
+}
+
+func (f *migrationExecutorFake) GetDatabaseMetadata(context.Context, domain.Database) (*ports.DatabaseMetadata, error) {
+	return &ports.DatabaseMetadata{}, nil
 }
 
 func TestCreateMigrationPersistsNextVersionAfterExecutingSQL(t *testing.T) {
@@ -216,6 +224,93 @@ func TestCreateMigrationSupportsMultiRowInsert(t *testing.T) {
 	wantDown := "DELETE FROM customers WHERE (name = 'Rina' AND email = 'rina@example.com') OR (name = 'Budi' AND email = 'budi@example.com')"
 	if created.SqlDown != wantDown {
 		t.Fatalf("sql_down = %q, want %q", created.SqlDown, wantDown)
+	}
+}
+
+func TestCreateMigrationMultiStatementSucceedsAsSingleMigration(t *testing.T) {
+	executor := &migrationExecutorFake{}
+	repository := &migrationRepositoryFake{latest: &domain.Migration{Version: "1"}}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	sql := "CREATE TABLE orders (id INT PRIMARY KEY);\nALTER TABLE orders ADD COLUMN total INT;\nINSERT INTO orders (id, total) VALUES (1, 50000);"
+	created, err := service.CreateMigration(context.Background(), 8, 3, sql)
+	if err != nil {
+		t.Fatalf("CreateMigration() error = %v", err)
+	}
+	if created.Status != "success" || created.Version != "2" {
+		t.Fatalf("created = %+v, want success version 2", created)
+	}
+	wantDown := "DELETE FROM orders WHERE id = 1 AND total = 50000;\nALTER TABLE orders DROP COLUMN total;\nDROP TABLE orders"
+	if created.SqlDown != wantDown {
+		t.Fatalf("sql_down = %q, want %q", created.SqlDown, wantDown)
+	}
+	if len(executor.commands) != 3 {
+		t.Fatalf("commands = %v, want 3 executed statements", executor.commands)
+	}
+}
+
+func TestCreateMigrationMultiStatementAtomicallyRollsBackOnFailure(t *testing.T) {
+	executor := &migrationExecutorFake{
+		failOnCommand: "INSERT INTO orders (id, total) VALUES (1, 50000)",
+	}
+	repository := &migrationRepositoryFake{latest: &domain.Migration{Version: "1"}}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	sql := "CREATE TABLE orders (id INT PRIMARY KEY);\nALTER TABLE orders ADD COLUMN total INT;\nINSERT INTO orders (id, total) VALUES (1, 50000);"
+	created, err := service.CreateMigration(context.Background(), 8, 3, sql)
+	if err != nil {
+		t.Fatalf("CreateMigration() error = %v", err)
+	}
+	if created.Status != "fail" || created.ErrorMessage == "" {
+		t.Fatalf("created = %+v, want failed migration with error message", created)
+	}
+
+	wantCommands := []string{
+		"CREATE TABLE orders (id INT PRIMARY KEY)",
+		"ALTER TABLE orders ADD COLUMN total INT",
+		"INSERT INTO orders (id, total) VALUES (1, 50000)",
+		"ALTER TABLE orders DROP COLUMN total",
+		"DROP TABLE orders",
+	}
+	if len(executor.commands) != len(wantCommands) {
+		t.Fatalf("commands = %v, want %v", executor.commands, wantCommands)
+	}
+	for index, wantCmd := range wantCommands {
+		if executor.commands[index] != wantCmd {
+			t.Fatalf("command[%d] = %q, want %q", index, executor.commands[index], wantCmd)
+		}
 	}
 }
 

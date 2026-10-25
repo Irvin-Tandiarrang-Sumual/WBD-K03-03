@@ -120,25 +120,6 @@ export default function AdminDashboard() {
           </article>
         ))}
       </div>
-
-      <div
-        style={{
-          backgroundColor: "#18181b",
-          border: "1px solid #27272a",
-          borderRadius: "8px",
-          padding: "1rem 1.25rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          fontSize: "0.85rem",
-          color: "#a1a1aa",
-        }}
-      >
-        <span>💡</span>
-        <span>
-          <strong>Catatan:</strong> Database internal sistem (<code style={{ color: "#e4e4e7" }}>tubes-wbd-3</code>) terisolasi dan hanya dikelola langsung oleh backend. Database yang dibuat di panel ini adalah database eksternal yang dapat didelegasikan ke pengguna melalui Group.
-        </span>
-      </div>
     </div>
   );
 }

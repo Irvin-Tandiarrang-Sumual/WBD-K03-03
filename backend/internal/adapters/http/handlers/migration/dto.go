@@ -1,5 +1,7 @@
 package migration
 
+import "encoding/json"
+
 type CreateMigrationRequest struct {
 	SqlUp string `json:"sql_up" binding:"required"`
 }
@@ -17,12 +19,13 @@ type MigrationComparisonResponse struct {
 }
 
 type MigrationResponse struct {
-	ID           uint   `json:"id"`
-	DatabaseID   uint   `json:"database_id"`
-	Version      string `json:"version"`
-	Status       string `json:"status"`
-	SqlUp        string `json:"sql_up"`
-	SqlDown      string `json:"sql_down"`
-	ErrorMessage string `json:"error_message"`
-	UserID       uint   `json:"user_id"`
+	ID           uint            `json:"id"`
+	DatabaseID   uint            `json:"database_id"`
+	Version      string          `json:"version"`
+	Status       string          `json:"status"`
+	SqlUp        string          `json:"sql_up"`
+	SqlDown      string          `json:"sql_down"`
+	ErrorMessage string          `json:"error_message"`
+	Snapshot     json.RawMessage `json:"snapshot,omitempty"`
+	UserID       uint            `json:"user_id"`
 }

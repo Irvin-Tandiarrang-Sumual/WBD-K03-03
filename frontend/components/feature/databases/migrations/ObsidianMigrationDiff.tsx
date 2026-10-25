@@ -9,9 +9,15 @@ import ToastContainer from "@/components/ui/Toast";
 import { useToast } from "@/lib/hooks/useToast";
 import { sanitizeSqlQuery } from "@/lib/api/executor";
 import { parseExecutionPlan, type ExecutionPlanAnalysis } from "@/lib/explainPlan";
+import {
+  diffSchemaSnapshots,
+  enrichMigrationsWithSnapshots,
+  fetchLiveDatabaseSnapshot,
+  type SchemaSnapshot,
+} from "@/lib/schemaSnapshot";
 import styles from "./MigrationDiff.module.css";
 
-type ViewMode = "Schema Diff" | "Full Script";
+type ViewMode = "Snapshot Diff" | "Snapshot JSON" | "SQL Script";
 
 interface MigrationDiffProps {
   databaseId: string;
@@ -39,11 +45,12 @@ export default function MigrationDiff({
     databaseName ?? `Database ${databaseId}`,
   );
   const [migrations, setMigrations] = useState<Migration[]>([]);
+  const [snapshotsById, setSnapshotsById] = useState<Record<number, SchemaSnapshot>>({});
   const [leftMigrationId, setLeftMigrationId] = useState("");
   const [rightMigrationId, setRightMigrationId] = useState("");
   const [rollbackTargetId, setRollbackTargetId] = useState("");
   const [comparison, setComparison] = useState<MigrationComparison | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("Schema Diff");
+  const [viewMode, setViewMode] = useState<ViewMode>("Snapshot Diff");
   const [migrationQuery, setMigrationQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -67,19 +74,26 @@ export default function MigrationDiff({
         api.migrations(databaseId, 1, 100),
         api.database(databaseId),
       ]);
-      const loaded = migrationResponse.data ?? [];
-      const latest = loaded.at(-1);
-      const previous = loaded.at(-2) ?? latest;
-      const latestSuccessful = [...loaded]
+      const rawLoaded = migrationResponse.data ?? [];
+      const liveSnapshot = await fetchLiveDatabaseSnapshot(databaseId, db.type);
+      const { migrations: enriched, snapshotsById: enrichedSnapshots } =
+        enrichMigrationsWithSnapshots(rawLoaded, liveSnapshot, Number(databaseId));
+
+      const latest = enriched.at(-1);
+      const previous = enriched.at(-2) ?? latest;
+      const latestRealSuccessful = [...rawLoaded]
         .reverse()
         .find((migration) => migration.status === "success");
 
       setDatabase(db);
-      setMigrations(loaded);
+      setMigrations(enriched);
+      setSnapshotsById(enrichedSnapshots);
       setResolvedDatabaseName(db.name);
       setLeftMigrationId(previous ? String(previous.id) : "");
       setRightMigrationId(latest ? String(latest.id) : "");
-      setRollbackTargetId(latestSuccessful ? String(latestSuccessful.id) : "");
+      setRollbackTargetId(
+        latestRealSuccessful ? String(latestRealSuccessful.id) : "",
+      );
       setComparison(null);
       setError("");
     } catch (loadError) {
@@ -105,11 +119,45 @@ export default function MigrationDiff({
     [migrations, rightMigrationId],
   );
   const successfulMigrations = useMemo(
-    () => migrations.filter((migration) => migration.status === "success"),
+    () => migrations.filter((migration) => migration.status === "success" && migration.id > 0),
     [migrations],
   );
 
-  const diffLines = useMemo<DiffLine[]>(() => {
+  const leftSnapshot = useMemo(
+    () => (leftMigration ? snapshotsById[leftMigration.id] ?? null : null),
+    [leftMigration, snapshotsById],
+  );
+  const rightSnapshot = useMemo(
+    () => (rightMigration ? snapshotsById[rightMigration.id] ?? null : null),
+    [rightMigration, snapshotsById],
+  );
+
+  const snapshotDiff = useMemo(
+    () => diffSchemaSnapshots(leftSnapshot, rightSnapshot),
+    [leftSnapshot, rightSnapshot],
+  );
+
+  const leftJsonText = useMemo(
+    () => JSON.stringify(leftSnapshot ?? { tables: {} }, null, 2),
+    [leftSnapshot],
+  );
+  const rightJsonText = useMemo(
+    () => JSON.stringify(rightSnapshot ?? { tables: {} }, null, 2),
+    [rightSnapshot],
+  );
+
+  const jsonDiffLines = useMemo<DiffLine[]>(() => {
+    const leftLines = leftJsonText.split("\n");
+    const rightLines = rightJsonText.split("\n");
+    const lineCount = Math.max(leftLines.length, rightLines.length);
+    return Array.from({ length: lineCount }, (_, index) => {
+      const left = leftLines[index] ?? "";
+      const right = rightLines[index] ?? "";
+      return { index, left, right, equal: left === right };
+    });
+  }, [leftJsonText, rightJsonText]);
+
+  const sqlDiffLines = useMemo<DiffLine[]>(() => {
     const leftLines = leftMigration?.sql_up.split("\n") ?? [];
     const rightLines = rightMigration?.sql_up.split("\n") ?? [];
     const lineCount = Math.max(leftLines.length, rightLines.length);
@@ -118,8 +166,8 @@ export default function MigrationDiff({
       const left = leftLines[index] ?? "";
       const right = rightLines[index] ?? "";
       return { index, left, right, equal: left === right };
-    }).filter((line) => viewMode === "Full Script" || !line.equal);
-  }, [leftMigration, rightMigration, viewMode]);
+    });
+  }, [leftMigration, rightMigration]);
 
   const handleCompare = async () => {
     if (!leftMigrationId || !rightMigrationId) {
@@ -135,13 +183,25 @@ export default function MigrationDiff({
     setError("");
     setNotice("");
     try {
-      const result = await api.compareMigrations(
-        databaseId,
-        leftMigrationId,
-        rightMigrationId,
+      if (Number(leftMigrationId) > 0 && Number(rightMigrationId) > 0) {
+        const result = await api.compareMigrations(
+          databaseId,
+          leftMigrationId,
+          rightMigrationId,
+        );
+        setComparison(result);
+      } else if (leftMigration && rightMigration) {
+        setComparison({
+          first_migration: leftMigration,
+          second_migration: rightMigration,
+          sql_up_equal: leftMigration.sql_up === rightMigration.sql_up,
+          sql_down_equal: leftMigration.sql_down === rightMigration.sql_down,
+        });
+      }
+      toast.info(
+        `Ditemukan ${snapshotDiff.summaryItems.length} perubahan struktur pada perbandingan snapshot.`,
+        "Schema Snapshot Diff",
       );
-      setComparison(result);
-      toast.info("Perbandingan schema migrasi berhasil ditampilkan.", "Schema Diff");
     } catch (compareError) {
       const msg = errorMessage(compareError);
       setError(msg);
@@ -155,8 +215,7 @@ export default function MigrationDiff({
   const handleUseDiffAsCandidate = () => {
     if (!rightMigration) return;
 
-    // Filter added or modified SQL lines from the right migration
-    const addedLines = diffLines
+    const addedLines = sqlDiffLines
       .filter((d) => !d.equal && d.right.trim())
       .map((d) => d.right);
 
@@ -181,26 +240,26 @@ export default function MigrationDiff({
         .map((stmt) => sanitizeSqlQuery(stmt, true))
         .filter(Boolean);
 
-      const explainableRegex = /^(SELECT|WITH|INSERT|UPDATE|DELETE|VALUES|TABLE)\b/i;
-      const ddlRegex = /^(CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i;
+      const explainableRegex = /^(SELECT|WITH)\b/i;
+      const dmlOrDdlRegex = /^(CREATE|ALTER|DROP|TRUNCATE|RENAME|INSERT|UPDATE|DELETE)\b/i;
 
       const targetQuery = statements.find((stmt) => explainableRegex.test(stmt));
 
-      if (!targetQuery && statements.some((stmt) => ddlRegex.test(stmt))) {
-        const ddlStatements = statements.filter((stmt) => ddlRegex.test(stmt));
+      if (!targetQuery && statements.some((stmt) => dmlOrDdlRegex.test(stmt))) {
+        const matchedStatements = statements.filter((stmt) => dmlOrDdlRegex.test(stmt));
         setPlanAnalysis({
           isAnalyze: analyze,
           rawText:
-            `-- Analisis Statis DDL (${ddlStatements.length} statement)\n` +
-            `-- Catatan: SQL EXPLAIN pada mesin database hanya berlaku untuk query SELECT / DML.\n\n` +
-            ddlStatements.map((s, idx) => `${idx + 1}. ${s};`).join("\n"),
-          scanType: "DDL Schema Operation (Metadata Lock)",
-          indexUsed: /INDEX/i.test(sql) ? "Pembuatan / Modifikasi Index" : "N/A (DDL)",
-          joinStrategy: "Tidak ada (Operasi Skema)",
+            `-- Analisis Statis Migrasi (${matchedStatements.length} statement)\n` +
+            `-- Catatan: SQL EXPLAIN berfokus pada rencana eksekusi query baca (SELECT).\n\n` +
+            matchedStatements.map((s, idx) => `${idx + 1}. ${s};`).join("\n"),
+          scanType: "Migration Operation (Schema / DML)",
+          indexUsed: /INDEX/i.test(sql) ? "Pembuatan / Modifikasi Index" : "N/A (Migration)",
+          joinStrategy: "Tidak ada (Operasi Migrasi)",
         });
         toast.info(
-          "Statement DDL terdeteksi. Menampilkan analisis statis operasi skema.",
-          "Analisis DDL",
+          "Statement migrasi terdeteksi. Menampilkan analisis statis operasi migrasi.",
+          "Analisis Migrasi",
         );
         return;
       }
@@ -240,14 +299,17 @@ export default function MigrationDiff({
       await loadData();
       if (created.status === "fail") {
         setError(
-          `Migration versi ${created.version} gagal: ${created.error_message || "Unknown database error"}`,
+          `Migrasi versi ${created.version} gagal dan seluruh perubahan dalam batch ini telah di-rollback otomatis (Atomic): ${created.error_message || "Unknown database error"}`,
         );
-        toast.error(`Migrasi versi ${created.version} gagal: ${created.error_message}`, "Migrasi Gagal");
+        toast.error(
+          `Migrasi versi ${created.version} gagal (seluruh query di-rollback otomatis): ${created.error_message}`,
+          "Migrasi Gagal & Di-Rollback",
+        );
       } else {
         setMigrationQuery("");
         setPlanAnalysis(null);
-        setNotice(`Migrasi versi ${created.version} berhasil dieksekusi.`);
-        toast.success(`Migrasi versi ${created.version} berhasil dieksekusi secara otomatis!`, "Migrasi Berhasil");
+        setNotice(`Migrasi versi ${created.version} berhasil dieksekusi secara atomik dan snapshot terbaru telah disimpan.`);
+        toast.success(`Migrasi versi ${created.version} berhasil dieksekusi & snapshot diperbarui!`, "Migrasi Berhasil");
       }
     } catch (executeError) {
       const msg = errorMessage(executeError);
@@ -297,7 +359,7 @@ export default function MigrationDiff({
   };
 
   if (loading) {
-    return <div className={styles.message}>Memuat data migrasi database...</div>;
+    return <div className={styles.message}>Memuat data migrasi & snapshot database...</div>;
   }
 
   return (
@@ -342,7 +404,7 @@ export default function MigrationDiff({
               </span>
             )}
           </div>
-          <h1 className={styles.title}>Schema Diff & Migration Management</h1>
+          <h1 className={styles.title}>Schema Snapshot Diff & Migration Management</h1>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button
@@ -362,24 +424,24 @@ export default function MigrationDiff({
         </div>
       </div>
 
-      {/* Access Permission Warning Banner if View Only */}
+      {/* Access Notice for View Only users */}
       {!isViewEdit && (
         <div
           style={{
             backgroundColor: "rgba(59, 130, 246, 0.1)",
             border: "1px solid rgba(59, 130, 246, 0.3)",
-            borderRadius: "8px",
-            padding: "0.85rem 1rem",
             color: "#93c5fd",
+            padding: "0.75rem 1rem",
+            borderRadius: "8px",
             fontSize: "0.875rem",
             display: "flex",
             alignItems: "center",
-            gap: "0.5rem",
+            gap: "0.6rem",
           }}
         >
           <span>👁️</span>
           <span>
-            <strong>Mode Akses View Only:</strong> Anda dapat meninjau schema diff dan melihat execution plan, namun eksekusi migrasi dan rollback skema dibatasi hanya untuk anggota grup dengan akses <strong>View & Edit</strong>.
+            <strong>Mode Akses View Only:</strong> Anda dapat meninjau perbandingan snapshot schema dan melihat execution plan, namun eksekusi migrasi dan rollback skema dibatasi hanya untuk anggota grup dengan akses <strong>View & Edit</strong>.
           </span>
         </div>
       )}
@@ -387,166 +449,421 @@ export default function MigrationDiff({
       {error && <div className={styles.error}>{error}</div>}
       {notice && <div className={styles.notice}>{notice}</div>}
 
-      {/* Section 1: Schema Diff & History */}
+      {/* Section 1: Schema Snapshot Diff & History */}
       <section className={styles.panel}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Bandingkan Schema (Schema Diff)</h2>
+            <h2 className={styles.sectionTitle}>Bandingkan Schema Snapshot (Schema Diff)</h2>
             <p className={styles.helpText}>
-              Bandingkan dua kondisi versi schema migrasi untuk melihat perbedaan struktur secara visual.
+              Migrasi pertama merepresentasikan <strong>Initial Schema Snapshot (Describe Tables)</strong>. Bandingkan dua versi untuk melihat perubahan tabel, kolom baru/dihapus, maupun JSON snapshot.
             </p>
           </div>
-          <div className={styles.topBar}>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() =>
-                setViewMode((current) =>
-                  current === "Schema Diff" ? "Full Script" : "Schema Diff",
-                )
-              }
-            >
-              Mode: {viewMode}
-            </button>
+          <div className={styles.topBar} style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            {(["Snapshot Diff", "Snapshot JSON", "SQL Script"] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={viewMode === mode ? styles.primaryButton : styles.secondaryButton}
+                onClick={() => setViewMode(mode)}
+                style={{ fontSize: "0.8rem", padding: "0.45rem 0.85rem" }}
+              >
+                {mode === "Snapshot Diff"
+                  ? "🔍 Perubahan Snapshot"
+                  : mode === "Snapshot JSON"
+                  ? "{ } Snapshot JSON"
+                  : "📜 SQL Script"}
+              </button>
+            ))}
           </div>
         </div>
 
-        {migrations.length < 2 ? (
-          <div className={styles.message}>
-            Minimal dibutuhkan 2 versi migrasi untuk melakukan perbandingan schema diff. Saat ini terdapat {migrations.length} versi.
+        {/* Version Selectors */}
+        <div className={styles.compareControls}>
+          <label>
+            Versi Pertama (Snapshot Awal / Kiri)
+            <select
+              value={leftMigrationId}
+              onChange={(event) => {
+                setLeftMigrationId(event.target.value);
+                setComparison(null);
+              }}
+              className={styles.dropdown}
+            >
+              {migrations.map((migration) => (
+                <option key={migration.id} value={migration.id}>
+                  Versi {migration.version} ({migration.status})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Versi Kedua (Snapshot Target / Kanan)
+            <select
+              value={rightMigrationId}
+              onChange={(event) => {
+                setRightMigrationId(event.target.value);
+                setComparison(null);
+              }}
+              className={styles.dropdown}
+            >
+              {migrations.map((migration) => (
+                <option key={migration.id} value={migration.id}>
+                  Versi {migration.version} ({migration.status})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={handleCompare}
+              disabled={busy || migrations.length < 2}
+            >
+              Bandingkan Snapshot
+            </button>
+            {rightMigration && rightMigration.id > 0 && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={handleUseDiffAsCandidate}
+                title="Salin perubahan SQL ini sebagai kandidat migrasi"
+                style={{
+                  borderColor: "#3b82f6",
+                  color: "#60a5fa",
+                }}
+              >
+                📋 Jadikan Kandidat Migrasi
+              </button>
+            )}
           </div>
-        ) : (
-          <>
-            <div className={styles.compareControls}>
-              <label>
-                Versi Pertama (Kiri)
-                <select
-                  value={leftMigrationId}
-                  onChange={(event) => {
-                    setLeftMigrationId(event.target.value);
-                    setComparison(null);
+        </div>
+
+        {comparison && (
+          <div className={styles.comparisonSummary}>
+            <span>
+              Status Snapshot:{" "}
+              <strong style={{ color: snapshotDiff.isIdentical ? "#86efac" : "#fde047" }}>
+                {snapshotDiff.isIdentical
+                  ? "Identik (Tidak Ada Perubahan Skema)"
+                  : `${snapshotDiff.summaryItems.length} Perubahan Terdeteksi`}
+              </strong>
+            </span>
+            <span>
+              Status SQL Up:{" "}
+              <strong style={{ color: comparison.sql_up_equal ? "#86efac" : "#fca5a5" }}>
+                {comparison.sql_up_equal ? "Identik" : "Berbeda"}
+              </strong>
+            </span>
+          </div>
+        )}
+
+        {(leftMigration?.error_message || rightMigration?.error_message) && (
+          <div className={styles.migrationErrors}>
+            {leftMigration?.error_message && (
+              <span>
+                Versi {leftMigration.version}: {leftMigration.error_message}
+              </span>
+            )}
+            {rightMigration?.error_message && (
+              <span>
+                Versi {rightMigration.version}: {rightMigration.error_message}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Mode 1: Visual Snapshot Diff (Tables, Columns, Indexes) */}
+        {viewMode === "Snapshot Diff" && (
+          <div
+            style={{
+              backgroundColor: "#09090b",
+              border: "1px solid #27272a",
+              borderRadius: "10px",
+              padding: "1.25rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.25rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+                borderBottom: "1px solid #27272a",
+                paddingBottom: "0.75rem",
+              }}
+            >
+              <div>
+                <strong style={{ color: "#fafafa", fontSize: "0.95rem" }}>
+                  Perbandingan Snapshot: Versi {leftMigration?.version ?? "-"} ➔ Versi {rightMigration?.version ?? "-"}
+                </strong>
+                <p style={{ color: "#a1a1aa", fontSize: "0.8rem", margin: "0.2rem 0 0" }}>
+                  Menampilkan penambahan/penghapusan tabel, kolom baru pada tabel, perubahan tipe data, serta index.
+                </p>
+              </div>
+              <span
+                style={{
+                  fontSize: "0.78rem",
+                  padding: "4px 10px",
+                  borderRadius: "999px",
+                  fontWeight: 700,
+                  backgroundColor: snapshotDiff.isIdentical
+                    ? "rgba(16, 185, 129, 0.12)"
+                    : "rgba(59, 130, 246, 0.15)",
+                  color: snapshotDiff.isIdentical ? "#34d399" : "#60a5fa",
+                }}
+              >
+                {snapshotDiff.summaryItems.length} Perubahan Struktur
+              </span>
+            </div>
+
+            {leftMigrationId === rightMigrationId ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{ color: "#a1a1aa", fontSize: "0.875rem" }}>
+                  Menampilkan isi <strong>Snapshot Versi {rightMigration?.version}</strong> ({Object.keys(rightSnapshot?.tables ?? {}).length} tabel terdaftar). Pilih dua versi berbeda di atas untuk melihat perbedaan antar-snapshot.
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                    gap: "1rem",
                   }}
-                  className={styles.dropdown}
                 >
-                  {migrations.map((migration) => (
-                    <option key={migration.id} value={migration.id}>
-                      Versi {migration.version} ({migration.status})
-                    </option>
+                  {Object.entries(rightSnapshot?.tables ?? {}).map(([tableName, tbl]) => (
+                    <div
+                      key={tableName}
+                      style={{
+                        backgroundColor: "#121215",
+                        border: "1px solid #27272a",
+                        borderRadius: "8px",
+                        padding: "1rem",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: "#60a5fa", marginBottom: "0.5rem" }}>
+                        📄 Tabel <code>{tableName}</code> ({tbl.columns.length} kolom)
+                      </div>
+                      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                        {tbl.columns.map((c) => (
+                          <li key={c.name} style={{ fontSize: "0.8rem", color: "#e4e4e7", display: "flex", justifyContent: "space-between" }}>
+                            <span><strong>{c.name}</strong></span>
+                            <code style={{ color: "#a1a1aa" }}>{c.type} {c.nullable ? "(NULL)" : "(NOT NULL)"}</code>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </select>
-              </label>
-              <label>
-                Versi Kedua (Kanan)
-                <select
-                  value={rightMigrationId}
-                  onChange={(event) => {
-                    setRightMigrationId(event.target.value);
-                    setComparison(null);
+                </div>
+              </div>
+            ) : snapshotDiff.isIdentical ? (
+              <div style={{ color: "#a1a1aa", fontSize: "0.875rem", padding: "0.5rem 0" }}>
+                ✓ Struktur tabel, kolom, dan index pada kedua snapshot identik (atau migrasi hanya berisi perubahan baris data DML).
+              </div>
+            ) : (
+              <>
+                {/* High-level Change Feed (e.g., "Kolom baru di tabel A: ...") */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#a1a1aa", textTransform: "uppercase" }}>
+                    Ringkasan Perubahan Snapshot:
+                  </div>
+                  {snapshotDiff.summaryItems.map((item, idx) => {
+                    const isAdd = item.type.endsWith("_added");
+                    const isRemove = item.type.endsWith("_removed");
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          padding: "0.6rem 0.85rem",
+                          borderRadius: "8px",
+                          backgroundColor: isAdd
+                            ? "rgba(16, 185, 129, 0.1)"
+                            : isRemove
+                            ? "rgba(239, 68, 68, 0.1)"
+                            : "rgba(234, 179, 8, 0.1)",
+                          border: `1px solid ${
+                            isAdd
+                              ? "rgba(16, 185, 129, 0.3)"
+                              : isRemove
+                              ? "rgba(239, 68, 68, 0.3)"
+                              : "rgba(234, 179, 8, 0.3)"
+                          }`,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: isAdd
+                              ? "rgba(16, 185, 129, 0.2)"
+                              : isRemove
+                              ? "rgba(239, 68, 68, 0.2)"
+                              : "rgba(234, 179, 8, 0.2)",
+                            color: isAdd ? "#34d399" : isRemove ? "#f87171" : "#facc15",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {item.badgeText}
+                        </span>
+                        <span style={{ fontSize: "0.875rem", color: "#fafafa", fontWeight: 500 }}>
+                          {item.detail}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Per-Table Breakdown */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                    gap: "1rem",
                   }}
-                  className={styles.dropdown}
                 >
-                  {migrations.map((migration) => (
-                    <option key={migration.id} value={migration.id}>
-                      Versi {migration.version} ({migration.status})
-                    </option>
+                  {snapshotDiff.tableDiffs.map((tDiff) => (
+                    <div
+                      key={tDiff.tableName}
+                      style={{
+                        backgroundColor: "#121215",
+                        border: "1px solid #27272a",
+                        borderRadius: "8px",
+                        padding: "1rem",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.6rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <strong style={{ color: "#fafafa", fontSize: "0.95rem" }}>
+                          📄 Tabel <code>{tDiff.tableName}</code>
+                        </strong>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            color:
+                              tDiff.status === "added"
+                                ? "#34d399"
+                                : tDiff.status === "removed"
+                                ? "#f87171"
+                                : "#60a5fa",
+                          }}
+                        >
+                          {tDiff.status === "added"
+                            ? "Tabel Baru"
+                            : tDiff.status === "removed"
+                            ? "Tabel Dihapus"
+                            : "Struktur Berubah"}
+                        </span>
+                      </div>
+
+                      {tDiff.addedColumns.map((col) => (
+                        <div key={`add-${col.name}`} style={{ fontSize: "0.82rem", color: "#86efac" }}>
+                          + Kolom baru: <strong>{col.name}</strong> (<code>{col.type}</code>, {col.nullable ? "NULL" : "NOT NULL"})
+                        </div>
+                      ))}
+                      {tDiff.removedColumns.map((col) => (
+                        <div key={`rem-${col.name}`} style={{ fontSize: "0.82rem", color: "#fca5a5" }}>
+                          - Kolom dihapus: <strong>{col.name}</strong> (<code>{col.type}</code>)
+                        </div>
+                      ))}
+                      {tDiff.modifiedColumns.map((mod) => (
+                        <div key={`mod-${mod.after.name}`} style={{ fontSize: "0.82rem", color: "#fde047" }}>
+                          ~ Kolom diubah: <strong>{mod.after.name}</strong> (<code>{mod.before.type}</code> ➔ <code>{mod.after.type}</code>)
+                        </div>
+                      ))}
+                      {tDiff.addedIndexes.map((idx) => (
+                        <div key={`add-idx-${idx.name}`} style={{ fontSize: "0.82rem", color: "#38bdf8" }}>
+                          + Index baru: <code>{idx.name}</code> ({idx.unique ? "UNIQUE" : "NON-UNIQUE"})
+                        </div>
+                      ))}
+                      {tDiff.removedIndexes.map((idx) => (
+                        <div key={`rem-idx-${idx.name}`} style={{ fontSize: "0.82rem", color: "#f87171" }}>
+                          - Index dihapus: <code>{idx.name}</code>
+                        </div>
+                      ))}
+                    </div>
                   ))}
-                </select>
-              </label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={handleCompare}
-                  disabled={busy || migrations.length < 2}
-                >
-                  Bandingkan
-                </button>
-                {diffLines.length > 0 && rightMigration && (
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={handleUseDiffAsCandidate}
-                    title="Salin perubahan schema ini sebagai kandidat SQL migrasi"
-                    style={{
-                      borderColor: "#3b82f6",
-                      color: "#60a5fa",
-                    }}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Mode 2: Side-by-Side Developer JSON Snapshot */}
+        {viewMode === "Snapshot JSON" && (
+          <div className={styles.diffWrapper}>
+            <div className={styles.diffHeader}>
+              <strong>Snapshot JSON — Versi {leftMigration?.version ?? "-"}</strong>
+              <strong>Snapshot JSON — Versi {rightMigration?.version ?? "-"}</strong>
+            </div>
+            <div className={styles.diffContainer}>
+              <div className={styles.editor}>
+                {jsonDiffLines.map((line) => (
+                  <div
+                    key={line.index}
+                    className={line.equal ? styles.lineUnchanged : styles.lineRemoved}
                   >
-                    📋 Jadikan Kandidat Migrasi
-                  </button>
-                )}
+                    <span className={styles.lineNumber}>{line.index + 1}</span>
+                    {line.left || " "}
+                  </div>
+                ))}
+              </div>
+              <div className={styles.editor}>
+                {jsonDiffLines.map((line) => (
+                  <div
+                    key={line.index}
+                    className={line.equal ? styles.lineUnchanged : styles.lineAdded}
+                  >
+                    <span className={styles.lineNumber}>{line.index + 1}</span>
+                    {line.right || " "}
+                  </div>
+                ))}
               </div>
             </div>
+          </div>
+        )}
 
-            {comparison && (
-              <div className={styles.comparisonSummary}>
-                <span>
-                  Status SQL Up:{" "}
-                  <strong style={{ color: comparison.sql_up_equal ? "#86efac" : "#fca5a5" }}>
-                    {comparison.sql_up_equal ? "Identik (Sama)" : "Berbeda (Terdapat Perubahan)"}
-                  </strong>
-                </span>
-                <span>
-                  Status SQL Down:{" "}
-                  <strong style={{ color: comparison.sql_down_equal ? "#86efac" : "#fca5a5" }}>
-                    {comparison.sql_down_equal ? "Identik" : "Berbeda"}
-                  </strong>
-                </span>
+        {/* Mode 3: SQL Script Diff */}
+        {viewMode === "SQL Script" && (
+          <div className={styles.diffWrapper}>
+            <div className={styles.diffHeader}>
+              <strong>SQL Up — Versi {leftMigration?.version ?? "-"}</strong>
+              <strong>SQL Up — Versi {rightMigration?.version ?? "-"}</strong>
+            </div>
+            <div className={styles.diffContainer}>
+              <div className={styles.editor}>
+                {sqlDiffLines.map((line) => (
+                  <div
+                    key={line.index}
+                    className={line.equal ? styles.lineUnchanged : styles.lineRemoved}
+                  >
+                    <span className={styles.lineNumber}>{line.index + 1}</span>
+                    {line.left || " "}
+                  </div>
+                ))}
               </div>
-            )}
-
-            {(leftMigration?.error_message || rightMigration?.error_message) && (
-              <div className={styles.migrationErrors}>
-                {leftMigration?.error_message && (
-                  <span>
-                    Versi {leftMigration.version}: {leftMigration.error_message}
-                  </span>
-                )}
-                {rightMigration?.error_message && (
-                  <span>
-                    Versi {rightMigration.version}: {rightMigration.error_message}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className={styles.diffWrapper}>
-              <div className={styles.diffHeader}>
-                <strong>Versi {leftMigration?.version ?? "-"}</strong>
-                <strong>Versi {rightMigration?.version ?? "-"}</strong>
-              </div>
-              <div className={styles.diffContainer}>
-                {diffLines.length === 0 ? (
-                  <div className={styles.emptyDiff}>Tidak ada perbedaan SQL di antara kedua versi.</div>
-                ) : (
-                  <>
-                    <div className={styles.editor}>
-                      {diffLines.map((line) => (
-                        <div
-                          key={line.index}
-                          className={line.equal ? styles.lineUnchanged : styles.lineRemoved}
-                        >
-                          <span className={styles.lineNumber}>{line.index + 1}</span>
-                          {line.left || " "}
-                        </div>
-                      ))}
-                    </div>
-                    <div className={styles.editor}>
-                      {diffLines.map((line) => (
-                        <div
-                          key={line.index}
-                          className={line.equal ? styles.lineUnchanged : styles.lineAdded}
-                        >
-                          <span className={styles.lineNumber}>{line.index + 1}</span>
-                          {line.right || " "}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+              <div className={styles.editor}>
+                {sqlDiffLines.map((line) => (
+                  <div
+                    key={line.index}
+                    className={line.equal ? styles.lineUnchanged : styles.lineAdded}
+                  >
+                    <span className={styles.lineNumber}>{line.index + 1}</span>
+                    {line.right || " "}
+                  </div>
+                ))}
               </div>
             </div>
-          </>
+          </div>
         )}
       </section>
 
@@ -554,9 +871,9 @@ export default function MigrationDiff({
       <section className={styles.panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
-            <h2 className={styles.sectionTitle}>Eksekusi Migrasi & Analisis Execution Plan</h2>
+            <h2 className={styles.sectionTitle}>Eksekusi Migrasi Baru (Multi-Query Atomic) & Analisis Execution Plan</h2>
             <p className={styles.helpText}>
-              Tinjau kandidat SQL migrasi di bawah. Jalankan EXPLAIN untuk menganalisis execution plan sebelum dieksekusi.
+              Masukkan satu atau beberapa perintah migrasi dipisahkan dengan titik koma (<code>;</code>) seperti CREATE TABLE, ALTER TABLE, INSERT, UPDATE, atau DELETE. Seluruh query dieksekusi sebagai 1 migrasi atomik — jika ada satu query gagal, perubahan sebelumnya otomatis di-rollback ke kondisi awal.
             </p>
           </div>
           <span
@@ -574,8 +891,8 @@ export default function MigrationDiff({
           className={styles.rollbackTextarea}
           value={migrationQuery}
           onChange={(event) => setMigrationQuery(event.target.value)}
-          placeholder="Contoh: ALTER TABLE customers ADD COLUMN phone VARCHAR(30); atau CREATE TABLE ..."
-          rows={4}
+          placeholder={"Contoh multi-query dalam 1 migrasi:\nCREATE TABLE orders (id INT PRIMARY KEY, customer_id INT);\nALTER TABLE orders ADD COLUMN total INT;\nINSERT INTO orders (id, customer_id, total) VALUES (1, 10, 50000);"}
+          rows={5}
           style={{ fontFamily: "monospace", fontSize: "0.875rem" }}
         />
 
