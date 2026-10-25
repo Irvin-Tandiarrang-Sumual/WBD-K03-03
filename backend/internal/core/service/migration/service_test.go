@@ -3,6 +3,7 @@ package migration_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -84,11 +85,21 @@ func (f *migrationRepositoryFake) Update(_ context.Context, migration *domain.Mi
 type migrationExecutorFake struct {
 	ports.DatabaseExecutor
 	commands      []string
+	queries       []string
+	queryResult   *ports.DatabaseQueryResult
+	queryErr      error
 	commandErr    error
 	failOnCommand string
 }
 
-func (f *migrationExecutorFake) ExecuteQuery(context.Context, domain.Database, string, ...any) (*ports.DatabaseQueryResult, error) {
+func (f *migrationExecutorFake) ExecuteQuery(_ context.Context, _ domain.Database, query string, _ ...any) (*ports.DatabaseQueryResult, error) {
+	f.queries = append(f.queries, query)
+	if f.queryErr != nil {
+		return nil, f.queryErr
+	}
+	if f.queryResult != nil {
+		return f.queryResult, nil
+	}
 	return &ports.DatabaseQueryResult{}, nil
 }
 
@@ -312,6 +323,294 @@ func TestCreateMigrationMultiStatementAtomicallyRollsBackOnFailure(t *testing.T)
 			t.Fatalf("command[%d] = %q, want %q", index, executor.commands[index], wantCmd)
 		}
 	}
+}
+
+func TestCreateMigrationMultiStatementRejectsInvalidQueryWithoutExecutingAnyStatement(t *testing.T) {
+	executor := &migrationExecutorFake{}
+	repository := &migrationRepositoryFake{latest: &domain.Migration{Version: "2"}}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	tests := []struct {
+		name string
+		sql  string
+		want error
+	}{
+		{
+			name: "contains select query in batch",
+			sql:  "CREATE TABLE orders (id INT PRIMARY KEY); SELECT * FROM orders;",
+			want: domain.ErrInvalidMigrationInput,
+		},
+		{
+			name: "contains unsupported truncate in batch",
+			sql:  "CREATE TABLE orders (id INT PRIMARY KEY); ALTER TABLE orders ADD COLUMN total INT; TRUNCATE TABLE orders;",
+			want: domain.ErrSQLDownGenerationUnsupported,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor.commands = nil
+			created, err := service.CreateMigration(context.Background(), 8, 3, tt.sql)
+			if err != nil {
+				t.Fatalf("CreateMigration() unexpected error = %v", err)
+			}
+			if created.Status != "fail" || !strings.Contains(created.ErrorMessage, tt.want.Error()) {
+				t.Fatalf("created = %+v, want fail with error %q", created, tt.want.Error())
+			}
+			if len(executor.commands) != 0 {
+				t.Fatalf("commands = %v, want 0 statements executed when batch validation fails", executor.commands)
+			}
+		})
+	}
+}
+
+func TestCreateMigrationMultiStatementRollsBackWhenDynamicDownGenerationFails(t *testing.T) {
+	snapshotErr := errors.New("failed to query rows before delete")
+	executor := &migrationExecutorFake{
+		queryErr: snapshotErr,
+	}
+	repository := &migrationRepositoryFake{latest: &domain.Migration{Version: "1"}}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	sql := "CREATE TABLE audit_logs (id INT PRIMARY KEY);\nDELETE FROM audit_logs WHERE id = 1;"
+	created, err := service.CreateMigration(context.Background(), 8, 3, sql)
+	if err != nil {
+		t.Fatalf("CreateMigration() error = %v", err)
+	}
+	if created.Status != "fail" || !strings.Contains(created.ErrorMessage, snapshotErr.Error()) {
+		t.Fatalf("created = %+v, want failed migration containing %q", created, snapshotErr.Error())
+	}
+
+	wantCommands := []string{
+		"CREATE TABLE audit_logs (id INT PRIMARY KEY)",
+		"DROP TABLE audit_logs",
+	}
+	if len(executor.commands) != len(wantCommands) {
+		t.Fatalf("commands = %v, want %v", executor.commands, wantCommands)
+	}
+	for index, wantCmd := range wantCommands {
+		if executor.commands[index] != wantCmd {
+			t.Fatalf("command[%d] = %q, want %q", index, executor.commands[index], wantCmd)
+		}
+	}
+}
+
+func TestCreateMigrationMultiStatementDeniesViewOnlyAndUnauthorizedUsers(t *testing.T) {
+	multiSQL := "CREATE TABLE orders (id INT PRIMARY KEY);\nALTER TABLE orders ADD COLUMN total INT;\nINSERT INTO orders (id, total) VALUES (1, 10000);"
+
+	t.Run("view_only access is denied before any query runs", func(t *testing.T) {
+		executor := &migrationExecutorFake{}
+		service := migrationservice.NewMigrationService(
+			&migrationRepositoryFake{},
+			&testutil.DatabaseRepository{},
+			executor,
+			&testutil.GroupService{
+				EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+					return domain.AccessViewOnly, nil
+				},
+			},
+		)
+
+		created, err := service.CreateMigration(context.Background(), 8, 3, multiSQL)
+		if !errors.Is(err, domain.ErrDatabaseAccessDenied) || created != nil {
+			t.Fatalf("created=%+v err=%v, want ErrDatabaseAccessDenied", created, err)
+		}
+		if len(executor.commands) != 0 {
+			t.Fatalf("commands = %v, want no execution on access denied", executor.commands)
+		}
+	})
+
+	t.Run("none access is denied before any query runs", func(t *testing.T) {
+		executor := &migrationExecutorFake{}
+		service := migrationservice.NewMigrationService(
+			&migrationRepositoryFake{},
+			&testutil.DatabaseRepository{},
+			executor,
+			&testutil.GroupService{
+				EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+					return domain.AccessType(""), nil
+				},
+			},
+		)
+
+		created, err := service.CreateMigration(context.Background(), 8, 3, multiSQL)
+		if !errors.Is(err, domain.ErrDatabaseAccessDenied) || created != nil {
+			t.Fatalf("created=%+v err=%v, want ErrDatabaseAccessDenied", created, err)
+		}
+		if len(executor.commands) != 0 {
+			t.Fatalf("commands = %v, want no execution on access denied", executor.commands)
+		}
+	})
+
+	t.Run("non-member database lookup failure blocks multi-query execution", func(t *testing.T) {
+		executor := &migrationExecutorFake{}
+		service := migrationservice.NewMigrationService(
+			&migrationRepositoryFake{},
+			&testutil.DatabaseRepository{
+				FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+					return nil, domain.ErrDatabaseAccessDenied
+				},
+			},
+			executor,
+			&testutil.GroupService{
+				EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+					return domain.AccessViewEdit, nil
+				},
+			},
+		)
+
+		created, err := service.CreateMigration(context.Background(), 8, 3, multiSQL)
+		if !errors.Is(err, domain.ErrDatabaseAccessDenied) || created != nil {
+			t.Fatalf("created=%+v err=%v, want ErrDatabaseAccessDenied", created, err)
+		}
+		if len(executor.commands) != 0 {
+			t.Fatalf("commands = %v, want no execution on unauthorized database", executor.commands)
+		}
+	})
+}
+
+func TestRollbackMultiStatementMigrationSuccessAndAtomicCompensation(t *testing.T) {
+	t.Run("successfully rolls back multi-statement migration in order", func(t *testing.T) {
+		executor := &migrationExecutorFake{}
+		repository := &migrationRepositoryFake{
+			latest: &domain.Migration{Version: "2", Status: "success"},
+			byID:   map[uint]*domain.Migration{1: {ID: 1, Version: "1", Status: "success"}},
+			byVersion: map[string]*domain.Migration{
+				"2": {
+					ID:      2,
+					Version: "2",
+					Status:  "success",
+					SqlUp:   "CREATE TABLE orders (id INT PRIMARY KEY);\nALTER TABLE orders ADD COLUMN total INT",
+					SqlDown: "ALTER TABLE orders DROP COLUMN total;\nDROP TABLE orders",
+				},
+			},
+		}
+		databases := &testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		}
+		service := migrationservice.NewMigrationService(
+			repository,
+			databases,
+			executor,
+			&testutil.GroupService{
+				EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+					return domain.AccessViewEdit, nil
+				},
+			},
+		)
+
+		rolledBack, err := service.RollbackMigrations(context.Background(), 8, 3, 1)
+		if err != nil {
+			t.Fatalf("RollbackMigrations() error = %v", err)
+		}
+		if len(rolledBack) != 2 || repository.saved.Version != "3" {
+			t.Fatalf("rolledBack=%+v saved=%+v", rolledBack, repository.saved)
+		}
+		wantCommands := []string{
+			"ALTER TABLE orders DROP COLUMN total",
+			"DROP TABLE orders",
+		}
+		if len(executor.commands) != len(wantCommands) {
+			t.Fatalf("commands = %v, want %v", executor.commands, wantCommands)
+		}
+		for i, want := range wantCommands {
+			if executor.commands[i] != want {
+				t.Fatalf("command[%d] = %q, want %q", i, executor.commands[i], want)
+			}
+		}
+	})
+
+	t.Run("compensates already-executed down statements when multi-statement rollback fails midway", func(t *testing.T) {
+		executor := &migrationExecutorFake{
+			failOnCommand: "DROP TABLE orders",
+		}
+		repository := &migrationRepositoryFake{
+			latest: &domain.Migration{Version: "2", Status: "success"},
+			byID:   map[uint]*domain.Migration{1: {ID: 1, Version: "1", Status: "success"}},
+			byVersion: map[string]*domain.Migration{
+				"2": {
+					ID:      2,
+					Version: "2",
+					Status:  "success",
+					SqlUp:   "CREATE TABLE orders (id INT PRIMARY KEY);\nALTER TABLE orders ADD COLUMN total INT",
+					SqlDown: "ALTER TABLE orders DROP COLUMN total;\nDROP TABLE orders",
+				},
+			},
+		}
+		databases := &testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		}
+		service := migrationservice.NewMigrationService(
+			repository,
+			databases,
+			executor,
+			&testutil.GroupService{
+				EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+					return domain.AccessViewEdit, nil
+				},
+			},
+		)
+
+		_, err := service.RollbackMigrations(context.Background(), 8, 3, 1)
+		if err == nil {
+			t.Fatal("expected error when DROP TABLE orders fails during rollback")
+		}
+		wantCommands := []string{
+			"ALTER TABLE orders DROP COLUMN total",
+			"DROP TABLE orders",
+			"ALTER TABLE orders ADD COLUMN total INT",
+		}
+		if len(executor.commands) != len(wantCommands) {
+			t.Fatalf("commands = %v, want %v", executor.commands, wantCommands)
+		}
+		for i, want := range wantCommands {
+			if executor.commands[i] != want {
+				t.Fatalf("command[%d] = %q, want %q", i, executor.commands[i], want)
+			}
+		}
+	})
 }
 
 func TestCreateMigrationDoesNotExecuteWhenHistoryCannotBeCreated(t *testing.T) {

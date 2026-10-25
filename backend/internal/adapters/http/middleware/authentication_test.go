@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -67,7 +69,7 @@ func TestAuthenticate(t *testing.T) {
 				if token != "valid-token" {
 					t.Fatalf("token = %q, want valid-token", token)
 				}
-				return domain.Session{UserID: 42}, nil
+				return domain.Session{UserID: 42, OpaqueToken: "valid-token"}, nil
 			},
 			wantStatus: http.StatusOK,
 			wantUserID: 42,
@@ -112,6 +114,49 @@ func TestAuthenticate(t *testing.T) {
 				t.Fatalf("status = %d, want %d; body=%s", w.Code, tt.wantStatus, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestAuthenticateUpdatesCookieWhenTokenRotatedOrResolvedViaGracePeriod(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	sessions := &testutil.SessionService{
+		ResolveFunc: func(_ context.Context, token string) (domain.Session, error) {
+			if token != "old-token" {
+				t.Fatalf("token = %q, want old-token", token)
+			}
+			return domain.Session{
+				UserID:              42,
+				OpaqueToken:         "rotated-new-token",
+				PreviousOpaqueToken: "old-token",
+				GracePeriodUntil:    time.Now().UTC().Add(30 * time.Second),
+				AbsoluteExpiration:  time.Now().UTC().Add(10 * time.Hour),
+			}, nil
+		},
+	}
+
+	r := gin.New()
+	r.GET("/protected", middleware.Authenticate(sessions, true), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  middleware.SessionCookieName,
+		Value: "old-token",
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	setCookie := w.Header().Get("Set-Cookie")
+	if !strings.Contains(setCookie, "session=rotated-new-token") ||
+		!strings.Contains(setCookie, "HttpOnly") ||
+		!strings.Contains(setCookie, "Secure") ||
+		!strings.Contains(setCookie, "SameSite=Strict") {
+		t.Fatalf("unexpected Set-Cookie header: %q", setCookie)
 	}
 }
 

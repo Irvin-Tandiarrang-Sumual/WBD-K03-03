@@ -24,12 +24,26 @@ func NewSessionRepository(db *gorm.DB) ports.SessionRepository {
 }
 
 func (r *sessionRepository) Create(ctx context.Context, session domain.Session) (domain.Session, error) {
+	rotatedAt := session.RotatedAt
+	if rotatedAt.IsZero() {
+		rotatedAt = session.LastActive
+	}
+
+	var gracePeriodUntil *time.Time
+	if !session.GracePeriodUntil.IsZero() {
+		t := session.GracePeriodUntil
+		gracePeriodUntil = &t
+	}
+
 	storedSession := models.Session{
-		OpaqueToken:        session.OpaqueToken,
-		IdleTimeout:        session.IdleTimeout,
-		LastActive:         session.LastActive,
-		AbsoluteExpiration: session.AbsoluteExpiration,
-		UserID:             session.UserID,
+		OpaqueToken:         session.OpaqueToken,
+		PreviousOpaqueToken: session.PreviousOpaqueToken,
+		GracePeriodUntil:    gracePeriodUntil,
+		RotatedAt:           rotatedAt,
+		IdleTimeout:         session.IdleTimeout,
+		LastActive:          session.LastActive,
+		AbsoluteExpiration:  session.AbsoluteExpiration,
+		UserID:              session.UserID,
 	}
 
 	if err := r.db.
@@ -48,7 +62,7 @@ func (r *sessionRepository) FindByToken(ctx context.Context, opaqueToken string)
 
 	err := r.db.
 		WithContext(ctx).
-		Where("opaque_token = ?", opaqueToken).
+		Where("opaque_token = ? OR (previous_opaque_token = ? AND previous_opaque_token <> '')", opaqueToken, opaqueToken).
 		First(&storedSession).Error
 
 	if err != nil {
@@ -80,10 +94,40 @@ func (r *sessionRepository) Touch(ctx context.Context, id uint, lastActive time.
 	return nil
 }
 
+func (r *sessionRepository) Rotate(ctx context.Context, session domain.Session) error {
+	var gracePeriodUntil *time.Time
+	if !session.GracePeriodUntil.IsZero() {
+		t := session.GracePeriodUntil
+		gracePeriodUntil = &t
+	}
+
+	result := r.db.
+		WithContext(ctx).
+		Model(&models.Session{}).
+		Where("id = ?", session.ID).
+		Updates(map[string]any{
+			"opaque_token":          session.OpaqueToken,
+			"previous_opaque_token": session.PreviousOpaqueToken,
+			"grace_period_until":    gracePeriodUntil,
+			"rotated_at":            session.RotatedAt,
+			"last_active":           session.LastActive,
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.ErrInvalidSession
+	}
+
+	return nil
+}
+
 func (r *sessionRepository) DeleteByToken(ctx context.Context, opaqueToken string) error {
 	return r.db.
 		WithContext(ctx).
-		Where("opaque_token = ?", opaqueToken).
+		Where("opaque_token = ? OR (previous_opaque_token = ? AND previous_opaque_token <> '')", opaqueToken, opaqueToken).
 		Delete(&models.Session{}).Error
 }
 
@@ -96,12 +140,20 @@ func (r *sessionRepository) DeleteByUserID(ctx context.Context, userID uint) err
 }
 
 func toDomain(storedSession models.Session) domain.Session {
+	var gracePeriodUntil time.Time
+	if storedSession.GracePeriodUntil != nil {
+		gracePeriodUntil = *storedSession.GracePeriodUntil
+	}
+
 	return domain.Session{
-		ID:                 storedSession.ID,
-		OpaqueToken:        storedSession.OpaqueToken,
-		IdleTimeout:        storedSession.IdleTimeout,
-		LastActive:         storedSession.LastActive,
-		AbsoluteExpiration: storedSession.AbsoluteExpiration,
-		UserID:             storedSession.UserID,
+		ID:                  storedSession.ID,
+		OpaqueToken:         storedSession.OpaqueToken,
+		PreviousOpaqueToken: storedSession.PreviousOpaqueToken,
+		GracePeriodUntil:    gracePeriodUntil,
+		RotatedAt:           storedSession.RotatedAt,
+		IdleTimeout:         storedSession.IdleTimeout,
+		LastActive:          storedSession.LastActive,
+		AbsoluteExpiration:  storedSession.AbsoluteExpiration,
+		UserID:              storedSession.UserID,
 	}
 }

@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -15,7 +16,12 @@ type authenticationErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func Authenticate(sessions ports.SessionService) gin.HandlerFunc {
+func Authenticate(sessions ports.SessionService, secureCookie ...bool) gin.HandlerFunc {
+	isSecure := true
+	if len(secureCookie) > 0 {
+		isSecure = secureCookie[0]
+	}
+
 	return func(c *gin.Context) {
 		opaqueToken, err := c.Cookie(SessionCookieName)
 
@@ -52,6 +58,27 @@ func Authenticate(sessions ports.SessionService) gin.HandlerFunc {
 				},
 			)
 			return
+		}
+
+		if session.OpaqueToken != "" && session.OpaqueToken != opaqueToken {
+			maxAge := 86400
+			if !session.AbsoluteExpiration.IsZero() {
+				maxAge = int(time.Until(session.AbsoluteExpiration).Seconds())
+				if maxAge < 0 {
+					maxAge = 0
+				}
+			}
+
+			c.SetSameSite(http.SameSiteStrictMode)
+			c.SetCookie(
+				SessionCookieName,
+				session.OpaqueToken,
+				maxAge,
+				"/",
+				"",
+				isSecure,
+				true,
+			)
 		}
 
 		SetAuthenticatedUserID(c, session.UserID)
