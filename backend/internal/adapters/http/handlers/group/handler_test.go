@@ -259,3 +259,104 @@ func TestGroupErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestListGroupPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		ListFunc: func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error) {
+			return nil, 0, errors.New("database failure")
+		},
+	}
+	c, w := newGroupTestContext(http.MethodGet, "/groups", nil, nil)
+	NewGroupHandler(service).List(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d want=500", w.Code)
+	}
+}
+
+func TestGetGroupPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		GetFunc: func(context.Context, uint) (domain.Group, error) {
+			return domain.Group{}, domain.ErrGroupNotFound
+		},
+	}
+	c, w := newGroupTestContext(http.MethodGet, "/groups/4", nil, gin.Params{{Key: "groupId", Value: "4"}})
+	NewGroupHandler(service).Get(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want=404", w.Code)
+	}
+}
+
+func TestCreateGroupPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		CreateFunc: func(context.Context, domain.CreateGroupInput) (domain.Group, error) {
+			return domain.Group{}, domain.ErrGroupNameTaken
+		},
+	}
+	c, w := newGroupTestContext(http.MethodPost, "/groups", []byte(`{"name":"eng","databaseAccesses":[{"databaseId":1,"accessType":"view_only"}]}`), nil)
+	NewGroupHandler(service).Create(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=409", w.Code)
+	}
+}
+
+func TestUpdateGroupRejectsInvalidJSONAndPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		UpdateFunc: func(context.Context, uint, domain.UpdateGroupInput) (domain.Group, error) {
+			return domain.Group{}, domain.ErrGroupNotFound
+		},
+	}
+	handler := NewGroupHandler(service)
+
+	// Invalid JSON
+	c1, w1 := newGroupTestContext(http.MethodPatch, "/groups/2", []byte(`{"name":`), gin.Params{{Key: "groupId", Value: "2"}})
+	handler.Update(c1)
+	if w1.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=400", w1.Code)
+	}
+
+	// Service error (404)
+	c2, w2 := newGroupTestContext(http.MethodPatch, "/groups/2", []byte(`{"name":"new"}`), gin.Params{{Key: "groupId", Value: "2"}})
+	handler.Update(c2)
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want=404", w2.Code)
+	}
+}
+
+func TestDeleteGroupPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		DeleteFunc: func(context.Context, uint) error {
+			return domain.ErrGroupNotFound
+		},
+	}
+	c, w := newGroupTestContext(http.MethodDelete, "/groups/9", nil, gin.Params{{Key: "groupId", Value: "9"}})
+	NewGroupHandler(service).Delete(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want=404", w.Code)
+	}
+}
+
+func TestAddUserPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		AddUserFunc: func(context.Context, uint, uint) error {
+			return domain.ErrMembershipExists
+		},
+	}
+	c, w := newGroupTestContext(http.MethodPost, "/groups/1/users/2", nil, gin.Params{{Key: "groupId", Value: "1"}, {Key: "userId", Value: "2"}})
+	NewGroupHandler(service).AddUser(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=409", w.Code)
+	}
+}
+
+func TestRemoveUserPropagatesServiceError(t *testing.T) {
+	service := &testutil.GroupService{
+		RemoveUserFunc: func(context.Context, uint, uint) error {
+			return domain.ErrUserMustHaveGroup
+		},
+	}
+	c, w := newGroupTestContext(http.MethodDelete, "/groups/1/users/2", nil, gin.Params{{Key: "groupId", Value: "1"}, {Key: "userId", Value: "2"}})
+	NewGroupHandler(service).RemoveUser(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=409", w.Code)
+	}
+}

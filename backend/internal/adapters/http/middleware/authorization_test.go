@@ -9,6 +9,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
 	"github.com/gin-gonic/gin"
 )
@@ -220,5 +221,144 @@ func TestRequireDatabaseAccess(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestRequireDatabaseViewAndEditWrappers(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name       string
+		middleware func(ports.GroupService) gin.HandlerFunc
+		effective  domain.AccessType
+		wantStatus int
+	}{
+		{
+			name:       "view wrapper allows view_only",
+			middleware: middleware.RequireDatabaseView,
+			effective:  domain.AccessViewOnly,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "view wrapper allows view_edit",
+			middleware: middleware.RequireDatabaseView,
+			effective:  domain.AccessViewEdit,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "edit wrapper rejects view_only (access denied)",
+			middleware: middleware.RequireDatabaseEdit,
+			effective:  domain.AccessViewOnly,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "edit wrapper allows view_edit",
+			middleware: middleware.RequireDatabaseEdit,
+			effective:  domain.AccessViewEdit,
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			groups := &testutil.GroupService{
+				EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+					return tt.effective, nil
+				},
+			}
+
+			r := gin.New()
+			r.GET(
+				"/databases/:database_id",
+				func(c *gin.Context) {
+					middleware.SetAuthenticatedUserID(c, 10)
+					c.Next()
+				},
+				tt.middleware(groups),
+				func(c *gin.Context) {
+					c.Status(http.StatusOK)
+				},
+			)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/databases/1", nil))
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestRequireDatabaseAccessErrorCases(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Case 1: unauthenticated
+	groups := &testutil.GroupService{}
+	r1 := gin.New()
+	r1.GET("/databases/:database_id", middleware.RequireDatabaseView(groups), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	w1 := httptest.NewRecorder()
+	r1.ServeHTTP(w1, httptest.NewRequest(http.MethodGet, "/databases/1", nil))
+	if w1.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 for unauthenticated", w1.Code)
+	}
+
+	// Case 2: database not found
+	groupsNotFound := &testutil.GroupService{
+		EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+			return "", domain.ErrDatabaseNotFound
+		},
+	}
+	r2 := gin.New()
+	r2.GET("/databases/:database_id", func(c *gin.Context) {
+		middleware.SetAuthenticatedUserID(c, 10)
+		c.Next()
+	}, middleware.RequireDatabaseView(groupsNotFound), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	w2 := httptest.NewRecorder()
+	r2.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/databases/999", nil))
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 for not found database", w2.Code)
+	}
+
+	// Case 3: internal service error
+	groupsInternalErr := &testutil.GroupService{
+		EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+			return "", errors.New("db query error")
+		},
+	}
+	r3 := gin.New()
+	r3.GET("/databases/:database_id", func(c *gin.Context) {
+		middleware.SetAuthenticatedUserID(c, 10)
+		c.Next()
+	}, middleware.RequireDatabaseView(groupsInternalErr), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	w3 := httptest.NewRecorder()
+	r3.ServeHTTP(w3, httptest.NewRequest(http.MethodGet, "/databases/1", nil))
+	if w3.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 for internal error", w3.Code)
+	}
+}
+
+func TestRequireAdminPropagatesInternalError(t *testing.T) {
+	users := &testutil.UserService{
+		GetFunc: func(context.Context, uint) (domain.User, error) {
+			return domain.User{}, errors.New("db connection timeout")
+		},
+	}
+	r := gin.New()
+	r.GET("/admin", func(c *gin.Context) {
+		middleware.SetAuthenticatedUserID(c, 1)
+		c.Next()
+	}, middleware.RequireAdmin(users), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", w.Code)
 	}
 }

@@ -107,3 +107,84 @@ func TestIntegrationMigrationCreateHistoryCompareAndRollback(t *testing.T) {
 		t.Fatalf("latest=%+v rollback=%+v", latest, rollbackRecord)
 	}
 }
+
+func TestIntegrationMigrationFailedExecutionPersistsFailStatusAndAllowsSubsequentMigration(t *testing.T) {
+	stack := newIntegrationStack(t, domain.AccessViewEdit)
+	ctx := context.Background()
+
+	_ = stack.db.Exec(`DROP TABLE IF EXISTS integration_fail_test`).Error
+	t.Cleanup(func() {
+		_ = stack.db.Exec(`DROP TABLE IF EXISTS integration_fail_test`).Error
+	})
+
+	// 1. Success migration: Version 1
+	v1, err := stack.migrationService.CreateMigration(
+		ctx,
+		stack.target.ID,
+		stack.user.ID,
+		"CREATE TABLE integration_fail_test (id integer PRIMARY KEY, title text NOT NULL)",
+	)
+	if err != nil {
+		t.Fatalf("CreateMigration(v1) error = %v", err)
+	}
+	if v1.Version != "1" || v1.Status != "success" {
+		t.Fatalf("v1 status = %q, want success", v1.Status)
+	}
+	if !stack.db.Migrator().HasTable("integration_fail_test") {
+		t.Fatal("table integration_fail_test was not created")
+	}
+
+	// 2. Failed migration: Version 2 (syntax error / invalid DDL statement)
+	v2, err := stack.migrationService.CreateMigration(
+		ctx,
+		stack.target.ID,
+		stack.user.ID,
+		"CREATE TABLE broken_table (id non_existent_type_xyz)",
+	)
+	if err != nil {
+		t.Fatalf("CreateMigration(v2) unexpected fatal error = %v", err)
+	}
+	if v2 == nil || v2.Version != "2" || v2.Status != "fail" {
+		t.Fatalf("v2 status = %+v, want status 'fail' and version '2'", v2)
+	}
+	if v2.ErrorMessage == "" {
+		t.Fatal("v2 ErrorMessage must not be empty on failure")
+	}
+	// Verify database was not partially modified
+	if stack.db.Migrator().HasTable("broken_table") {
+		t.Fatal("broken_table was created despite failure")
+	}
+
+	// 3. Subsequent migration: Version 3
+	v3, err := stack.migrationService.CreateMigration(
+		ctx,
+		stack.target.ID,
+		stack.user.ID,
+		"ALTER TABLE integration_fail_test ADD COLUMN counter integer",
+	)
+	if err != nil {
+		t.Fatalf("CreateMigration(v3) error = %v", err)
+	}
+	if v3.Version != "3" || v3.Status != "success" {
+		t.Fatalf("v3 status = %+v, want status 'success' and version '3'", v3)
+	}
+	if !stack.db.Migrator().HasColumn("integration_fail_test", "counter") {
+		t.Fatal("v3 column counter was not added")
+	}
+
+	// 4. Verify history in database shows all three versions (1: success, 2: fail, 3: success)
+	history, total, err := stack.migrationService.GetMigrationsByDatabaseID(
+		ctx,
+		stack.target.ID,
+		pagination.NewPaginationParams(1, 10),
+	)
+	if err != nil {
+		t.Fatalf("GetMigrationsByDatabaseID error = %v", err)
+	}
+	if total != 3 || len(history) != 3 {
+		t.Fatalf("total history = %d, want 3; history = %+v", total, history)
+	}
+	if history[0].Status != "success" || history[1].Status != "fail" || history[2].Status != "success" {
+		t.Fatalf("unexpected statuses in history: %+v", history)
+	}
+}

@@ -249,3 +249,92 @@ func TestIntegrationDatabaseCredentialIsEncryptedAtRest(t *testing.T) {
 		)
 	}
 }
+
+func TestIntegrationMultiGroupPerDatabaseAccessIsolation(t *testing.T) {
+	db := openTestDB(t)
+	seedTestDB(t, db)
+	ctx := context.Background()
+
+	cipher, err := security.NewAESGCMCipher([]byte(integrationCredentialKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	databaseRepo := databaserepository.NewDatabaseRepository(db, cipher)
+	groupRepo := grouprepository.NewGroupRepository(db)
+	userRepo := userrepository.NewUserRepository(db)
+	sessionRepo := sessionrepository.NewSessionRepository(db)
+	sessionService := sessionservice.NewSessionService(sessionRepo)
+	groupService := groupservice.NewGroupService(groupRepo, userRepo, databaseRepo, sessionService)
+
+	// Create 2 separate target databases in PostgreSQL
+	db1, err := databaseRepo.CreateDatabase(ctx, &domain.Database{
+		Host: "localhost", Port: 5432, User: "postgres", Name: "app_db1", Type: "postgresql",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db2, err := databaseRepo.CreateDatabase(ctx, &domain.Database{
+		Host: "localhost", Port: 5432, User: "postgres", Name: "app_db2", Type: "postgresql",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db3, err := databaseRepo.CreateDatabase(ctx, &domain.Database{
+		Host: "localhost", Port: 5432, User: "postgres", Name: "app_db3", Type: "postgresql",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create group 1 with View Only access to DB 1
+	g1, err := groupService.Create(ctx, domain.CreateGroupInput{
+		Name: "viewers_group",
+		DatabaseAccesses: []domain.DatabaseAccess{
+			{DatabaseID: db1.ID, AccessType: domain.AccessViewOnly},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create group 2 with View + Edit access to DB 2
+	g2, err := groupService.Create(ctx, domain.CreateGroupInput{
+		Name: "editors_group",
+		DatabaseAccesses: []domain.DatabaseAccess{
+			{DatabaseID: db2.ID, AccessType: domain.AccessViewEdit},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fetch test user and add to both groups
+	var user models.User
+	if err := db.Where("username = ?", "user").First(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := groupService.AddUser(ctx, g1.ID, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := groupService.AddUser(ctx, g2.ID, user.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Effective access for DB 1 must be View Only
+	acc1, err := groupService.EffectiveDatabaseAccess(ctx, user.ID, db1.ID)
+	if err != nil || acc1 != domain.AccessViewOnly {
+		t.Fatalf("db1 effective access = %q err = %v, want view_only", acc1, err)
+	}
+
+	// 2. Effective access for DB 2 must be View + Edit
+	acc2, err := groupService.EffectiveDatabaseAccess(ctx, user.ID, db2.ID)
+	if err != nil || acc2 != domain.AccessViewEdit {
+		t.Fatalf("db2 effective access = %q err = %v, want view_edit", acc2, err)
+	}
+
+	// 3. Effective access for DB 3 must be denied (user in no group that grants DB 3)
+	_, err = groupService.EffectiveDatabaseAccess(ctx, user.ID, db3.ID)
+	if err != domain.ErrDatabaseAccessDenied {
+		t.Fatalf("db3 access err = %v, want ErrDatabaseAccessDenied", err)
+	}
+}
