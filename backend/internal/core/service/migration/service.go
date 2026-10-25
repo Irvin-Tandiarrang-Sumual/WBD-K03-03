@@ -11,11 +11,21 @@ import (
 )
 
 type migrationService struct {
-	repository ports.MigrationRepository
+	repository         ports.MigrationRepository
+	databaseRepository ports.DatabaseRepository
+	databaseExecutor   ports.DatabaseExecutor
 }
 
-func NewMigrationService(repository ports.MigrationRepository) ports.MigrationService {
-	return &migrationService{repository: repository}
+func NewMigrationService(
+	repository ports.MigrationRepository,
+	databaseRepository ports.DatabaseRepository,
+	databaseExecutor ports.DatabaseExecutor,
+) ports.MigrationService {
+	return &migrationService{
+		repository:         repository,
+		databaseRepository: databaseRepository,
+		databaseExecutor:   databaseExecutor,
+	}
 }
 
 func (s *migrationService) GetMigrationsByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error) {
@@ -25,6 +35,22 @@ func (s *migrationService) GetMigrationsByDatabaseID(ctx context.Context, databa
 func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint, userID uint, sqlUp string) (*domain.Migration, error) {
 	if databaseID == 0 || userID == 0 || sqlUp == "" {
 		return nil, domain.ErrInvalidMigrationInput
+	}
+
+	_, err := s.databaseRepository.FindByIDAndUserID(ctx, databaseID, userID)
+	if err != nil {
+		return nil, err
+	}
+	databaseWithCredential, err := s.databaseRepository.FindWithCredentialByID(ctx, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	sqlDown, err := generateSQLDown(ctx, s.databaseExecutor, databaseWithCredential, sqlUp)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.databaseExecutor.ExecuteCommand(ctx, databaseWithCredential, sqlUp); err != nil {
+		return nil, err
 	}
 
 	latest, err := s.repository.FindLatestByDatabaseID(ctx, databaseID)
@@ -44,9 +70,9 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 	return s.repository.Save(ctx, &domain.Migration{
 		DatabaseID: databaseID,
 		Version:    version,
-		Status:     "fail",
+		Status:     "success",
 		SqlUp:      sqlUp,
-		SqlDown:    "", // CONVERTER
+		SqlDown:    sqlDown,
 		UserID:     userID,
 	})
 }

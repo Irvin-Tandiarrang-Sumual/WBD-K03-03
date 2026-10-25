@@ -30,4 +30,5 @@ var (
 	ErrMigrationVersionUnavailable = errors.New("Migration version is not available")
 	ErrInvalidPagination           = errors.New("Pagination parameters are not valid")
 	ErrInvalidDatabaseQuery        = errors.New("Database query is not valid")
+	ErrSQLDownGenerationUnsupported = errors.New("SQL down generation is not supported for this statement")
 )
