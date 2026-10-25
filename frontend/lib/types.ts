@@ -36,6 +36,7 @@ export interface Migration {
   status: MigrationStatus;
   sql_up: string;
   sql_down: string;
+  error_message: string;
   user_id: number;
 }
 

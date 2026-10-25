@@ -109,7 +109,7 @@ func scanRows(rows *sql.Rows) (*ports.DatabaseQueryResult, error) {
 		}
 		row := make(map[string]any, len(columns))
 		for index, column := range columns {
-			row[column] = values[index]
+			row[column] = normalizeValue(values[index])
 		}
 		result.Rows = append(result.Rows, row)
 	}
@@ -117,6 +117,13 @@ func scanRows(rows *sql.Rows) (*ports.DatabaseQueryResult, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func normalizeValue(value any) any {
+	if bytes, ok := value.([]byte); ok {
+		return string(bytes)
+	}
+	return value
 }
 
 func mapTables(result *ports.DatabaseQueryResult) []ports.DatabaseTableMetadata {
@@ -161,6 +168,9 @@ func mapIndexes(result *ports.DatabaseQueryResult) []ports.DatabaseIndexMetadata
 func stringValue(value any) string {
 	if value == nil {
 		return ""
+	}
+	if bytes, ok := value.([]byte); ok {
+		return string(bytes)
 	}
 	return fmt.Sprint(value)
 }

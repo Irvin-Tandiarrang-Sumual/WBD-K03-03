@@ -56,13 +56,6 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 	if err != nil {
 		return nil, err
 	}
-	sqlDown, err := generateSQLDown(ctx, s.databaseExecutor, databaseWithCredential, sqlUp)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := s.databaseExecutor.ExecuteCommand(ctx, databaseWithCredential, sqlUp); err != nil {
-		return nil, err
-	}
 
 	latest, err := s.repository.FindLatestByDatabaseID(ctx, databaseID)
 	if err != nil && !errors.Is(err, domain.ErrMigrationNotFound) {
@@ -78,14 +71,32 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 		version = strconv.Itoa(latestVersion + 1)
 	}
 
-	return s.repository.Save(ctx, &domain.Migration{
+	migration := &domain.Migration{
 		DatabaseID: databaseID,
 		Version:    version,
-		Status:     "success",
+		Status:     "fail",
 		SqlUp:      sqlUp,
-		SqlDown:    sqlDown,
 		UserID:     userID,
-	})
+	}
+	migration, err = s.repository.Save(ctx, migration)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDown, generationErr := generateSQLDown(ctx, s.databaseExecutor, databaseWithCredential, sqlUp)
+	if generationErr != nil {
+		migration.ErrorMessage = generationErr.Error()
+		return s.repository.Update(ctx, migration)
+	}
+	migration.SqlDown = sqlDown
+
+	if _, executionErr := s.databaseExecutor.ExecuteCommand(ctx, databaseWithCredential, sqlUp); executionErr != nil {
+		migration.ErrorMessage = executionErr.Error()
+		return s.repository.Update(ctx, migration)
+	}
+
+	migration.Status = "success"
+	return s.repository.Update(ctx, migration)
 }
 
 func (s *migrationService) GetMigrationByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint) (*domain.Migration, int64, error) {
@@ -145,11 +156,14 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 	if err != nil {
 		return nil, err
 	}
+	if target.Status != "success" {
+		return nil, domain.ErrMigrationRollbackUnavailable
+	}
 	targetVersion, err := strconv.Atoi(target.Version)
 	if err != nil {
 		return nil, domain.ErrMigrationVersionUnavailable
 	}
-	latest, err := s.repository.FindLatestByDatabaseID(ctx, databaseID)
+	latest, err := s.repository.FindLatestSuccessfulByDatabaseID(ctx, databaseID)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +177,9 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 		migration, err := s.repository.FindByVersionAndDatabaseID(ctx, strconv.Itoa(version), databaseID)
 		if err != nil {
 			return nil, err
+		}
+		if migration.Status != "success" {
+			continue
 		}
 		if migration.SqlDown == "" {
 			return nil, domain.ErrMigrationRollbackUnavailable
@@ -187,9 +204,18 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 		sqlDownStatements = append(sqlDownStatements, migration.SqlUp)
 	}
 
+	latestAttempt, err := s.repository.FindLatestByDatabaseID(ctx, databaseID)
+	if err != nil {
+		return nil, err
+	}
+	latestAttemptVersion, err := strconv.Atoi(latestAttempt.Version)
+	if err != nil {
+		return nil, domain.ErrMigrationVersionUnavailable
+	}
+
 	rollbackMigration, err := s.repository.Save(ctx, &domain.Migration{
 		DatabaseID: databaseID,
-		Version:    strconv.Itoa(latestVersion + 1),
+		Version:    strconv.Itoa(latestAttemptVersion + 1),
 		Status:     "success",
 		SqlUp:      strings.Join(sqlUpStatements, ";\n"),
 		SqlDown:    strings.Join(sqlDownStatements, ";\n"),

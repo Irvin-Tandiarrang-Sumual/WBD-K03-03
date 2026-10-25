@@ -3,8 +3,10 @@ package app
 import (
 	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
+	httpmiddleware "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/gin-gonic/gin"
 )
@@ -12,8 +14,7 @@ import (
 func Run() {
 	application, err := buildApplication()
 	if err != nil {
-		log.Printf("failed to build application: %v", err)
-		return
+		log.Fatalf("failed to build application: %v", err)
 	}
 	defer application.close()
 
@@ -24,7 +25,7 @@ func Run() {
 	)
 
 	if err := application.engine.Run(address); err != nil {
-		log.Printf("failed to run HTTP server: %v", err)
+		log.Fatalf("failed to run HTTP server: %v", err)
 	}
 }
 
@@ -66,6 +67,13 @@ func buildApplication() (*application, error) {
 
 	handlers := buildHandlers(configuration, services)
 	engine := gin.Default()
+	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))
+	engine.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	engine.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	router.SetupRouter(
 		engine,
 		handlers.auth,

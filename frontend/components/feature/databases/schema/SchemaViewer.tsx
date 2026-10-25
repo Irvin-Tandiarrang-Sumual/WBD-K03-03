@@ -24,7 +24,7 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
   useEffect(() => {
     api.query(
       databaseId,
-      "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' ORDER BY table_schema, table_name",
+      "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name",
     )
       .then((body) => {
         const names = readRows(body)
@@ -48,7 +48,7 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
     const escapedTable = activeTable.replaceAll("'", "''");
     api.query(
       databaseId,
-      `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '${escapedTable}' ORDER BY ordinal_position`,
+      `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name = '${escapedTable}' ORDER BY ordinal_position`,
     )
       .then((body) => setColumns(readRows(body)))
       .catch((requestError: unknown) => {
@@ -66,15 +66,27 @@ export default function SchemaViewer({ databaseId }: SchemaViewerProps) {
         <p className={styles.breadcrumb}>
           <strong>{activeTable || "Schema"}</strong>
         </p>
-        <button
-          onClick={() =>
-            router.push(`/databases/${databaseId}/tables/${activeTable}`)
-          }
-          className={styles.primaryButton}
-          disabled={!activeTable}
-        >
-          View Data
-        </button>
+        <div className={styles.actions}>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/databases/${databaseId}/migrations/new`)
+            }
+            className={styles.secondaryButton}
+          >
+            Migrate
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/databases/${databaseId}/tables/${activeTable}`)
+            }
+            className={styles.primaryButton}
+            disabled={!activeTable}
+          >
+            View Data
+          </button>
+        </div>
       </div>
 
       {error && <p role="alert">{error}</p>}

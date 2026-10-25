@@ -6,15 +6,17 @@ import (
 )
 
 type Config struct {
-	Database DBConfig
-	Server   ServerConfig
-	Security SecurityConfig
-	Session SessionConfig
+	Database     DBConfig
+	Server       ServerConfig
+	Security     SecurityConfig
+	Session      SessionConfig
+	SeedTestData bool
 }
 
 type ServerConfig struct {
-	Host string
-	Port int
+	Host           string
+	Port           int
+	FrontendOrigin string
 }
 
 type DBConfig struct {
@@ -44,8 +46,9 @@ func LoadConfig() (*Config, error) {
 		},
 
 		Server: ServerConfig{
-			Host: getEnv("SERVER_HOST", "0.0.0.0"),
-			Port: getEnvAsIntValue("SERVER_PORT", 8080),
+			Host:           getEnv("SERVER_HOST", "0.0.0.0"),
+			Port:           getEnvAsIntValue("SERVER_PORT", 8080),
+			FrontendOrigin: getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
 		},
 
 		Security: SecurityConfig{
@@ -58,6 +61,8 @@ func LoadConfig() (*Config, error) {
 		Session: SessionConfig{
 			CookieSecure: getEnvAsBoolValue("SESSION_COOKIE_SECURE", false),
 		},
+
+		SeedTestData: getEnvAsBoolValue("SEED_TEST_DATA", false),
 	}
 
 	return config, nil

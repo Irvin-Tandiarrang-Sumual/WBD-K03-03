@@ -42,6 +42,28 @@ Backend dapat diakses melalui:
 http://localhost:8080
 ```
 
+Frontend dapat diakses melalui:
+
+```text
+http://localhost:3000
+```
+
+Untuk lingkungan development Docker, data demo dibuat otomatis. Akun yang
+dapat digunakan untuk login adalah:
+
+```text
+Admin: admin / admin123
+User:  user / user123
+```
+
+`demo_user` dan `demo_password` adalah kredensial database target development,
+bukan akun login aplikasi.
+
+Database demo PostgreSQL `db1_pg` dijalankan oleh Docker Compose dan berisi
+tabel contoh `customers` serta `orders` untuk mencoba tampilan schema dan data.
+Database MySQL `db2_mysql` juga dijalankan oleh Docker Compose dan berisi tabel
+`products` serta `inventory_movements`.
+
 Jika ingin membangun ulang image tanpa menggunakan cache:
 
 ```bash

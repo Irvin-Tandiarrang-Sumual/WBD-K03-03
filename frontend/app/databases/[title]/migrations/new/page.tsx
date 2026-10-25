@@ -12,7 +12,9 @@ export default async function NewMigrationPage({
   searchParams,
 }: NewMigrationPageProps) {
   const [{ title }, query] = await Promise.all([params, searchParams]);
-  const databaseName = query?.dbName || decodeURIComponent(title);
+  const databaseId = decodeURIComponent(title);
 
-  return <MigrationDiff databaseId={databaseName} />;
+  return (
+    <MigrationDiff databaseId={databaseId} databaseName={query?.dbName} />
+  );
 }

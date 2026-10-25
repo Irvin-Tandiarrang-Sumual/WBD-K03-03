@@ -241,3 +241,33 @@ monospace;
   border-radius: 6px;
   margin-bottom: 1em;
 }
+.container h1 {
+  text-align: center;
+  margin: 0 0 0.5rem;
+}
+
+.container > p {
+  text-align: center;
+  color: #a1a1aa;
+  margin: 0 0 2rem;
+}
+
+.dataTable {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.dataTable th,
+.dataTable td {
+  border: 1px solid #e0e0e0;
+  padding: 0.75rem 1rem;
+}
+
+.dataTable th {
+  background-color: #000000;
+  color: #ffffff;
+  font-weight: 600;
+}

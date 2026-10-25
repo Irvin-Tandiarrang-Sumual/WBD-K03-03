@@ -349,3 +349,51 @@
   border-radius: 6px;
   margin-bottom: 1em;
 }
+.container {
+  max-width: 1180px;
+  width: 60%;
+  margin: 0 auto;
+  padding: 38px 28px 70px;
+  color: #d4d4d8;
+  box-sizing: border-box;
+}
+
+.container h1 {
+  text-align: center;
+  margin: 0 0 2rem;
+}
+
+.container > p[role="alert"] {
+  text-align: center;
+}
+
+.dataTable {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.dataTable th,
+.dataTable td {
+  border: 1px solid #e0e0e0;
+  padding: 0.75rem 1rem;
+}
+
+.dataTable th {
+  background-color: #000000;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.dataTable tbody tr:hover {
+  background: #1a1a1a;
+}
+
+@media (max-width: 800px) {
+  .container {
+    width: 100%;
+    padding: 25px 15px;
+  }
+}

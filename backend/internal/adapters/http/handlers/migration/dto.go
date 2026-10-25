@@ -5,7 +5,7 @@ type CreateMigrationRequest struct {
 }
 
 type RollbackMigrationRequest struct {
-	DatabaseID       uint `json:"database_id" binding:"required"`
+	DatabaseID        uint `json:"database_id" binding:"required"`
 	TargetMigrationID uint `json:"target_migration_id" binding:"required"`
 }
 
@@ -17,11 +17,12 @@ type MigrationComparisonResponse struct {
 }
 
 type MigrationResponse struct {
-	ID         uint   `json:"id"`
-	DatabaseID uint   `json:"database_id"`
-	Version    string `json:"version"`
-	Status     string `json:"status"`
-	SqlUp      string `json:"sql_up"`
-	SqlDown    string `json:"sql_down"`
-	UserID     uint   `json:"user_id"`
+	ID           uint   `json:"id"`
+	DatabaseID   uint   `json:"database_id"`
+	Version      string `json:"version"`
+	Status       string `json:"status"`
+	SqlUp        string `json:"sql_up"`
+	SqlDown      string `json:"sql_down"`
+	ErrorMessage string `json:"error_message"`
+	UserID       uint   `json:"user_id"`
 }

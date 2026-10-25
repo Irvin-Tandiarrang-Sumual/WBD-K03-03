@@ -24,6 +24,25 @@ func buildSystemDatabase(configuration *config.Config) (*gorm.DB, func(), error)
 		}
 		return nil, nil, err
 	}
+	if configuration.SeedTestData {
+		credentialCipher, cipherErr := security.NewAESGCMCipher(
+			[]byte(configuration.Security.DatabaseCredentialKey),
+		)
+		if cipherErr != nil {
+			sqlDatabase, closeErr := systemDatabase.DB()
+			if closeErr == nil {
+				_ = sqlDatabase.Close()
+			}
+			return nil, nil, cipherErr
+		}
+		if err := migrations.SeedDevelopmentData(systemDatabase, credentialCipher); err != nil {
+			sqlDatabase, closeErr := systemDatabase.DB()
+			if closeErr == nil {
+				_ = sqlDatabase.Close()
+			}
+			return nil, nil, err
+		}
+	}
 
 	closeSystemDatabase := func() {
 		sqlDatabase, err := systemDatabase.DB()

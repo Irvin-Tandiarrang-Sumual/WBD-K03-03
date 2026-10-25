@@ -25,7 +25,9 @@ type MigrationComparison struct {
 type MigrationRepository interface {
 	FindAllByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error)
 	FindLatestByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error)
+	FindLatestSuccessfulByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error)
 	Save(ctx context.Context, migration *domain.Migration) (*domain.Migration, error)
+	Update(ctx context.Context, migration *domain.Migration) (*domain.Migration, error)
 	FindByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint) (*domain.Migration, error)
 	FindByVersionAndDatabaseID(ctx context.Context, version string, databaseID uint) (*domain.Migration, error)
 }

@@ -71,7 +71,11 @@ func (h *MigrationHandler) CreateMigration(c *gin.Context) {
 		writeErrorResponse(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, response.Success("migration created successfully", toResponse(migration)))
+	message := "migration created successfully"
+	if migration.Status == "fail" {
+		message = "migration failed and was recorded"
+	}
+	c.JSON(http.StatusCreated, response.Success(message, toResponse(migration)))
 }
 
 func (h *MigrationHandler) GetMigrationByIDAndDatabaseID(c *gin.Context) {
@@ -173,7 +177,8 @@ func toResponse(migration *domain.Migration) MigrationResponse {
 	return MigrationResponse{
 		ID: migration.ID, DatabaseID: migration.DatabaseID, Version: migration.Version,
 		Status: migration.Status, SqlUp: migration.SqlUp, SqlDown: migration.SqlDown,
-		UserID: migration.UserID,
+		ErrorMessage: migration.ErrorMessage,
+		UserID:       migration.UserID,
 	}
 }
 

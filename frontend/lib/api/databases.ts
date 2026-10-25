@@ -5,6 +5,10 @@ import type {
 } from "@/lib/types";
 import { request } from "@/lib/api/client";
 
+interface DatabaseResponse {
+  data: Database;
+}
+
 export const databaseApi = {
   list: (page = 1, limit = 20) =>
     request<PagedResponse<Database>>(
@@ -12,7 +16,9 @@ export const databaseApi = {
     ),
 
   get: (id: number | string) =>
-    request<Database>(`/api/v1/me/databases/${id}`),
+    request<DatabaseResponse>(`/api/v1/me/databases/${id}`).then(
+      (response) => response.data,
+    ),
 
   listForAdmin: (page = 1, limit = 20) =>
     request<PagedResponse<Database>>(
@@ -20,10 +26,10 @@ export const databaseApi = {
     ),
 
   create: (payload: CreateDatabaseInput) =>
-    request<Database>("/api/v1/admin/databases", {
+    request<DatabaseResponse>("/api/v1/admin/databases", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    }).then((response) => response.data),
 
   remove: (id: number | string) =>
     request<void>(`/api/v1/admin/databases/${id}`, {

@@ -13,14 +13,23 @@ import (
 
 type migrationRepositoryFake struct {
 	ports.MigrationRepository
-	latest        *domain.Migration
-	byID          map[uint]*domain.Migration
-	byVersion     map[string]*domain.Migration
-	saved         *domain.Migration
-	findLatestErr error
+	latest           *domain.Migration
+	latestSuccessful *domain.Migration
+	byID             map[uint]*domain.Migration
+	byVersion        map[string]*domain.Migration
+	saved            *domain.Migration
+	findLatestErr    error
+	saveErr          error
 }
 
 func (f *migrationRepositoryFake) FindLatestByDatabaseID(context.Context, uint) (*domain.Migration, error) {
+	return f.latest, f.findLatestErr
+}
+
+func (f *migrationRepositoryFake) FindLatestSuccessfulByDatabaseID(context.Context, uint) (*domain.Migration, error) {
+	if f.latestSuccessful != nil {
+		return f.latestSuccessful, nil
+	}
 	return f.latest, f.findLatestErr
 }
 
@@ -41,13 +50,25 @@ func (f *migrationRepositoryFake) FindByVersionAndDatabaseID(_ context.Context, 
 }
 
 func (f *migrationRepositoryFake) Save(_ context.Context, migration *domain.Migration) (*domain.Migration, error) {
+	if f.saveErr != nil {
+		return nil, f.saveErr
+	}
+	if migration.ID == 0 {
+		migration.ID = 1
+	}
+	f.saved = migration
+	return migration, nil
+}
+
+func (f *migrationRepositoryFake) Update(_ context.Context, migration *domain.Migration) (*domain.Migration, error) {
 	f.saved = migration
 	return migration, nil
 }
 
 type migrationExecutorFake struct {
 	ports.DatabaseExecutor
-	commands []string
+	commands   []string
+	commandErr error
 }
 
 func (f *migrationExecutorFake) ExecuteQuery(context.Context, domain.Database, string, ...any) (*ports.DatabaseQueryResult, error) {
@@ -56,6 +77,9 @@ func (f *migrationExecutorFake) ExecuteQuery(context.Context, domain.Database, s
 
 func (f *migrationExecutorFake) ExecuteCommand(_ context.Context, _ domain.Database, command string, _ ...any) (*ports.DatabaseCommandResult, error) {
 	f.commands = append(f.commands, command)
+	if f.commandErr != nil {
+		return nil, f.commandErr
+	}
 	return &ports.DatabaseCommandResult{}, nil
 }
 
@@ -111,14 +135,116 @@ func TestCreateMigrationRequiresEditAccess(t *testing.T) {
 	}
 }
 
+func TestCreateMigrationPersistsFailedExecutionAsNextVersion(t *testing.T) {
+	executor := &migrationExecutorFake{commandErr: errors.New("syntax error near INVALID")}
+	repository := &migrationRepositoryFake{latest: &domain.Migration{Version: "4", Status: "fail"}}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	created, err := service.CreateMigration(context.Background(), 8, 3, "CREATE TABLE invalid (")
+	if err != nil {
+		t.Fatalf("CreateMigration() error = %v", err)
+	}
+	if created.Version != "5" || created.Status != "fail" {
+		t.Fatalf("created = %+v, want failed version 5", created)
+	}
+	if created.ErrorMessage == "" || repository.saved != created {
+		t.Fatalf("failed migration was not saved with its error: %+v", created)
+	}
+}
+
+func TestCreateMigrationSupportsMultiRowInsert(t *testing.T) {
+	executor := &migrationExecutorFake{}
+	repository := &migrationRepositoryFake{findLatestErr: domain.ErrMigrationNotFound}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	sql := "INSERT INTO customers (name, email) VALUES ('Rina', 'rina@example.com'), ('Budi', 'budi@example.com')"
+	created, err := service.CreateMigration(context.Background(), 8, 3, sql)
+	if err != nil {
+		t.Fatalf("CreateMigration() error = %v", err)
+	}
+	if created.Status != "success" {
+		t.Fatalf("status = %q, want success; error=%q", created.Status, created.ErrorMessage)
+	}
+	wantDown := "DELETE FROM customers WHERE (name = 'Rina' AND email = 'rina@example.com') OR (name = 'Budi' AND email = 'budi@example.com')"
+	if created.SqlDown != wantDown {
+		t.Fatalf("sql_down = %q, want %q", created.SqlDown, wantDown)
+	}
+}
+
+func TestCreateMigrationDoesNotExecuteWhenHistoryCannotBeCreated(t *testing.T) {
+	executor := &migrationExecutorFake{}
+	repositoryError := errors.New("cannot create migration history")
+	repository := &migrationRepositoryFake{
+		latest:  &domain.Migration{Version: "1", Status: "fail"},
+		saveErr: repositoryError,
+	}
+	service := migrationservice.NewMigrationService(
+		repository,
+		&testutil.DatabaseRepository{
+			FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8}, nil
+			},
+			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 8, Type: "postgresql"}, nil
+			},
+		},
+		executor,
+		&testutil.GroupService{
+			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+				return domain.AccessViewEdit, nil
+			},
+		},
+	)
+
+	_, err := service.CreateMigration(context.Background(), 8, 3, "CREATE TABLE users (id INT)")
+	if !errors.Is(err, repositoryError) {
+		t.Fatalf("error = %v, want repository error", err)
+	}
+	if len(executor.commands) != 0 {
+		t.Fatalf("commands = %v, want no target database execution", executor.commands)
+	}
+}
+
 func TestRollbackCreatesLinearRollbackMigration(t *testing.T) {
 	executor := &migrationExecutorFake{}
 	repository := &migrationRepositoryFake{
-		latest: &domain.Migration{Version: "3"},
-		byID:   map[uint]*domain.Migration{1: {ID: 1, Version: "1"}},
+		latest: &domain.Migration{Version: "3", Status: "success"},
+		byID:   map[uint]*domain.Migration{1: {ID: 1, Version: "1", Status: "success"}},
 		byVersion: map[string]*domain.Migration{
-			"3": {Version: "3", SqlUp: "up3", SqlDown: "down3"},
-			"2": {Version: "2", SqlUp: "up2", SqlDown: "down2"},
+			"3": {Version: "3", Status: "success", SqlUp: "up3", SqlDown: "down3"},
+			"2": {Version: "2", Status: "success", SqlUp: "up2", SqlDown: "down2"},
 		},
 	}
 	databases := &testutil.DatabaseRepository{

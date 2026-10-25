@@ -86,6 +86,18 @@ func TestExecuteDatabaseQueryReturnsResult(t *testing.T) {
 		service.query != "SELECT * FROM users" {
 		t.Fatalf("unexpected service call: %+v", service)
 	}
+	var responseBody struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &responseBody); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if _, exists := responseBody.Data["rows"]; !exists {
+		t.Fatalf("response data does not contain lowercase rows: %s", recorder.Body.String())
+	}
+	if _, exists := responseBody.Data["Rows"]; exists {
+		t.Fatalf("response data contains legacy uppercase Rows: %s", recorder.Body.String())
+	}
 }
 
 func TestExecuteDatabaseQueryRejectsMissingUser(t *testing.T) {
