@@ -52,7 +52,7 @@ func TestLoginSuccess(t *testing.T) {
 		},
 	}
 
-	service := 	authservice.NewAuthService(users, sessions)
+	service := authservice.NewAuthService(users, sessions)
 
 	user, session, err := service.Login(
 		context.Background(),
@@ -195,5 +195,91 @@ func TestLogoutRevokesCurrentToken(t *testing.T) {
 
 	if revoked != "opaque-token" {
 		t.Fatalf("revoked token = %q", revoked)
+	}
+}
+func TestLoginRejectsBlankCredentialsWithoutRepositoryCall(t *testing.T) {
+	called := false
+	users := &testutil.UserRepository{
+		FindByUsernameWithPasswordFunc: func(context.Context, string) (domain.User, error) {
+			called = true
+			return domain.User{}, nil
+		},
+	}
+	service := authservice.NewAuthService(users, &testutil.SessionService{})
+
+	cases := []struct {
+		name     string
+		username string
+		password string
+	}{
+		{name: "blank username", username: "   ", password: "secret"},
+		{name: "blank password", username: "admin", password: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := service.Login(context.Background(), tc.username, tc.password)
+			if !errors.Is(err, domain.ErrInvalidCredentials) {
+				t.Fatalf("Login() error = %v, want ErrInvalidCredentials", err)
+			}
+		})
+	}
+
+	if called {
+		t.Fatal("repository must not be called for blank credentials")
+	}
+}
+
+func TestLoginPropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("repository unavailable")
+	users := &testutil.UserRepository{
+		FindByUsernameWithPasswordFunc: func(context.Context, string) (domain.User, error) {
+			return domain.User{}, wantErr
+		},
+	}
+	service := authservice.NewAuthService(users, &testutil.SessionService{})
+
+	_, _, err := service.Login(context.Background(), "admin", "secret")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Login() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestLoginPropagatesSessionCreateError(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("secret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantErr := errors.New("session storage unavailable")
+	users := &testutil.UserRepository{
+		FindByUsernameWithPasswordFunc: func(context.Context, string) (domain.User, error) {
+			return domain.User{ID: 8, Username: "admin", Password: string(hash)}, nil
+		},
+	}
+	sessions := &testutil.SessionService{
+		CreateFunc: func(context.Context, uint) (domain.Session, error) {
+			return domain.Session{}, wantErr
+		},
+	}
+	service := authservice.NewAuthService(users, sessions)
+
+	_, _, err = service.Login(context.Background(), "admin", "secret")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Login() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestLogoutPropagatesRevokeError(t *testing.T) {
+	wantErr := errors.New("revoke failed")
+	sessions := &testutil.SessionService{
+		RevokeFunc: func(context.Context, string) error {
+			return wantErr
+		},
+	}
+	service := authservice.NewAuthService(&testutil.UserRepository{}, sessions)
+
+	if err := service.Logout(context.Background(), "opaque-token"); !errors.Is(err, wantErr) {
+		t.Fatalf("Logout() error = %v, want %v", err, wantErr)
 	}
 }

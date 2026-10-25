@@ -59,7 +59,7 @@ func TestIntegrationPostgreSQLConnectionTester(t *testing.T) {
 		User:     parsed.User.Username(),
 		Password: password,
 		Type:     "postgresql",
-		Name:     strings.TrimPrefix(
+		Name: strings.TrimPrefix(
 			parsed.Path,
 			"/",
 		),

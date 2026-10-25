@@ -2,8 +2,8 @@ package router
 
 import (
 	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
-	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
 	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
+	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
 	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
@@ -12,15 +12,15 @@ import (
 )
 
 type routerDependencies struct {
-	authHandler            *authhandler.AuthHandler
-	userHandler            *userhandler.UserHandler
-	groupHandler           *grouphandler.GroupHandler
-	databaseHandler        *databasehandler.DatabaseHandler
+	authHandler             *authhandler.AuthHandler
+	userHandler             *userhandler.UserHandler
+	groupHandler            *grouphandler.GroupHandler
+	databaseHandler         *databasehandler.DatabaseHandler
 	databaseExecutorHandler *databaseexecutorhandler.DatabaseExecutorHandler
-	migrationHandler       *migrationhandler.MigrationHandler
-	sessionService         ports.SessionService
-	userService            ports.UserService
-	groupService           ports.GroupService
+	migrationHandler        *migrationhandler.MigrationHandler
+	sessionService          ports.SessionService
+	userService             ports.UserService
+	groupService            ports.GroupService
 }
 
 func SetupRouter(

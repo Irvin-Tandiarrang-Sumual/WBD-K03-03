@@ -9,17 +9,27 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
 type migrationRepositoryFake struct {
 	ports.MigrationRepository
+	list             []*domain.Migration
+	total            int64
 	latest           *domain.Migration
 	latestSuccessful *domain.Migration
 	byID             map[uint]*domain.Migration
 	byVersion        map[string]*domain.Migration
 	saved            *domain.Migration
+	findAllErr       error
 	findLatestErr    error
+	findByIDErr      error
+	findByVersionErr error
 	saveErr          error
+}
+
+func (f *migrationRepositoryFake) FindAllByDatabaseID(context.Context, uint, pagination.PaginationParams) ([]*domain.Migration, int64, error) {
+	return f.list, f.total, f.findAllErr
 }
 
 func (f *migrationRepositoryFake) FindLatestByDatabaseID(context.Context, uint) (*domain.Migration, error) {
@@ -34,6 +44,9 @@ func (f *migrationRepositoryFake) FindLatestSuccessfulByDatabaseID(context.Conte
 }
 
 func (f *migrationRepositoryFake) FindByIDAndDatabaseID(_ context.Context, id, _ uint) (*domain.Migration, error) {
+	if f.findByIDErr != nil {
+		return nil, f.findByIDErr
+	}
 	migration, ok := f.byID[id]
 	if !ok {
 		return nil, domain.ErrMigrationNotFound
@@ -42,6 +55,9 @@ func (f *migrationRepositoryFake) FindByIDAndDatabaseID(_ context.Context, id, _
 }
 
 func (f *migrationRepositoryFake) FindByVersionAndDatabaseID(_ context.Context, version string, _ uint) (*domain.Migration, error) {
+	if f.findByVersionErr != nil {
+		return nil, f.findByVersionErr
+	}
 	migration, ok := f.byVersion[version]
 	if !ok {
 		return nil, domain.ErrMigrationNotFound

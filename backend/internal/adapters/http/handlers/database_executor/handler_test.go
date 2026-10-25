@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/gin-gonic/gin"
 )
@@ -16,6 +18,8 @@ import (
 type fakeExecutorService struct {
 	ports.DatabaseExecutorService
 	queryResult *ports.DatabaseQueryResult
+	queryErr    error
+	explainErr  error
 	queryID     uint
 	queryUserID uint
 	query       string
@@ -31,7 +35,7 @@ func (f *fakeExecutorService) ExecuteDatabaseQuery(
 	f.queryID = databaseID
 	f.queryUserID = userID
 	f.query = query
-	return f.queryResult, nil
+	return f.queryResult, f.queryErr
 }
 
 func (f *fakeExecutorService) ExplainDatabaseQuery(
@@ -45,7 +49,7 @@ func (f *fakeExecutorService) ExplainDatabaseQuery(
 	f.queryUserID = userID
 	f.query = query
 	f.analyze = analyze
-	return f.queryResult, nil
+	return f.queryResult, f.explainErr
 }
 
 func executorContext(path string, userID *uint) (*gin.Context, *httptest.ResponseRecorder) {
@@ -156,5 +160,80 @@ func TestExecutorErrorResponseIsJSONEnvelope(t *testing.T) {
 	}
 	if recorder.Code != http.StatusBadRequest || body["success"] != false {
 		t.Fatalf("unexpected response: status=%d body=%v", recorder.Code, body)
+	}
+}
+
+func TestExecuteDatabaseQueryRejectsInvalidJSON(t *testing.T) {
+	service := &fakeExecutorService{}
+	handler := NewDatabaseExecutorHandler(service)
+	userID := uint(7)
+	context, recorder := executorContext("/databases/3/query", &userID)
+	context.Params = gin.Params{{Key: "database_id", Value: "3"}}
+	context.Request = httptest.NewRequest(http.MethodPost, "/databases/3/query", bytes.NewBufferString(`{"query":`))
+	context.Request.Header.Set("Content-Type", "application/json")
+
+	handler.ExecuteDatabaseQuery(context)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestExplainDatabaseQueryRejectsInvalidAnalyzer(t *testing.T) {
+	service := &fakeExecutorService{}
+	handler := NewDatabaseExecutorHandler(service)
+	userID := uint(7)
+	context, recorder := executorContext("/databases/3/explain?analyzer=maybe", &userID)
+	context.Params = gin.Params{{Key: "database_id", Value: "3"}}
+	context.Request = httptest.NewRequest(http.MethodPost, "/databases/3/explain?analyzer=maybe", bytes.NewBufferString(`{"query":"SELECT 1"}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+
+	handler.ExplainDatabaseQuery(context)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestDatabaseExecutorHandlerMapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "invalid query", err: domain.ErrInvalidDatabaseQuery, want: http.StatusBadRequest},
+		{name: "database missing", err: domain.ErrDatabaseNotFound, want: http.StatusNotFound},
+		{name: "access denied", err: domain.ErrDatabaseAccessDenied, want: http.StatusForbidden},
+		{name: "internal", err: errors.New("boom"), want: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &fakeExecutorService{queryErr: tt.err}
+			handler := NewDatabaseExecutorHandler(service)
+			userID := uint(7)
+			context, recorder := executorContext("/databases/3/query", &userID)
+			context.Params = gin.Params{{Key: "database_id", Value: "3"}}
+			context.Request = httptest.NewRequest(http.MethodPost, "/databases/3/query", bytes.NewBufferString(`{"query":"SELECT 1"}`))
+			context.Request.Header.Set("Content-Type", "application/json")
+
+			handler.ExecuteDatabaseQuery(context)
+			if recorder.Code != tt.want {
+				t.Fatalf("status=%d want=%d body=%s", recorder.Code, tt.want, recorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestExplainDatabaseQueryMapsServiceError(t *testing.T) {
+	service := &fakeExecutorService{explainErr: domain.ErrDatabaseAccessDenied}
+	handler := NewDatabaseExecutorHandler(service)
+	userID := uint(7)
+	context, recorder := executorContext("/databases/3/explain", &userID)
+	context.Params = gin.Params{{Key: "database_id", Value: "3"}}
+	context.Request = httptest.NewRequest(http.MethodPost, "/databases/3/explain", bytes.NewBufferString(`{"query":"SELECT 1"}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+
+	handler.ExplainDatabaseQuery(context)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

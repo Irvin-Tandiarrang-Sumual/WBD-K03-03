@@ -23,6 +23,8 @@ func (f *databaseServiceFake) GetDatabaseByIDAndUserID(context.Context, uint, ui
 type executorFake struct {
 	ports.DatabaseExecutor
 	queryResult *ports.DatabaseQueryResult
+	queryErr    error
+	explainErr  error
 	explained   bool
 	query       string
 	database    domain.Database
@@ -32,7 +34,7 @@ type executorFake struct {
 func (f *executorFake) ExecuteQuery(_ context.Context, database domain.Database, query string, _ ...any) (*ports.DatabaseQueryResult, error) {
 	f.database = database
 	f.query = query
-	return f.queryResult, nil
+	return f.queryResult, f.queryErr
 }
 
 func (f *executorFake) ExplainQuery(_ context.Context, database domain.Database, query string, analyze bool, _ ...any) (*ports.DatabaseQueryResult, error) {
@@ -40,7 +42,7 @@ func (f *executorFake) ExplainQuery(_ context.Context, database domain.Database,
 	f.query = query
 	f.analyze = analyze
 	f.explained = true
-	return f.queryResult, nil
+	return f.queryResult, f.explainErr
 }
 
 func TestExecuteDatabaseQueryChecksAccessAndDelegates(t *testing.T) {
@@ -138,5 +140,113 @@ func TestValidateSelectQuery(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestExecuteDatabaseQueryPropagatesAccessibleDatabaseError(t *testing.T) {
+	wantErr := domain.ErrDatabaseNotFound
+	service := NewDatabaseExecutorService(
+		&databaseServiceFake{err: wantErr},
+		&testutil.DatabaseRepository{},
+		&executorFake{},
+		&testutil.GroupService{},
+	)
+	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error=%v want=%v", err, wantErr)
+	}
+}
+
+func TestExecuteDatabaseQueryPropagatesAccessLookupError(t *testing.T) {
+	wantErr := errors.New("access lookup failed")
+	service := NewDatabaseExecutorService(
+		&databaseServiceFake{database: &domain.Database{ID: 5}},
+		&testutil.DatabaseRepository{},
+		&executorFake{},
+		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+			return "", wantErr
+		}},
+	)
+	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error=%v want=%v", err, wantErr)
+	}
+}
+
+func TestExecuteDatabaseQueryRejectsInvalidQueryBeforeCredentialLookup(t *testing.T) {
+	credentialLookup := false
+	service := NewDatabaseExecutorService(
+		&databaseServiceFake{database: &domain.Database{ID: 5}},
+		&testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+			credentialLookup = true
+			return domain.Database{}, nil
+		}},
+		&executorFake{},
+		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+			return domain.AccessViewOnly, nil
+		}},
+	)
+	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "DELETE FROM users")
+	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+		t.Fatalf("error=%v", err)
+	}
+	if credentialLookup {
+		t.Fatal("credential lookup must not run for invalid query")
+	}
+}
+
+func TestExecuteDatabaseQueryPropagatesCredentialAndExecutorErrors(t *testing.T) {
+	credentialErr := errors.New("decrypt failed")
+	service := NewDatabaseExecutorService(
+		&databaseServiceFake{database: &domain.Database{ID: 5}},
+		&testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+			return domain.Database{}, credentialErr
+		}},
+		&executorFake{},
+		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+			return domain.AccessViewOnly, nil
+		}},
+	)
+	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+	if !errors.Is(err, credentialErr) {
+		t.Fatalf("error=%v", err)
+	}
+
+	executorErr := errors.New("query failed")
+	service = NewDatabaseExecutorService(
+		&databaseServiceFake{database: &domain.Database{ID: 5}},
+		&testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+			return domain.Database{ID: 5, Password: "pw"}, nil
+		}},
+		&executorFake{queryErr: executorErr},
+		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+			return domain.AccessViewOnly, nil
+		}},
+	)
+	_, err = service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+	if !errors.Is(err, executorErr) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestExplainDatabaseQueryRejectsInvalidQueryAndPropagatesExecutorError(t *testing.T) {
+	groups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
+		return domain.AccessViewOnly, nil
+	}}
+	repository := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+		return domain.Database{ID: 5}, nil
+	}}
+
+	service := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, &executorFake{}, groups)
+	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "UPDATE users SET x=1", false)
+	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+		t.Fatalf("error=%v", err)
+	}
+
+	wantErr := errors.New("explain failed")
+	service = NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, &executorFake{explainErr: wantErr}, groups)
+	_, err = service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1", true)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error=%v want=%v", err, wantErr)
 	}
 }
