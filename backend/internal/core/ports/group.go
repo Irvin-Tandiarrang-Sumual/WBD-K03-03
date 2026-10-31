@@ -8,86 +8,30 @@ import (
 )
 
 type GroupService interface {
-	List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error)
-	Get(ctx context.Context, id uint) (domain.Group, error)
+	GetAllGroups(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error)
+	GetGroupByID(ctx context.Context, id uint) (domain.Group, error)
+	CreateGroup(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error)
+	UpdateGroup(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error)
+	DeleteGroup(ctx context.Context, id uint) error
 
-	Create(
-		ctx context.Context,
-		input domain.CreateGroupInput,
-	) (domain.Group, error)
-
-	Update(
-		ctx context.Context,
-		id uint,
-		input domain.UpdateGroupInput,
-	) (domain.Group, error)
-
-	Delete(ctx context.Context, id uint) error
-
-	AddUser(
-		ctx context.Context,
-		groupID uint,
-		userID uint,
-	) error
-
-	RemoveUser(
-		ctx context.Context,
-		groupID uint,
-		userID uint,
-	) error
-
-	EffectiveDatabaseAccess(
-		ctx context.Context,
-		userID uint,
-		databaseID uint,
-	) (domain.AccessType, error)
+	AddUser(ctx context.Context, groupID uint, userID uint) error
+	RemoveUser(ctx context.Context, groupID uint, userID uint) error
+	EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error)
 }
 
 type GroupRepository interface {
-	List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error)
+	FindAll(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error)
 	FindByID(ctx context.Context, id uint) (domain.Group, error)
-	ExistsAll(ctx context.Context, ids []uint) (bool, error)
-
-	Create(
-		ctx context.Context,
-		group domain.Group,
-	) (domain.Group, error)
-
-	Update(
-		ctx context.Context,
-		group domain.Group,
-	) (domain.Group, error)
-
+	AllExist(ctx context.Context, ids []uint) (bool, error)
+	Save(ctx context.Context, group domain.Group) (domain.Group, error)
+	Update(ctx context.Context, group domain.Group) (domain.Group, error)
 	Delete(ctx context.Context, id uint) error
 
-	AddUser(
-		ctx context.Context,
-		groupID uint,
-		userID uint,
-	) error
-
-	RemoveUser(
-		ctx context.Context,
-		groupID uint,
-		userID uint,
-	) error
-
-	CountUserGroups(
-		ctx context.Context,
-		userID uint,
-	) (int64, error)
-
-	ListUserIDs(
-		ctx context.Context,
-		groupID uint,
-	) ([]uint, error)
-
-	ListAccessTypes(
-		ctx context.Context,
-		userID uint,
-		databaseID uint,
-	) ([]domain.AccessType, error)
-
+	AddUser(ctx context.Context, groupID uint, userID uint) error
+	RemoveUser(ctx context.Context, groupID uint, userID uint) error
+	CountUserGroups(ctx context.Context, userID uint) (int64, error)
+	ListUserIDs(ctx context.Context, groupID uint) ([]uint, error)
+	ListAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error)
 	ListUserIDsByDatabase(ctx context.Context, databaseID uint) ([]uint, error)
 	HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error)
 }

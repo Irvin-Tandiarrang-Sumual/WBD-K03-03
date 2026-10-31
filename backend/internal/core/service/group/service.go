@@ -31,15 +31,15 @@ func NewGroupService(
 	}
 }
 
-func (s *groupService) List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
-	return s.groups.List(ctx, params)
+func (s *groupService) GetAllGroups(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
+	return s.groups.FindAll(ctx, params)
 }
 
-func (s *groupService) Get(ctx context.Context, id uint) (domain.Group, error) {
+func (s *groupService) GetGroupByID(ctx context.Context, id uint) (domain.Group, error) {
 	return s.groups.FindByID(ctx, id)
 }
 
-func (s *groupService) Create(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
+func (s *groupService) CreateGroup(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
 
 	input.Name = strings.TrimSpace(input.Name)
 
@@ -64,10 +64,10 @@ func (s *groupService) Create(ctx context.Context, input domain.CreateGroupInput
 		DatabaseAccesses: accesses,
 	}
 
-	return s.groups.Create(ctx, group)
+	return s.groups.Save(ctx, group)
 }
 
-func (s *groupService) Update(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
+func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
 
 	current, err := s.groups.FindByID(ctx, id)
 	if err != nil {
@@ -121,7 +121,7 @@ func (s *groupService) Update(ctx context.Context, id uint, input domain.UpdateG
 	return updated, nil
 }
 
-func (s *groupService) Delete(ctx context.Context, id uint) error {
+func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 
 	if _, err := s.groups.FindByID(ctx, id); err != nil {
 		return err

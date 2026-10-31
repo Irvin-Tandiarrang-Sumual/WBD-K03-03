@@ -18,7 +18,7 @@ type UserRepository struct {
 	CreateFunc                     func(context.Context, domain.User, []uint) (domain.User, error)
 	UpdateFunc                     func(context.Context, uint, *string, *string) (domain.User, error)
 	DeleteFunc                     func(context.Context, uint) error
-	SetRoleFunc                    func(context.Context, uint, string) (domain.User, error)
+	UpdateUserRoleFunc             func(context.Context, uint, string) (domain.User, error)
 }
 
 func (f *UserRepository) List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
@@ -53,7 +53,7 @@ func (f *UserRepository) Delete(ctx context.Context, id uint) error {
 }
 
 func (f *UserRepository) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
-	return f.SetRoleFunc(ctx, id, role)
+	return f.UpdateUserRoleFunc(ctx, id, role)
 }
 
 type GroupRepository struct {
@@ -127,19 +127,19 @@ func (f *GroupRepository) HasGroupWithOnlyDatabase(ctx context.Context, database
 
 type DatabaseRepository struct {
 	ports.DatabaseRepository
-	FindByIdFunc               func(context.Context, uint) (*domain.Database, error)
-	FindAllFunc                func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error)
-	SaveFunc                   func(context.Context, *domain.Database) (*domain.Database, error)
-	FindAllByUserIDFunc        func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error)
-	FindByIDAndUserIDFunc      func(context.Context, uint, uint) (*domain.Database, error)
-	FindByIDFunc               func(context.Context, uint) (domain.Database, error)
-	FindWithCredentialByIDFunc func(context.Context, uint) (domain.Database, error)
+	FindByIdFunc                    func(context.Context, uint) (*domain.Database, error)
+	FindAllFunc                     func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	SaveFunc                        func(context.Context, *domain.Database) (*domain.Database, error)
+	FindAllByUserIDFunc             func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	FindByIDAndUserIDFunc           func(context.Context, uint, uint) (*domain.Database, error)
+	FindByIDFunc                    func(context.Context, uint) (domain.Database, error)
+	FindWithCredentialByIDFunc      func(context.Context, uint) (domain.Database, error)
 	FindCredentialByHostAndPortFunc func(context.Context, string, uint, string) (string, error)
-	GetDistinctHostsFunc       func(context.Context) ([]domain.DatabaseHost, error)
-	ExistsAllFunc              func(context.Context, []uint) (bool, error)
-	CreateFunc                 func(context.Context, domain.Database) (domain.Database, error)
-	CreateDatabaseFunc         func(context.Context, *domain.Database) (*domain.Database, error)
-	DeleteFunc                 func(context.Context, uint) error
+	GetDistinctHostsFunc            func(context.Context) ([]domain.DatabaseHost, error)
+	ExistsAllFunc                   func(context.Context, []uint) (bool, error)
+	CreateFunc                      func(context.Context, domain.Database) (domain.Database, error)
+	CreateDatabaseFunc              func(context.Context, *domain.Database) (*domain.Database, error)
+	DeleteFunc                      func(context.Context, uint) error
 }
 
 func (f *DatabaseRepository) FindById(ctx context.Context, id uint) (*domain.Database, error) {

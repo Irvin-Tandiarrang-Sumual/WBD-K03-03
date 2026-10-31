@@ -26,15 +26,15 @@ func NewUserService(users ports.UserRepository, groups ports.GroupRepository, se
 	}
 }
 
-func (s *userService) List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
-	return s.users.List(ctx, params)
+func (s *userService) GetAllUsers(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
+	return s.users.FindAll(ctx, params)
 }
 
-func (s *userService) Get(ctx context.Context, id uint) (domain.User, error) {
+func (s *userService) GetUserByID(ctx context.Context, id uint) (domain.User, error) {
 	return s.users.FindByID(ctx, id)
 }
 
-func (s *userService) Create(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
+func (s *userService) CreateUser(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
 	username := strings.TrimSpace(input.Username)
 
 	if username == "" ||
@@ -44,7 +44,7 @@ func (s *userService) Create(ctx context.Context, input domain.CreateUserInput) 
 		return domain.User{}, domain.ErrInvalidInput
 	}
 
-	exists, err := s.groups.ExistsAll(ctx, input.GroupIDs)
+	exists, err := s.groups.AllExist(ctx, input.GroupIDs)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -62,7 +62,7 @@ func (s *userService) Create(ctx context.Context, input domain.CreateUserInput) 
 		return domain.User{}, err
 	}
 
-	return s.users.Create(
+	return s.users.Save(
 		ctx,
 		domain.User{
 			Username: username,
@@ -73,7 +73,7 @@ func (s *userService) Create(ctx context.Context, input domain.CreateUserInput) 
 	)
 }
 
-func (s *userService) Update(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error) {
+func (s *userService) UpdateUser(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error) {
 	if _, err := s.users.FindByID(ctx, id); err != nil {
 		return domain.User{}, err
 	}
@@ -125,7 +125,7 @@ func (s *userService) Update(ctx context.Context, id uint, input domain.UpdateUs
 	return updated, nil
 }
 
-func (s *userService) Delete(ctx context.Context, id uint) error {
+func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 	current, err := s.users.FindByID(ctx, id)
 	if err != nil {
 		return err
@@ -148,7 +148,7 @@ func (s *userService) Delete(ctx context.Context, id uint) error {
 	return s.sessions.RevokeUser(ctx, id)
 }
 
-func (s *userService) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
+func (s *userService) UpdateUserRole(ctx context.Context, id uint, role string) (domain.User, error) {
 	role = strings.ToLower(strings.TrimSpace(role))
 
 	if role != domain.RoleUser && role != domain.RoleAdmin {
@@ -187,7 +187,7 @@ func (s *userService) SetRole(ctx context.Context, id uint, role string) (domain
 		}
 	}
 
-	updated, err := s.users.SetRole(ctx, id, role)
+	updated, err := s.users.UpdateRole(ctx, id, role)
 
 	if err != nil {
 		return domain.User{}, err

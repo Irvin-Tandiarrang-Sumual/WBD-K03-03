@@ -29,7 +29,7 @@ func TestListDelegatesToRepository(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	groups, total, err := service.List(context.Background(), params)
+	groups, total, err := service.GetAllGroups(context.Background(), params)
 	if err != nil || !reflect.DeepEqual(groups, want) || total != 7 {
 		t.Fatalf("List() = %#v, %d, %v", groups, total, err)
 	}
@@ -51,7 +51,7 @@ func TestGetDelegatesToRepository(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	group, err := service.Get(context.Background(), 4)
+	group, err := service.GetGroupByID(context.Background(), 4)
 	if err != nil || !reflect.DeepEqual(group, want) {
 		t.Fatalf("Get() = %+v, %v", group, err)
 	}
@@ -98,7 +98,7 @@ func TestCreateNormalizesAndSortsDatabaseAccesses(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	created, err := service.Create(
+	created, err := service.CreateGroup(
 		context.Background(),
 		domain.CreateGroupInput{
 			Name: "  analyst  ",
@@ -144,7 +144,7 @@ func TestCreateRequiresAtLeastOneDatabase(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	_, err := service.Create(
+	_, err := service.CreateGroup(
 		context.Background(),
 		domain.CreateGroupInput{
 			Name: "empty",
@@ -170,7 +170,7 @@ func TestCreateRejectsInvalidDatabaseAccess(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	_, err := service.Create(
+	_, err := service.CreateGroup(
 		context.Background(),
 		domain.CreateGroupInput{
 			Name: "analyst",
@@ -194,7 +194,7 @@ func TestCreateRejectsDuplicateDatabaseAccess(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	_, err := service.Create(
+	_, err := service.CreateGroup(
 		context.Background(),
 		domain.CreateGroupInput{
 			Name: "analyst",
@@ -544,7 +544,7 @@ func TestUpdateAccessRevokesAllGroupMembers(t *testing.T) {
 		},
 	}
 
-	_, err := service.Update(
+	_, err := service.UpdateGroup(
 		context.Background(),
 		2,
 		domain.UpdateGroupInput{
@@ -600,7 +600,7 @@ func TestDeleteRemovesGroupAndRevokesMembers(t *testing.T) {
 		},
 	)
 
-	if err := service.Delete(context.Background(), 2); err != nil {
+	if err := service.DeleteGroup(context.Background(), 2); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 	if !deleted || !reflect.DeepEqual(revoked, []uint{7, 8}) {
@@ -614,7 +614,7 @@ func TestUpdateValidationAndDependencyErrors(t *testing.T) {
 		&testutil.GroupRepository{FindByIDFunc: func(context.Context, uint) (domain.Group, error) { return domain.Group{}, findErr }},
 		&testutil.UserRepository{}, &testutil.DatabaseRepository{}, &testutil.SessionService{},
 	)
-	if _, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{}); !errors.Is(err, findErr) {
+	if _, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{}); !errors.Is(err, findErr) {
 		t.Fatalf("find error=%v", err)
 	}
 
@@ -623,7 +623,7 @@ func TestUpdateValidationAndDependencyErrors(t *testing.T) {
 		&testutil.GroupRepository{FindByIDFunc: func(context.Context, uint) (domain.Group, error) { return domain.Group{ID: 1, Name: "old"}, nil }},
 		&testutil.UserRepository{}, &testutil.DatabaseRepository{}, &testutil.SessionService{},
 	)
-	if _, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{Name: &blank}); !errors.Is(err, domain.ErrInvalidInput) {
+	if _, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{Name: &blank}); !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("blank name error=%v", err)
 	}
 }
@@ -646,7 +646,7 @@ func TestUpdateSameAccessDoesNotRevokeUsers(t *testing.T) {
 		&testutil.DatabaseRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return true, nil }},
 		&testutil.SessionService{},
 	)
-	if _, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &accesses}); err != nil {
+	if _, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &accesses}); err != nil {
 		t.Fatal(err)
 	}
 	if listUsersCalled {
@@ -664,7 +664,7 @@ func TestUpdateRejectsMissingDatabaseAndPropagatesRevokeFailure(t *testing.T) {
 		&testutil.DatabaseRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return false, nil }},
 		&testutil.SessionService{},
 	)
-	if _, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &newAccesses}); !errors.Is(err, domain.ErrDatabaseNotFound) {
+	if _, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &newAccesses}); !errors.Is(err, domain.ErrDatabaseNotFound) {
 		t.Fatalf("error=%v", err)
 	}
 
@@ -681,7 +681,7 @@ func TestUpdateRejectsMissingDatabaseAndPropagatesRevokeFailure(t *testing.T) {
 		&testutil.DatabaseRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return true, nil }},
 		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { return revokeErr }},
 	)
-	if _, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &newAccesses}); !errors.Is(err, revokeErr) {
+	if _, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &newAccesses}); !errors.Is(err, revokeErr) {
 		t.Fatalf("error=%v", err)
 	}
 }
@@ -758,7 +758,7 @@ func TestDeleteRejectsLastGroupForRegularUser(t *testing.T) {
 		}},
 		&testutil.DatabaseRepository{}, &testutil.SessionService{},
 	)
-	if err := service.Delete(context.Background(), 1); !errors.Is(err, domain.ErrUserMustHaveGroup) {
+	if err := service.DeleteGroup(context.Background(), 1); !errors.Is(err, domain.ErrUserMustHaveGroup) {
 		t.Fatalf("error=%v", err)
 	}
 	if deleted {
@@ -779,7 +779,7 @@ func TestCreateGroupHandlesDatabaseExistsErrorAndDuplicateAccess(t *testing.T) {
 		},
 		&testutil.SessionService{},
 	)
-	_, err := service.Create(context.Background(), domain.CreateGroupInput{
+	_, err := service.CreateGroup(context.Background(), domain.CreateGroupInput{
 		Name: "dev-team",
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
@@ -790,7 +790,7 @@ func TestCreateGroupHandlesDatabaseExistsErrorAndDuplicateAccess(t *testing.T) {
 	}
 
 	// Duplicate database ID in access inputs
-	_, err = service.Create(context.Background(), domain.CreateGroupInput{
+	_, err = service.CreateGroup(context.Background(), domain.CreateGroupInput{
 		Name: "dev-team",
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
@@ -816,7 +816,7 @@ func TestUpdateGroupRejectsBlankNameAndHandlesDatabaseExistsError(t *testing.T) 
 
 	// Blank name
 	blank := "   "
-	_, err := service.Update(context.Background(), 1, domain.UpdateGroupInput{Name: &blank})
+	_, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{Name: &blank})
 	if !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("error=%v, want ErrInvalidInput", err)
 	}
@@ -838,7 +838,7 @@ func TestUpdateGroupRejectsBlankNameAndHandlesDatabaseExistsError(t *testing.T) 
 		&testutil.SessionService{},
 	)
 	accesses := []domain.DatabaseAccess{{DatabaseID: 2, AccessType: domain.AccessViewOnly}}
-	_, err = serviceDbErr.Update(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &accesses})
+	_, err = serviceDbErr.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{DatabaseAccesses: &accesses})
 	if !errors.Is(err, dbErr) {
 		t.Fatalf("error=%v, want dbErr", err)
 	}
@@ -856,7 +856,7 @@ func TestDeleteGroupHandlesDependencyErrors(t *testing.T) {
 		&testutil.DatabaseRepository{},
 		&testutil.SessionService{},
 	)
-	if err := serviceListErr.Delete(context.Background(), 1); !errors.Is(err, listErr) {
+	if err := serviceListErr.DeleteGroup(context.Background(), 1); !errors.Is(err, listErr) {
 		t.Fatalf("error=%v, want listErr", err)
 	}
 
@@ -873,7 +873,7 @@ func TestDeleteGroupHandlesDependencyErrors(t *testing.T) {
 		&testutil.DatabaseRepository{},
 		&testutil.SessionService{},
 	)
-	if err := serviceUserErr.Delete(context.Background(), 1); !errors.Is(err, userErr) {
+	if err := serviceUserErr.DeleteGroup(context.Background(), 1); !errors.Is(err, userErr) {
 		t.Fatalf("error=%v, want userErr", err)
 	}
 
@@ -891,7 +891,7 @@ func TestDeleteGroupHandlesDependencyErrors(t *testing.T) {
 		&testutil.DatabaseRepository{},
 		&testutil.SessionService{},
 	)
-	if err := serviceCountErr.Delete(context.Background(), 1); !errors.Is(err, countErr) {
+	if err := serviceCountErr.DeleteGroup(context.Background(), 1); !errors.Is(err, countErr) {
 		t.Fatalf("error=%v, want countErr", err)
 	}
 }

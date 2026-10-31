@@ -29,7 +29,7 @@ func TestListDelegatesToRepository(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	users, total, err := service.List(context.Background(), params)
+	users, total, err := service.GetAllUsers(context.Background(), params)
 	if err != nil || !reflect.DeepEqual(users, want) || total != 3 {
 		t.Fatalf("List() = %#v, %d, %v", users, total, err)
 	}
@@ -50,7 +50,7 @@ func TestGetDelegatesToRepository(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	user, err := service.Get(context.Background(), 4)
+	user, err := service.GetUserByID(context.Background(), 4)
 	if err != nil || !reflect.DeepEqual(user, want) {
 		t.Fatalf("Get() = %+v, %v", user, err)
 	}
@@ -98,7 +98,7 @@ func TestCreateHashesPasswordAndCreatesRegularUser(t *testing.T) {
 		sessions,
 	)
 
-	created, err := service.Create(
+	created, err := service.CreateUser(
 		context.Background(),
 		domain.CreateUserInput{
 			Username: "  alice  ",
@@ -163,7 +163,7 @@ func TestCreateRejectsInvalidGroupIDs(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	_, err := service.Create(
+	_, err := service.CreateUser(
 		context.Background(),
 		domain.CreateUserInput{
 			Username: "alice",
@@ -248,7 +248,7 @@ func TestUpdatePasswordRevokesSessions(t *testing.T) {
 
 	password := "new-secret"
 
-	_, err := service.Update(
+	_, err := service.UpdateUser(
 		context.Background(),
 		3,
 		domain.UpdateUserInput{
@@ -267,7 +267,7 @@ func TestUpdatePasswordRevokesSessions(t *testing.T) {
 	}
 }
 
-func TestSetRoleRevokesSessions(t *testing.T) {
+func TestUpdateUserRoleRevokesSessions(t *testing.T) {
 	users := &testutil.UserRepository{
 		FindByIDFunc: func(
 			context.Context,
@@ -279,7 +279,7 @@ func TestSetRoleRevokesSessions(t *testing.T) {
 			}, nil
 		},
 
-		SetRoleFunc: func(
+		UpdateUserRoleFunc: func(
 			_ context.Context,
 			id uint,
 			role string,
@@ -309,14 +309,14 @@ func TestSetRoleRevokesSessions(t *testing.T) {
 		sessions,
 	)
 
-	updated, err := service.SetRole(
+	updated, err := service.UpdateUserRole(
 		context.Background(),
 		4,
 		domain.RoleAdmin,
 	)
 
 	if err != nil {
-		t.Fatalf("SetRole() error = %v", err)
+		t.Fatalf("UpdateUserRole() error = %v", err)
 	}
 
 	if updated.Role != domain.RoleAdmin || !revoked {
@@ -328,14 +328,14 @@ func TestSetRoleRevokesSessions(t *testing.T) {
 	}
 }
 
-func TestSetRoleRejectsInvalidRole(t *testing.T) {
+func TestUpdateUserRoleRejectsInvalidRole(t *testing.T) {
 	service := userservice.NewUserService(
 		&testutil.UserRepository{},
 		&testutil.GroupRepository{},
 		&testutil.SessionService{},
 	)
 
-	_, err := service.SetRole(
+	_, err := service.UpdateUserRole(
 		context.Background(),
 		1,
 		"superadmin",
@@ -349,7 +349,7 @@ func TestSetRoleRejectsInvalidRole(t *testing.T) {
 	}
 }
 
-func TestSetRoleRejectsRegularUserWithoutGroup(t *testing.T) {
+func TestUpdateUserRoleRejectsRegularUserWithoutGroup(t *testing.T) {
 	users := &testutil.UserRepository{
 		FindByIDFunc: func(
 			context.Context,
@@ -377,7 +377,7 @@ func TestSetRoleRejectsRegularUserWithoutGroup(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	_, err := service.SetRole(
+	_, err := service.UpdateUserRole(
 		context.Background(),
 		5,
 		domain.RoleUser,
@@ -413,7 +413,7 @@ func TestDeleteRemovesUserAndRevokesSessions(t *testing.T) {
 		},
 	)
 
-	if err := service.Delete(context.Background(), 6); err != nil {
+	if err := service.DeleteUser(context.Background(), 6); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 	if !deleted || !revoked {
@@ -430,7 +430,7 @@ func TestCreateRejectsInvalidInputs(t *testing.T) {
 	}
 	for index, input := range tests {
 		service := userservice.NewUserService(&testutil.UserRepository{}, &testutil.GroupRepository{}, &testutil.SessionService{})
-		_, err := service.Create(context.Background(), input)
+		_, err := service.CreateUser(context.Background(), input)
 		if !errors.Is(err, domain.ErrInvalidInput) {
 			t.Fatalf("case %d error=%v", index, err)
 		}
@@ -444,7 +444,7 @@ func TestCreatePropagatesGroupAndRepositoryErrors(t *testing.T) {
 		&testutil.GroupRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return false, groupErr }},
 		&testutil.SessionService{},
 	)
-	_, err := service.Create(context.Background(), domain.CreateUserInput{Username: "user", Password: "secret", GroupIDs: []uint{1}})
+	_, err := service.CreateUser(context.Background(), domain.CreateUserInput{Username: "user", Password: "secret", GroupIDs: []uint{1}})
 	if !errors.Is(err, groupErr) {
 		t.Fatalf("error=%v", err)
 	}
@@ -455,7 +455,7 @@ func TestCreatePropagatesGroupAndRepositoryErrors(t *testing.T) {
 		&testutil.GroupRepository{ExistsAllFunc: func(context.Context, []uint) (bool, error) { return true, nil }},
 		&testutil.SessionService{},
 	)
-	_, err = service.Create(context.Background(), domain.CreateUserInput{Username: "user", Password: "secret", GroupIDs: []uint{1}})
+	_, err = service.CreateUser(context.Background(), domain.CreateUserInput{Username: "user", Password: "secret", GroupIDs: []uint{1}})
 	if !errors.Is(err, repositoryErr) {
 		t.Fatalf("error=%v", err)
 	}
@@ -467,7 +467,7 @@ func TestUpdateValidationAndErrors(t *testing.T) {
 		&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{}, findErr }},
 		&testutil.GroupRepository{}, &testutil.SessionService{},
 	)
-	_, err := service.Update(context.Background(), 1, domain.UpdateUserInput{})
+	_, err := service.UpdateUser(context.Background(), 1, domain.UpdateUserInput{})
 	if !errors.Is(err, findErr) {
 		t.Fatalf("error=%v", err)
 	}
@@ -480,7 +480,7 @@ func TestUpdateValidationAndErrors(t *testing.T) {
 			&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{ID: 1}, nil }},
 			&testutil.GroupRepository{}, &testutil.SessionService{},
 		)
-		_, err = service.Update(context.Background(), 1, input)
+		_, err = service.UpdateUser(context.Background(), 1, input)
 		if !errors.Is(err, domain.ErrInvalidInput) {
 			t.Fatalf("input=%+v error=%v", input, err)
 		}
@@ -503,7 +503,7 @@ func TestUpdateWithoutPasswordDoesNotRevokeSession(t *testing.T) {
 		&testutil.GroupRepository{},
 		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { revoked = true; return nil }},
 	)
-	_, err := service.Update(context.Background(), 1, domain.UpdateUserInput{Username: &name})
+	_, err := service.UpdateUser(context.Background(), 1, domain.UpdateUserInput{Username: &name})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +522,7 @@ func TestUpdatePropagatesRepositoryAndRevokeErrors(t *testing.T) {
 		},
 		&testutil.GroupRepository{}, &testutil.SessionService{},
 	)
-	_, err := service.Update(context.Background(), 1, domain.UpdateUserInput{Password: &password})
+	_, err := service.UpdateUser(context.Background(), 1, domain.UpdateUserInput{Password: &password})
 	if !errors.Is(err, updateErr) {
 		t.Fatalf("error=%v", err)
 	}
@@ -536,13 +536,13 @@ func TestUpdatePropagatesRepositoryAndRevokeErrors(t *testing.T) {
 		&testutil.GroupRepository{},
 		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { return revokeErr }},
 	)
-	_, err = service.Update(context.Background(), 1, domain.UpdateUserInput{Password: &password})
+	_, err = service.UpdateUser(context.Background(), 1, domain.UpdateUserInput{Password: &password})
 	if !errors.Is(err, revokeErr) {
 		t.Fatalf("error=%v", err)
 	}
 }
 
-func TestSetRoleNoopDoesNotRevoke(t *testing.T) {
+func TestUpdateUserRoleNoopDoesNotRevoke(t *testing.T) {
 	revoked := false
 	service := userservice.NewUserService(
 		&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) {
@@ -551,7 +551,7 @@ func TestSetRoleNoopDoesNotRevoke(t *testing.T) {
 		&testutil.GroupRepository{},
 		&testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { revoked = true; return nil }},
 	)
-	user, err := service.SetRole(context.Background(), 1, " ADMIN ")
+	user, err := service.UpdateUserRole(context.Background(), 1, " ADMIN ")
 	if err != nil || user.Role != domain.RoleAdmin {
 		t.Fatalf("user=%+v err=%v", user, err)
 	}
@@ -566,7 +566,7 @@ func TestDeletePropagatesDependencyErrors(t *testing.T) {
 		&testutil.UserRepository{FindByIDFunc: func(context.Context, uint) (domain.User, error) { return domain.User{}, findErr }},
 		&testutil.GroupRepository{}, &testutil.SessionService{},
 	)
-	if err := service.Delete(context.Background(), 1); !errors.Is(err, findErr) {
+	if err := service.DeleteUser(context.Background(), 1); !errors.Is(err, findErr) {
 		t.Fatalf("error=%v", err)
 	}
 
@@ -578,13 +578,12 @@ func TestDeletePropagatesDependencyErrors(t *testing.T) {
 		},
 		&testutil.GroupRepository{}, &testutil.SessionService{},
 	)
-	if err := service.Delete(context.Background(), 1); !errors.Is(err, deleteErr) {
+	if err := service.DeleteUser(context.Background(), 1); !errors.Is(err, deleteErr) {
 		t.Fatalf("error=%v", err)
 	}
 }
 
-
-func TestSetRoleRejectsDemotingLastAdmin(t *testing.T) {
+func TestUpdateUserRoleRejectsDemotingLastAdmin(t *testing.T) {
 	service := userservice.NewUserService(
 		&testutil.UserRepository{
 			FindByIDFunc: func(context.Context, uint) (domain.User, error) {
@@ -605,7 +604,7 @@ func TestSetRoleRejectsDemotingLastAdmin(t *testing.T) {
 		&testutil.SessionService{},
 	)
 
-	_, err := service.SetRole(context.Background(), 1, domain.RoleUser)
+	_, err := service.UpdateUserRole(context.Background(), 1, domain.RoleUser)
 	if !errors.Is(err, domain.ErrLastAdmin) {
 		t.Fatalf("error = %v, want ErrLastAdmin", err)
 	}
@@ -625,7 +624,7 @@ func TestDeleteRejectsLastAdminAndHandlesCountErrors(t *testing.T) {
 		&testutil.GroupRepository{},
 		&testutil.SessionService{},
 	)
-	err := serviceLastAdmin.Delete(context.Background(), 1)
+	err := serviceLastAdmin.DeleteUser(context.Background(), 1)
 	if !errors.Is(err, domain.ErrLastAdmin) {
 		t.Fatalf("error=%v, want ErrLastAdmin", err)
 	}
@@ -644,7 +643,7 @@ func TestDeleteRejectsLastAdminAndHandlesCountErrors(t *testing.T) {
 		&testutil.GroupRepository{},
 		&testutil.SessionService{},
 	)
-	if err := serviceCountErr.Delete(context.Background(), 1); !errors.Is(err, countErr) {
+	if err := serviceCountErr.DeleteUser(context.Background(), 1); !errors.Is(err, countErr) {
 		t.Fatalf("error=%v, want countErr", err)
 	}
 
@@ -666,12 +665,12 @@ func TestDeleteRejectsLastAdminAndHandlesCountErrors(t *testing.T) {
 			},
 		},
 	)
-	if err := serviceRevokeErr.Delete(context.Background(), 2); !errors.Is(err, revokeErr) {
+	if err := serviceRevokeErr.DeleteUser(context.Background(), 2); !errors.Is(err, revokeErr) {
 		t.Fatalf("error=%v, want revokeErr", err)
 	}
 }
 
-func TestSetRolePropagatesCountAndAdminErrors(t *testing.T) {
+func TestUpdateUserRolePropagatesCountAndAdminErrors(t *testing.T) {
 	// CountUserGroups error when demoting to user
 	groupCountErr := errors.New("group count error")
 	serviceGroupErr := userservice.NewUserService(
@@ -687,7 +686,7 @@ func TestSetRolePropagatesCountAndAdminErrors(t *testing.T) {
 		},
 		&testutil.SessionService{},
 	)
-	_, err := serviceGroupErr.SetRole(context.Background(), 1, domain.RoleUser)
+	_, err := serviceGroupErr.UpdateUserRole(context.Background(), 1, domain.RoleUser)
 	if !errors.Is(err, groupCountErr) {
 		t.Fatalf("error=%v, want groupCountErr", err)
 	}
@@ -710,7 +709,7 @@ func TestSetRolePropagatesCountAndAdminErrors(t *testing.T) {
 		},
 		&testutil.SessionService{},
 	)
-	_, err = serviceAdminErr.SetRole(context.Background(), 1, domain.RoleUser)
+	_, err = serviceAdminErr.UpdateUserRole(context.Background(), 1, domain.RoleUser)
 	if !errors.Is(err, adminCountErr) {
 		t.Fatalf("error=%v, want adminCountErr", err)
 	}

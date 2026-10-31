@@ -33,7 +33,7 @@ func NewSessionService(sessions ports.SessionRepository) ports.SessionService {
 	}
 }
 
-func (s *sessionService) Create(ctx context.Context, userID uint) (domain.Session, error) {
+func (s *sessionService) CreateSession(ctx context.Context, userID uint) (domain.Session, error) {
 	opaqueToken, err := generateOpaqueToken()
 	if err != nil {
 		return domain.Session{}, err
@@ -50,7 +50,7 @@ func (s *sessionService) Create(ctx context.Context, userID uint) (domain.Sessio
 		UserID:             userID,
 	}
 
-	return s.sessions.Create(ctx, session)
+	return s.sessions.Save(ctx, session)
 }
 
 func (s *sessionService) Resolve(ctx context.Context, opaqueToken string) (domain.Session, error) {

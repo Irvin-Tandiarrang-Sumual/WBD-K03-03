@@ -8,25 +8,22 @@ import (
 )
 
 type UserService interface {
-	List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error)
-	Get(ctx context.Context, id uint) (domain.User, error)
-	Create(ctx context.Context, input domain.CreateUserInput) (domain.User, error)
-	Update(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error)
-	Delete(ctx context.Context, id uint) error
-	SetRole(ctx context.Context, id uint, role string) (domain.User, error)
+	GetAllUsers(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error)
+	GetUserByID(ctx context.Context, id uint) (domain.User, error)
+	CreateUser(ctx context.Context, input domain.CreateUserInput) (domain.User, error)
+	UpdateUser(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error)
+	DeleteUser(ctx context.Context, id uint) error
+	UpdateUserRole(ctx context.Context, id uint, role string) (domain.User, error)
 }
 
 type UserRepository interface {
-	List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error)
-
+	FindAll(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error)
 	FindByID(ctx context.Context, id uint) (domain.User, error)
-
-	FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error)
-
 	CountByRole(ctx context.Context, role string) (int64, error)
-
-	Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error)
+	Save(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error)
 	Update(ctx context.Context, id uint, username *string, passwordHash *string) (domain.User, error)
 	Delete(ctx context.Context, id uint) error
-	SetRole(ctx context.Context, id uint, role string) (domain.User, error)
+
+	FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error)
+	UpdateRole(ctx context.Context, id uint, role string) (domain.User, error)
 }

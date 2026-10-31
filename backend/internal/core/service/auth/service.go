@@ -44,7 +44,7 @@ func (s *authService) Login(ctx context.Context, username string, password strin
 		return domain.User{}, domain.Session{}, domain.ErrInvalidCredentials
 	}
 
-	session, err := s.sessions.Create(ctx, user.ID)
+	session, err := s.sessions.CreateSession(ctx, user.ID)
 	if err != nil {
 		return domain.User{}, domain.Session{}, err
 	}

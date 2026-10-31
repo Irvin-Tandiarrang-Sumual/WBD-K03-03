@@ -23,7 +23,7 @@ func NewSessionRepository(db *gorm.DB) ports.SessionRepository {
 	}
 }
 
-func (r *sessionRepository) Create(ctx context.Context, session domain.Session) (domain.Session, error) {
+func (r *sessionRepository) Save(ctx context.Context, session domain.Session) (domain.Session, error) {
 	rotatedAt := session.RotatedAt
 	if rotatedAt.IsZero() {
 		rotatedAt = session.LastActive

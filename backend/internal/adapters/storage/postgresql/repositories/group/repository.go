@@ -21,7 +21,7 @@ func NewGroupRepository(db *gorm.DB) ports.GroupRepository {
 	return &groupRepository{db: db}
 }
 
-func (r *groupRepository) List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
+func (r *groupRepository) FindAll(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
 	var storedGroups []models.Group
 	var total int64
 
@@ -108,7 +108,7 @@ func (r *groupRepository) FindByID(ctx context.Context, id uint) (domain.Group, 
 	}, nil
 }
 
-func (r *groupRepository) ExistsAll(ctx context.Context, ids []uint) (bool, error) {
+func (r *groupRepository) AllExist(ctx context.Context, ids []uint) (bool, error) {
 	if len(ids) == 0 {
 		return true, nil
 	}
@@ -136,7 +136,7 @@ func (r *groupRepository) ExistsAll(ctx context.Context, ids []uint) (bool, erro
 	return count == int64(len(cleanIDs)), nil
 }
 
-func (r *groupRepository) Create(ctx context.Context, group domain.Group) (domain.Group, error) {
+func (r *groupRepository) Save(ctx context.Context, group domain.Group) (domain.Group, error) {
 	var created domain.Group
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		storedGroup := models.Group{

@@ -21,7 +21,7 @@ func NewUserRepository(db *gorm.DB) ports.UserRepository {
 	return &userRepository{db: db}
 }
 
-func (r *userRepository) List(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
+func (r *userRepository) FindAll(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
 	var storedUsers []models.User
 	var total int64
 
@@ -79,7 +79,7 @@ func (r *userRepository) CountByRole(ctx context.Context, role string) (int64, e
 	return count, err
 }
 
-func (r *userRepository) Create(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {
+func (r *userRepository) Save(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {
 	var created domain.User
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -199,7 +199,7 @@ func (r *userRepository) Delete(ctx context.Context, id uint) error {
 	})
 }
 
-func (r *userRepository) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
+func (r *userRepository) UpdateRole(ctx context.Context, id uint, role string) (domain.User, error) {
 	result := r.db.
 		WithContext(ctx).
 		Model(&models.User{}).

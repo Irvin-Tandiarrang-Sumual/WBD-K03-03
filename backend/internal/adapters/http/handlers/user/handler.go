@@ -41,7 +41,7 @@ func (h *UserHandler) List(c *gin.Context) {
 		return
 	}
 
-	users, totalData, err := h.service.List(c.Request.Context(), params)
+	users, totalData, err := h.service.GetAllUsers(c.Request.Context(), params)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -84,7 +84,7 @@ func (h *UserHandler) Get(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Get(c.Request.Context(), userID)
+	user, err := h.service.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -124,7 +124,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		GroupIDs: request.GroupIDs,
 	}
 
-	createdUser, err := h.service.Create(c.Request.Context(), input)
+	createdUser, err := h.service.CreateUser(c.Request.Context(), input)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -170,7 +170,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		Password: request.Password,
 	}
 
-	updatedUser, err := h.service.Update(c.Request.Context(), userID, input)
+	updatedUser, err := h.service.UpdateUser(c.Request.Context(), userID, input)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -202,7 +202,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), userID); err != nil {
+	if err := h.service.DeleteUser(c.Request.Context(), userID); err != nil {
 		writeError(c, err)
 		return
 	}
@@ -241,7 +241,7 @@ func (h *UserHandler) SetRole(c *gin.Context) {
 		return
 	}
 
-	updatedUser, err := h.service.SetRole(c.Request.Context(), userID, request.Role)
+	updatedUser, err := h.service.UpdateUserRole(c.Request.Context(), userID, request.Role)
 	if err != nil {
 		writeError(c, err)
 		return

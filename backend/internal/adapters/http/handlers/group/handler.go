@@ -41,7 +41,7 @@ func (h *GroupHandler) List(c *gin.Context) {
 		return
 	}
 
-	groups, totalData, err := h.service.List(c.Request.Context(), params)
+	groups, totalData, err := h.service.GetAllGroups(c.Request.Context(), params)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -84,7 +84,7 @@ func (h *GroupHandler) Get(c *gin.Context) {
 		return
 	}
 
-	group, err := h.service.Get(c.Request.Context(), groupID)
+	group, err := h.service.GetGroupByID(c.Request.Context(), groupID)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -123,7 +123,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		DatabaseAccesses: toDatabaseAccesses(request.DatabaseAccesses),
 	}
 
-	group, err := h.service.Create(c.Request.Context(), input)
+	group, err := h.service.CreateGroup(c.Request.Context(), input)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -173,7 +173,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		input.DatabaseAccesses = &accesses
 	}
 
-	group, err := h.service.Update(c.Request.Context(), groupID, input)
+	group, err := h.service.UpdateGroup(c.Request.Context(), groupID, input)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -205,7 +205,7 @@ func (h *GroupHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), groupID); err != nil {
+	if err := h.service.DeleteGroup(c.Request.Context(), groupID); err != nil {
 		writeError(c, err)
 		return
 	}

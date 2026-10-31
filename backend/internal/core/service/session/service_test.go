@@ -28,7 +28,7 @@ func TestCreateBuildsOpaqueSession(t *testing.T) {
 
 	service := sessionservice.NewSessionService(repo)
 
-	session, err := service.Create(
+	session, err := service.CreateSession(
 		context.Background(),
 		5,
 	)
@@ -421,7 +421,7 @@ func TestCreatePropagatesRepositoryError(t *testing.T) {
 	}
 	service := sessionservice.NewSessionService(repo)
 
-	_, err := service.Create(context.Background(), 5)
+	_, err := service.CreateSession(context.Background(), 5)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Create() error = %v, want %v", err, wantErr)
 	}

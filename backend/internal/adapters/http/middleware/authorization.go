@@ -54,7 +54,7 @@ func RequireAdmin(users ports.UserService) gin.HandlerFunc {
 			return
 		}
 
-		user, err := users.Get(c.Request.Context(), userID)
+		user, err := users.GetUserByID(c.Request.Context(), userID)
 		if err != nil {
 			if errors.Is(err, domain.ErrUserNotFound) {
 				abortUnauthorized(c)
