@@ -1,4 +1,4 @@
-package migration
+package repositories
 
 import (
 	"context"
@@ -37,7 +37,7 @@ func (r *migrationRepository) FindAllByDatabaseID(ctx context.Context, databaseI
 
 	result := make([]*domain.Migration, 0, len(migrations))
 	for _, migration := range migrations {
-		result = append(result, toDomain(migration))
+		result = append(result, toDomainMigration(migration))
 	}
 	return result, total, nil
 }
@@ -54,7 +54,7 @@ func (r *migrationRepository) FindLatestByDatabaseID(ctx context.Context, databa
 		}
 		return nil, err
 	}
-	return toDomain(migration), nil
+	return toDomainMigration(migration), nil
 }
 
 func (r *migrationRepository) FindLatestSuccessfulByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
@@ -69,7 +69,7 @@ func (r *migrationRepository) FindLatestSuccessfulByDatabaseID(ctx context.Conte
 		}
 		return nil, err
 	}
-	return toDomain(migration), nil
+	return toDomainMigration(migration), nil
 }
 
 func (r *migrationRepository) Save(ctx context.Context, migration *domain.Migration) (*domain.Migration, error) {
@@ -92,7 +92,7 @@ func (r *migrationRepository) Save(ctx context.Context, migration *domain.Migrat
 	if err := r.db.WithContext(ctx).Create(&migrationModel).Error; err != nil {
 		return nil, err
 	}
-	return toDomain(migrationModel), nil
+	return toDomainMigration(migrationModel), nil
 }
 
 func (r *migrationRepository) Update(ctx context.Context, migration *domain.Migration) (*domain.Migration, error) {
@@ -104,7 +104,7 @@ func (r *migrationRepository) Update(ctx context.Context, migration *domain.Migr
 	if err := r.db.WithContext(ctx).Save(&migrationModel).Error; err != nil {
 		return nil, err
 	}
-	return toDomain(migrationModel), nil
+	return toDomainMigration(migrationModel), nil
 }
 
 func (r *migrationRepository) FindByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint) (*domain.Migration, error) {
@@ -118,7 +118,7 @@ func (r *migrationRepository) FindByIDAndDatabaseID(ctx context.Context, migrati
 		}
 		return nil, err
 	}
-	return toDomain(migration), nil
+	return toDomainMigration(migration), nil
 }
 
 func (r *migrationRepository) FindByVersionAndDatabaseID(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
@@ -132,10 +132,10 @@ func (r *migrationRepository) FindByVersionAndDatabaseID(ctx context.Context, ve
 		}
 		return nil, err
 	}
-	return toDomain(migration), nil
+	return toDomainMigration(migration), nil
 }
 
-func toDomain(migration model.Migration) *domain.Migration {
+func toDomainMigration(migration model.Migration) *domain.Migration {
 	return &domain.Migration{
 		ID:           migration.ID,
 		DatabaseID:   uint(migration.DatabaseID),

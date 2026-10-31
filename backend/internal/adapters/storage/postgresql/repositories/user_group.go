@@ -1,4 +1,4 @@
-package usergroup
+package repositories
 
 import (
 	"context"
@@ -18,10 +18,6 @@ var _ ports.UserGroupRepository = (*userGroupRepository)(nil)
 
 func NewUserGroupRepository(db *gorm.DB) ports.UserGroupRepository {
 	return &userGroupRepository{db: db}
-}
-
-func NewGroupRepository(db *gorm.DB) ports.UserGroupRepository {
-	return NewUserGroupRepository(db)
 }
 
 func (r *userGroupRepository) AddUser(ctx context.Context, groupID uint, userID uint) error {

@@ -1,4 +1,4 @@
-package session
+package repositories
 
 import (
 	"context"
@@ -73,7 +73,7 @@ func (r *sessionRepository) FindByToken(ctx context.Context, opaqueToken string)
 		return domain.Session{}, err
 	}
 
-	return toDomain(storedSession), nil
+	return toDomainSession(storedSession), nil
 }
 
 func (r *sessionRepository) Touch(ctx context.Context, id uint, lastActive time.Time) error {
@@ -139,7 +139,7 @@ func (r *sessionRepository) DeleteByUserID(ctx context.Context, userID uint) err
 		Delete(&models.Session{}).Error
 }
 
-func toDomain(storedSession models.Session) domain.Session {
+func toDomainSession(storedSession models.Session) domain.Session {
 	var gracePeriodUntil time.Time
 	if storedSession.GracePeriodUntil != nil {
 		gracePeriodUntil = *storedSession.GracePeriodUntil

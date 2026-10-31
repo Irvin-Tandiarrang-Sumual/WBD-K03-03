@@ -1,12 +1,7 @@
 package app
 
 import (
-	databaserepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/database"
-	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
-	migrationrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/migration"
-	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
-	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
-	usergrouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user_group"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
@@ -34,15 +29,15 @@ func buildServices(
 	systemDatabase *gorm.DB,
 	infrastructure *targetDatabaseInfrastructure,
 ) (*applicationServices, error) {
-	userRepository := userrepository.NewUserRepository(systemDatabase)
-	groupRepository := grouprepository.NewGroupRepository(systemDatabase)
-	userGroupRepository := usergrouprepository.NewUserGroupRepository(systemDatabase)
-	databaseRepository := databaserepository.NewDatabaseRepository(
+	userRepository := repositories.NewUserRepository(systemDatabase)
+	groupRepository := repositories.NewGroupRepository(systemDatabase)
+	userGroupRepository := repositories.NewUserGroupRepository(systemDatabase)
+	databaseRepository := repositories.NewDatabaseRepository(
 		systemDatabase,
 		infrastructure.credentialCipher,
 	)
-	sessionRepository := sessionrepository.NewSessionRepository(systemDatabase)
-	migrationRepository := migrationrepository.NewMigrationRepository(systemDatabase)
+	sessionRepository := repositories.NewSessionRepository(systemDatabase)
+	migrationRepository := repositories.NewMigrationRepository(systemDatabase)
 
 	sessionService := sessionservice.NewSessionService(sessionRepository)
 	authService := authservice.NewAuthService(userRepository, sessionService)

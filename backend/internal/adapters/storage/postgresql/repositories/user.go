@@ -1,4 +1,4 @@
-package user
+package repositories
 
 import (
 	"context"
@@ -42,7 +42,7 @@ func (r *userRepository) FindAll(ctx context.Context, params pagination.Paginati
 	users := make([]domain.User, 0, len(storedUsers))
 
 	for _, storedUser := range storedUsers {
-		users = append(users, toDomain(storedUser))
+		users = append(users, toDomainUserUser(storedUser))
 	}
 
 	return users, total, nil
@@ -64,7 +64,7 @@ func (r *userRepository) FindByID(ctx context.Context, id uint) (domain.User, er
 		return domain.User{}, err
 	}
 
-	return toDomain(storedUser), nil
+	return toDomainUserUser(storedUser), nil
 }
 
 func (r *userRepository) CountByRole(ctx context.Context, role string) (int64, error) {
@@ -217,7 +217,7 @@ func (r *userRepository) UpdateRole(ctx context.Context, id uint, role string) (
 	return r.FindByID(ctx, id)
 }
 
-func toDomain(storedUser models.User) domain.User {
+func toDomainUserUser(storedUser models.User) domain.User {
 	return domain.User{
 		ID:       storedUser.ID,
 		Username: storedUser.Username,
