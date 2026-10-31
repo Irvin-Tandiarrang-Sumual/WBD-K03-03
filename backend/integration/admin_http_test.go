@@ -17,6 +17,7 @@ import (
 	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
+	usergrouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -35,6 +36,7 @@ func fullIntegrationRouter(t *testing.T, stack *integrationStack) *gin.Engine {
 		authhandler.NewAuthHandler(authService, false),
 		userhandler.NewUserHandler(stack.userService),
 		grouphandler.NewGroupHandler(stack.groupService),
+		usergrouphandler.NewUserGroupHandler(stack.userGroupService),
 		databasehandler.NewDatabaseHandler(stack.databaseService),
 		databaseexecutorhandler.NewDatabaseExecutorHandler(stack.executorService),
 		migrationhandler.NewMigrationHandler(stack.migrationService),
@@ -42,6 +44,7 @@ func fullIntegrationRouter(t *testing.T, stack *integrationStack) *gin.Engine {
 		stack.sessionService,
 		stack.userService,
 		stack.groupService,
+		stack.userGroupService,
 	)
 	return engine
 }
@@ -101,7 +104,7 @@ func responseID(t *testing.T, response *httptest.ResponseRecorder) uint {
 func TestIntegrationAdminUserAndGroupHTTPFlow(t *testing.T) {
 	stack := newIntegrationStack(t, domain.AccessViewEdit)
 
-	admin, err := stack.userService.SetRole(t.Context(), stack.user.ID, domain.RoleAdmin)
+	admin, err := stack.userService.UpdateUserRole(t.Context(), stack.user.ID, domain.RoleAdmin)
 	if err != nil {
 		t.Fatalf("promote integration user: %v", err)
 	}
@@ -184,7 +187,7 @@ func TestIntegrationAdminUserAndGroupHTTPFlow(t *testing.T) {
 func TestIntegrationAdminRejectsLastAdminDeletionAndDuplicateUsername(t *testing.T) {
 	stack := newIntegrationStack(t, domain.AccessViewEdit)
 
-	admin, err := stack.userService.SetRole(t.Context(), stack.user.ID, domain.RoleAdmin)
+	admin, err := stack.userService.UpdateUserRole(t.Context(), stack.user.ID, domain.RoleAdmin)
 	if err != nil {
 		t.Fatalf("promote integration user: %v", err)
 	}

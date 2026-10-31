@@ -53,24 +53,57 @@ func (f *UserRepository) Delete(ctx context.Context, id uint) error {
 }
 
 func (f *UserRepository) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
-	return f.UpdateUserRoleFunc(ctx, id, role)
+	if f.UpdateUserRoleFunc != nil {
+		return f.UpdateUserRoleFunc(ctx, id, role)
+	}
+	return domain.User{}, nil
+}
+
+func (f *UserRepository) FindAll(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
+	if f.ListFunc != nil {
+		return f.ListFunc(ctx, params)
+	}
+	return nil, 0, nil
+}
+
+func (f *UserRepository) Save(ctx context.Context, user domain.User, groupIDs []uint) (domain.User, error) {
+	if f.CreateFunc != nil {
+		return f.CreateFunc(ctx, user, groupIDs)
+	}
+	return domain.User{}, nil
+}
+
+func (f *UserRepository) UpdateRole(ctx context.Context, id uint, role string) (domain.User, error) {
+	if f.UpdateUserRoleFunc != nil {
+		return f.UpdateUserRoleFunc(ctx, id, role)
+	}
+	return domain.User{}, nil
 }
 
 type GroupRepository struct {
 	ports.GroupRepository
-	ListFunc                     func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error)
-	FindByIDFunc                 func(context.Context, uint) (domain.Group, error)
-	ExistsAllFunc                func(context.Context, []uint) (bool, error)
-	CreateFunc                   func(context.Context, domain.Group) (domain.Group, error)
-	UpdateFunc                   func(context.Context, domain.Group) (domain.Group, error)
-	DeleteFunc                   func(context.Context, uint) error
-	AddUserFunc                  func(context.Context, uint, uint) error
-	RemoveUserFunc               func(context.Context, uint, uint) error
-	CountUserGroupsFunc          func(context.Context, uint) (int64, error)
-	ListUserIDsFunc              func(context.Context, uint) ([]uint, error)
-	ListAccessTypesFunc          func(context.Context, uint, uint) ([]domain.AccessType, error)
-	ListUserIDsByDatabaseFunc    func(context.Context, uint) ([]uint, error)
-	HasGroupWithOnlyDatabaseFunc func(context.Context, uint) (bool, error)
+	ports.UserGroupRepository
+	ListFunc                         func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error)
+	FindAllFunc                      func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error)
+	FindByIDFunc                     func(context.Context, uint) (domain.Group, error)
+	ExistsAllFunc                    func(context.Context, []uint) (bool, error)
+	AllExistFunc                     func(context.Context, []uint) (bool, error)
+	CreateFunc                       func(context.Context, domain.Group) (domain.Group, error)
+	SaveFunc                         func(context.Context, domain.Group) (domain.Group, error)
+	UpdateFunc                       func(context.Context, domain.Group) (domain.Group, error)
+	DeleteFunc                       func(context.Context, uint) error
+	AddUserFunc                      func(context.Context, uint, uint) error
+	RemoveUserFunc                   func(context.Context, uint, uint) error
+	CountUserGroupsFunc              func(context.Context, uint) (int64, error)
+	CountByUserIDFunc                func(context.Context, uint) (int64, error)
+	ListUserIDsFunc                  func(context.Context, uint) ([]uint, error)
+	FindAllUserIDsByGroupIDFunc      func(context.Context, uint) ([]uint, error)
+	ListAccessTypesFunc              func(context.Context, uint, uint) ([]domain.AccessType, error)
+	FindAllAccessTypesFunc           func(context.Context, uint, uint) ([]domain.AccessType, error)
+	ListUserIDsByDatabaseFunc        func(context.Context, uint) ([]uint, error)
+	FindAllUserIDsByDatabaseIDFunc   func(context.Context, uint) ([]uint, error)
+	HasGroupWithOnlyDatabaseFunc     func(context.Context, uint) (bool, error)
+	HasGroupWithOnlyThisDatabaseFunc func(context.Context, uint) (bool, error)
 }
 
 func (f *GroupRepository) List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
@@ -122,7 +155,93 @@ func (f *GroupRepository) ListUserIDsByDatabase(ctx context.Context, databaseID 
 }
 
 func (f *GroupRepository) HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error) {
-	return f.HasGroupWithOnlyDatabaseFunc(ctx, databaseID)
+	if f.HasGroupWithOnlyDatabaseFunc != nil {
+		return f.HasGroupWithOnlyDatabaseFunc(ctx, databaseID)
+	}
+	if f.HasGroupWithOnlyThisDatabaseFunc != nil {
+		return f.HasGroupWithOnlyThisDatabaseFunc(ctx, databaseID)
+	}
+	return false, nil
+}
+
+func (f *GroupRepository) FindAll(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
+	if f.FindAllFunc != nil {
+		return f.FindAllFunc(ctx, params)
+	}
+	if f.ListFunc != nil {
+		return f.ListFunc(ctx, params)
+	}
+	return nil, 0, nil
+}
+
+func (f *GroupRepository) AllExist(ctx context.Context, ids []uint) (bool, error) {
+	if f.AllExistFunc != nil {
+		return f.AllExistFunc(ctx, ids)
+	}
+	if f.ExistsAllFunc != nil {
+		return f.ExistsAllFunc(ctx, ids)
+	}
+	return false, nil
+}
+
+func (f *GroupRepository) Save(ctx context.Context, group domain.Group) (domain.Group, error) {
+	if f.SaveFunc != nil {
+		return f.SaveFunc(ctx, group)
+	}
+	if f.CreateFunc != nil {
+		return f.CreateFunc(ctx, group)
+	}
+	return domain.Group{}, nil
+}
+
+func (f *GroupRepository) CountByUserID(ctx context.Context, userID uint) (int64, error) {
+	if f.CountByUserIDFunc != nil {
+		return f.CountByUserIDFunc(ctx, userID)
+	}
+	if f.CountUserGroupsFunc != nil {
+		return f.CountUserGroupsFunc(ctx, userID)
+	}
+	return 0, nil
+}
+
+func (f *GroupRepository) FindAllUserIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error) {
+	if f.FindAllUserIDsByGroupIDFunc != nil {
+		return f.FindAllUserIDsByGroupIDFunc(ctx, groupID)
+	}
+	if f.ListUserIDsFunc != nil {
+		return f.ListUserIDsFunc(ctx, groupID)
+	}
+	return nil, nil
+}
+
+func (f *GroupRepository) FindAllAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
+	if f.FindAllAccessTypesFunc != nil {
+		return f.FindAllAccessTypesFunc(ctx, userID, databaseID)
+	}
+	if f.ListAccessTypesFunc != nil {
+		return f.ListAccessTypesFunc(ctx, userID, databaseID)
+	}
+	return nil, nil
+}
+
+func (f *GroupRepository) FindAllUserIDsByDatabaseID(ctx context.Context, databaseID uint) ([]uint, error) {
+	if f.FindAllUserIDsByDatabaseIDFunc != nil {
+		return f.FindAllUserIDsByDatabaseIDFunc(ctx, databaseID)
+	}
+	if f.ListUserIDsByDatabaseFunc != nil {
+		return f.ListUserIDsByDatabaseFunc(ctx, databaseID)
+	}
+	return nil, nil
+}
+
+func (f *GroupRepository) HasGroupWithOnlyThisDatabase(ctx context.Context, databaseID uint) (bool, error) {
+	if f.HasGroupWithOnlyThisDatabaseFunc != nil {
+		return f.HasGroupWithOnlyThisDatabaseFunc(ctx, databaseID)
+	}
+	if f.HasGroupWithOnlyDatabaseFunc != nil {
+		return f.HasGroupWithOnlyDatabaseFunc(ctx, databaseID)
+	}
+	return false, nil
 }
 
 type DatabaseRepository struct {
@@ -236,6 +355,24 @@ func (f *SessionRepository) Create(ctx context.Context, session domain.Session) 
 	return f.CreateFunc(ctx, session)
 }
 
+func (f *SessionRepository) Save(ctx context.Context, session domain.Session) (domain.Session, error) {
+	if f.CreateFunc != nil {
+		return f.CreateFunc(ctx, session)
+	}
+	return domain.Session{}, nil
+}
+
+func (f *SessionRepository) DeleteByUserIDs(ctx context.Context, userIDs []uint) error {
+	if f.DeleteByUserIDFunc != nil {
+		for _, id := range userIDs {
+			if err := f.DeleteByUserIDFunc(ctx, id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (f *SessionRepository) FindByToken(ctx context.Context, token string) (domain.Session, error) {
 	return f.FindByTokenFunc(ctx, token)
 }
@@ -268,14 +405,22 @@ func (f *SessionRepository) DeleteByUserID(ctx context.Context, userID uint) err
 
 type SessionService struct {
 	ports.SessionService
-	CreateFunc     func(context.Context, uint) (domain.Session, error)
-	ResolveFunc    func(context.Context, string) (domain.Session, error)
-	RevokeFunc     func(context.Context, string) error
-	RevokeUserFunc func(context.Context, uint) error
+	CreateFunc      func(context.Context, uint) (domain.Session, error)
+	ResolveFunc     func(context.Context, string) (domain.Session, error)
+	RevokeFunc      func(context.Context, string) error
+	RevokeUserFunc  func(context.Context, uint) error
+	RevokeUsersFunc func(context.Context, []uint) error
 }
 
 func (f *SessionService) Create(ctx context.Context, userID uint) (domain.Session, error) {
 	return f.CreateFunc(ctx, userID)
+}
+
+func (f *SessionService) CreateSession(ctx context.Context, userID uint) (domain.Session, error) {
+	if f.CreateFunc != nil {
+		return f.CreateFunc(ctx, userID)
+	}
+	return domain.Session{}, nil
 }
 
 func (f *SessionService) Resolve(ctx context.Context, token string) (domain.Session, error) {
@@ -288,6 +433,20 @@ func (f *SessionService) Revoke(ctx context.Context, token string) error {
 
 func (f *SessionService) RevokeUser(ctx context.Context, userID uint) error {
 	return f.RevokeUserFunc(ctx, userID)
+}
+
+func (f *SessionService) RevokeUsers(ctx context.Context, userIDs []uint) error {
+	if f.RevokeUsersFunc != nil {
+		return f.RevokeUsersFunc(ctx, userIDs)
+	}
+	if f.RevokeUserFunc != nil {
+		for _, userID := range userIDs {
+			if err := f.RevokeUserFunc(ctx, userID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 type DatabaseConnectionTester struct {
@@ -339,19 +498,71 @@ func (f *UserService) Delete(ctx context.Context, id uint) error {
 }
 
 func (f *UserService) SetRole(ctx context.Context, id uint, role string) (domain.User, error) {
-	return f.SetRoleFunc(ctx, id, role)
+	if f.SetRoleFunc != nil {
+		return f.SetRoleFunc(ctx, id, role)
+	}
+	return domain.User{}, nil
+}
+
+func (f *UserService) GetAllUsers(ctx context.Context, params pagination.PaginationParams) ([]domain.User, int64, error) {
+	if f.ListFunc != nil {
+		return f.ListFunc(ctx, params)
+	}
+	return nil, 0, nil
+}
+
+func (f *UserService) GetUserByID(ctx context.Context, id uint) (domain.User, error) {
+	if f.GetFunc != nil {
+		return f.GetFunc(ctx, id)
+	}
+	return domain.User{}, nil
+}
+
+func (f *UserService) CreateUser(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
+	if f.CreateFunc != nil {
+		return f.CreateFunc(ctx, input)
+	}
+	return domain.User{}, nil
+}
+
+func (f *UserService) UpdateUser(ctx context.Context, id uint, input domain.UpdateUserInput) (domain.User, error) {
+	if f.UpdateFunc != nil {
+		return f.UpdateFunc(ctx, id, input)
+	}
+	return domain.User{}, nil
+}
+
+func (f *UserService) DeleteUser(ctx context.Context, id uint) error {
+	if f.DeleteFunc != nil {
+		return f.DeleteFunc(ctx, id)
+	}
+	return nil
+}
+
+func (f *UserService) UpdateUserRole(ctx context.Context, id uint, role string) (domain.User, error) {
+	if f.SetRoleFunc != nil {
+		return f.SetRoleFunc(ctx, id, role)
+	}
+	return domain.User{}, nil
 }
 
 type GroupService struct {
 	ports.GroupService
-	ListFunc                    func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error)
-	GetFunc                     func(context.Context, uint) (domain.Group, error)
-	CreateFunc                  func(context.Context, domain.CreateGroupInput) (domain.Group, error)
-	UpdateFunc                  func(context.Context, uint, domain.UpdateGroupInput) (domain.Group, error)
-	DeleteFunc                  func(context.Context, uint) error
-	AddUserFunc                 func(context.Context, uint, uint) error
-	RemoveUserFunc              func(context.Context, uint, uint) error
-	EffectiveDatabaseAccessFunc func(context.Context, uint, uint) (domain.AccessType, error)
+	ports.UserGroupService
+	ListFunc                       func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error)
+	GetAllGroupsFunc               func(context.Context, pagination.PaginationParams) ([]domain.Group, int64, error)
+	GetFunc                        func(context.Context, uint) (domain.Group, error)
+	GetGroupByIDFunc               func(context.Context, uint) (domain.Group, error)
+	CreateFunc                     func(context.Context, domain.CreateGroupInput) (domain.Group, error)
+	CreateGroupFunc                func(context.Context, domain.CreateGroupInput) (domain.Group, error)
+	UpdateFunc                     func(context.Context, uint, domain.UpdateGroupInput) (domain.Group, error)
+	UpdateGroupFunc                func(context.Context, uint, domain.UpdateGroupInput) (domain.Group, error)
+	DeleteFunc                     func(context.Context, uint) error
+	DeleteGroupFunc                func(context.Context, uint) error
+	AddUserFunc                    func(context.Context, uint, uint) error
+	RemoveUserFunc                 func(context.Context, uint, uint) error
+	EffectiveDatabaseAccessFunc    func(context.Context, uint, uint) (domain.AccessType, error)
+	GetEffectiveDatabaseAccessFunc func(context.Context, uint, uint) (domain.AccessType, error)
 }
 
 func (f *GroupService) List(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
@@ -383,7 +594,169 @@ func (f *GroupService) RemoveUser(ctx context.Context, groupID uint, userID uint
 }
 
 func (f *GroupService) EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
-	return f.EffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	if f.EffectiveDatabaseAccessFunc != nil {
+		return f.EffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	}
+	if f.GetEffectiveDatabaseAccessFunc != nil {
+		return f.GetEffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	}
+	return "", nil
+}
+
+func (f *GroupService) GetAllGroups(ctx context.Context, params pagination.PaginationParams) ([]domain.Group, int64, error) {
+	if f.GetAllGroupsFunc != nil {
+		return f.GetAllGroupsFunc(ctx, params)
+	}
+	if f.ListFunc != nil {
+		return f.ListFunc(ctx, params)
+	}
+	return nil, 0, nil
+}
+
+func (f *GroupService) GetGroupByID(ctx context.Context, id uint) (domain.Group, error) {
+	if f.GetGroupByIDFunc != nil {
+		return f.GetGroupByIDFunc(ctx, id)
+	}
+	if f.GetFunc != nil {
+		return f.GetFunc(ctx, id)
+	}
+	return domain.Group{}, nil
+}
+
+func (f *GroupService) CreateGroup(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
+	if f.CreateGroupFunc != nil {
+		return f.CreateGroupFunc(ctx, input)
+	}
+	if f.CreateFunc != nil {
+		return f.CreateFunc(ctx, input)
+	}
+	return domain.Group{}, nil
+}
+
+func (f *GroupService) UpdateGroup(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
+	if f.UpdateGroupFunc != nil {
+		return f.UpdateGroupFunc(ctx, id, input)
+	}
+	if f.UpdateFunc != nil {
+		return f.UpdateFunc(ctx, id, input)
+	}
+	return domain.Group{}, nil
+}
+
+func (f *GroupService) DeleteGroup(ctx context.Context, id uint) error {
+	if f.DeleteGroupFunc != nil {
+		return f.DeleteGroupFunc(ctx, id)
+	}
+	if f.DeleteFunc != nil {
+		return f.DeleteFunc(ctx, id)
+	}
+	return nil
+}
+
+func (f *GroupService) GetEffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
+	if f.GetEffectiveDatabaseAccessFunc != nil {
+		return f.GetEffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	}
+	if f.EffectiveDatabaseAccessFunc != nil {
+		return f.EffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	}
+	return "", nil
+}
+
+type UserGroupRepository struct {
+	ports.UserGroupRepository
+	AddUserFunc                      func(context.Context, uint, uint) error
+	RemoveUserFunc                   func(context.Context, uint, uint) error
+	CountByUserIDFunc                func(context.Context, uint) (int64, error)
+	FindAllUserIDsByGroupIDFunc      func(context.Context, uint) ([]uint, error)
+	FindAllAccessTypesFunc           func(context.Context, uint, uint) ([]domain.AccessType, error)
+	FindAllUserIDsByDatabaseIDFunc   func(context.Context, uint) ([]uint, error)
+	HasGroupWithOnlyThisDatabaseFunc func(context.Context, uint) (bool, error)
+}
+
+func (f *UserGroupRepository) AddUser(ctx context.Context, groupID uint, userID uint) error {
+	if f.AddUserFunc != nil {
+		return f.AddUserFunc(ctx, groupID, userID)
+	}
+	return nil
+}
+
+func (f *UserGroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+	if f.RemoveUserFunc != nil {
+		return f.RemoveUserFunc(ctx, groupID, userID)
+	}
+	return nil
+}
+
+func (f *UserGroupRepository) CountByUserID(ctx context.Context, userID uint) (int64, error) {
+	if f.CountByUserIDFunc != nil {
+		return f.CountByUserIDFunc(ctx, userID)
+	}
+	return 0, nil
+}
+
+func (f *UserGroupRepository) FindAllUserIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error) {
+	if f.FindAllUserIDsByGroupIDFunc != nil {
+		return f.FindAllUserIDsByGroupIDFunc(ctx, groupID)
+	}
+	return nil, nil
+}
+
+func (f *UserGroupRepository) FindAllAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
+	if f.FindAllAccessTypesFunc != nil {
+		return f.FindAllAccessTypesFunc(ctx, userID, databaseID)
+	}
+	return nil, nil
+}
+
+func (f *UserGroupRepository) FindAllUserIDsByDatabaseID(ctx context.Context, databaseID uint) ([]uint, error) {
+	if f.FindAllUserIDsByDatabaseIDFunc != nil {
+		return f.FindAllUserIDsByDatabaseIDFunc(ctx, databaseID)
+	}
+	return nil, nil
+}
+
+func (f *UserGroupRepository) HasGroupWithOnlyThisDatabase(ctx context.Context, databaseID uint) (bool, error) {
+	if f.HasGroupWithOnlyThisDatabaseFunc != nil {
+		return f.HasGroupWithOnlyThisDatabaseFunc(ctx, databaseID)
+	}
+	return false, nil
+}
+
+type UserGroupService struct {
+	ports.UserGroupService
+	AddUserFunc                    func(context.Context, uint, uint) error
+	RemoveUserFunc                 func(context.Context, uint, uint) error
+	GetEffectiveDatabaseAccessFunc func(context.Context, uint, uint) (domain.AccessType, error)
+	EffectiveDatabaseAccessFunc    func(context.Context, uint, uint) (domain.AccessType, error)
+}
+
+func (f *UserGroupService) AddUser(ctx context.Context, groupID uint, userID uint) error {
+	if f.AddUserFunc != nil {
+		return f.AddUserFunc(ctx, groupID, userID)
+	}
+	return nil
+}
+
+func (f *UserGroupService) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+	if f.RemoveUserFunc != nil {
+		return f.RemoveUserFunc(ctx, groupID, userID)
+	}
+	return nil
+}
+
+func (f *UserGroupService) GetEffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
+	if f.GetEffectiveDatabaseAccessFunc != nil {
+		return f.GetEffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	}
+	if f.EffectiveDatabaseAccessFunc != nil {
+		return f.EffectiveDatabaseAccessFunc(ctx, userID, databaseID)
+	}
+	return "", nil
+}
+
+func (f *UserGroupService) EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
+	return f.GetEffectiveDatabaseAccess(ctx, userID, databaseID)
 }
 
 type DatabaseService struct {

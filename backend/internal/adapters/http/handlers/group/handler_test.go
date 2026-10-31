@@ -160,21 +160,11 @@ func TestUpdateMapsOptionalFields(t *testing.T) {
 	}
 }
 
-func TestDeleteAddAndRemoveUserDelegate(t *testing.T) {
+func TestDeleteGroupDelegate(t *testing.T) {
 	var deleted uint
-	var added [2]uint
-	var removed [2]uint
 	service := &testutil.GroupService{
 		DeleteFunc: func(_ context.Context, groupID uint) error {
 			deleted = groupID
-			return nil
-		},
-		AddUserFunc: func(_ context.Context, groupID uint, userID uint) error {
-			added = [2]uint{groupID, userID}
-			return nil
-		},
-		RemoveUserFunc: func(_ context.Context, groupID uint, userID uint) error {
-			removed = [2]uint{groupID, userID}
 			return nil
 		},
 	}
@@ -184,19 +174,6 @@ func TestDeleteAddAndRemoveUserDelegate(t *testing.T) {
 	handler.Delete(c)
 	if c.Writer.Status() != http.StatusNoContent || deleted != 4 {
 		t.Fatalf("delete status=%d id=%d", c.Writer.Status(), deleted)
-	}
-
-	params := gin.Params{{Key: "groupId", Value: "4"}, {Key: "userId", Value: "8"}}
-	c, _ = newGroupTestContext(http.MethodPost, "/groups/4/users/8", nil, params)
-	handler.AddUser(c)
-	if c.Writer.Status() != http.StatusNoContent || added != [2]uint{4, 8} {
-		t.Fatalf("add status=%d call=%v", c.Writer.Status(), added)
-	}
-
-	c, _ = newGroupTestContext(http.MethodDelete, "/groups/4/users/8", nil, params)
-	handler.RemoveUser(c)
-	if c.Writer.Status() != http.StatusNoContent || removed != [2]uint{4, 8} {
-		t.Fatalf("remove status=%d call=%v", c.Writer.Status(), removed)
 	}
 }
 
@@ -211,10 +188,6 @@ func TestGroupHandlersRejectInvalidIDs(t *testing.T) {
 		{name: "get group", params: gin.Params{{Key: "groupId", Value: "x"}}, call: handler.Get},
 		{name: "update group", params: gin.Params{{Key: "groupId", Value: "x"}}, call: handler.Update},
 		{name: "delete group", params: gin.Params{{Key: "groupId", Value: "x"}}, call: handler.Delete},
-		{name: "add invalid group", params: gin.Params{{Key: "groupId", Value: "x"}, {Key: "userId", Value: "2"}}, call: handler.AddUser},
-		{name: "add invalid user", params: gin.Params{{Key: "groupId", Value: "1"}, {Key: "userId", Value: "x"}}, call: handler.AddUser},
-		{name: "remove invalid group", params: gin.Params{{Key: "groupId", Value: "x"}, {Key: "userId", Value: "2"}}, call: handler.RemoveUser},
-		{name: "remove invalid user", params: gin.Params{{Key: "groupId", Value: "1"}, {Key: "userId", Value: "x"}}, call: handler.RemoveUser},
 	}
 
 	for _, tt := range tests {
@@ -335,28 +308,3 @@ func TestDeleteGroupPropagatesServiceError(t *testing.T) {
 	}
 }
 
-func TestAddUserPropagatesServiceError(t *testing.T) {
-	service := &testutil.GroupService{
-		AddUserFunc: func(context.Context, uint, uint) error {
-			return domain.ErrMembershipExists
-		},
-	}
-	c, w := newGroupTestContext(http.MethodPost, "/groups/1/users/2", nil, gin.Params{{Key: "groupId", Value: "1"}, {Key: "userId", Value: "2"}})
-	NewGroupHandler(service).AddUser(c)
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status=%d want=409", w.Code)
-	}
-}
-
-func TestRemoveUserPropagatesServiceError(t *testing.T) {
-	service := &testutil.GroupService{
-		RemoveUserFunc: func(context.Context, uint, uint) error {
-			return domain.ErrUserMustHaveGroup
-		},
-	}
-	c, w := newGroupTestContext(http.MethodDelete, "/groups/1/users/2", nil, gin.Params{{Key: "groupId", Value: "1"}, {Key: "userId", Value: "2"}})
-	NewGroupHandler(service).RemoveUser(c)
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status=%d want=409", w.Code)
-	}
-}

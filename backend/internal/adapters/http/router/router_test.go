@@ -10,6 +10,7 @@ import (
 	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
+	usergrouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
 	"github.com/gin-gonic/gin"
 )
@@ -23,6 +24,7 @@ func TestSetupRouterRegistersExpectedRoutes(t *testing.T) {
 		authhandler.NewAuthHandler(nil, false),
 		userhandler.NewUserHandler(&testutil.UserService{}),
 		grouphandler.NewGroupHandler(&testutil.GroupService{}),
+		usergrouphandler.NewUserGroupHandler(&testutil.UserGroupService{}),
 		databasehandler.NewDatabaseHandler(&testutil.DatabaseService{}),
 		databaseexecutorhandler.NewDatabaseExecutorHandler(nil),
 		migrationhandler.NewMigrationHandler(&testutil.MigrationService{}),
@@ -30,6 +32,7 @@ func TestSetupRouterRegistersExpectedRoutes(t *testing.T) {
 		&testutil.SessionService{},
 		&testutil.UserService{},
 		&testutil.GroupService{},
+		&testutil.UserGroupService{},
 	)
 
 	got := make(map[string]bool)

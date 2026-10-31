@@ -12,9 +12,11 @@ import (
 	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
 	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
+	usergrouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
+	usergroupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user_group"
 )
 
 func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
@@ -91,7 +93,7 @@ func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
 
 	userRepo := userrepository.NewUserRepository(db)
 
-	databaseRepo := databaserepository.NewDatabaseRepository(
+	_ = databaserepository.NewDatabaseRepository(
 		db,
 		cipher,
 	)
@@ -100,14 +102,15 @@ func TestIntegrationEffectiveAccessUsesMaximumAcrossGroups(t *testing.T) {
 		sessionrepository.NewSessionRepository(db),
 	)
 
-	service := groupservice.NewGroupService(
+	userGroupRepo := usergrouprepository.NewUserGroupRepository(db)
+	userGroupService := usergroupservice.NewUserGroupService(
+		userGroupRepo,
 		groupRepo,
 		userRepo,
-		databaseRepo,
 		sessionService,
 	)
 
-	access, err := service.EffectiveDatabaseAccess(
+	access, err := userGroupService.GetEffectiveDatabaseAccess(
 		ctx,
 		user.ID,
 		database.ID,
@@ -263,8 +266,10 @@ func TestIntegrationMultiGroupPerDatabaseAccessIsolation(t *testing.T) {
 	groupRepo := grouprepository.NewGroupRepository(db)
 	userRepo := userrepository.NewUserRepository(db)
 	sessionRepo := sessionrepository.NewSessionRepository(db)
+	userGroupRepo := usergrouprepository.NewUserGroupRepository(db)
 	sessionService := sessionservice.NewSessionService(sessionRepo)
-	groupService := groupservice.NewGroupService(groupRepo, userRepo, databaseRepo, sessionService)
+	userGroupService := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionService)
+	groupService := groupservice.NewGroupService(userGroupRepo, groupRepo, userRepo, databaseRepo, sessionService)
 
 	// Create 2 separate target databases in PostgreSQL
 	db1, err := databaseRepo.CreateDatabase(ctx, &domain.Database{
@@ -287,7 +292,7 @@ func TestIntegrationMultiGroupPerDatabaseAccessIsolation(t *testing.T) {
 	}
 
 	// Create group 1 with View Only access to DB 1
-	g1, err := groupService.Create(ctx, domain.CreateGroupInput{
+	g1, err := groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "viewers_group",
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: db1.ID, AccessType: domain.AccessViewOnly},
@@ -298,7 +303,7 @@ func TestIntegrationMultiGroupPerDatabaseAccessIsolation(t *testing.T) {
 	}
 
 	// Create group 2 with View + Edit access to DB 2
-	g2, err := groupService.Create(ctx, domain.CreateGroupInput{
+	g2, err := groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "editors_group",
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: db2.ID, AccessType: domain.AccessViewEdit},
@@ -313,27 +318,27 @@ func TestIntegrationMultiGroupPerDatabaseAccessIsolation(t *testing.T) {
 	if err := db.Where("username = ?", "user").First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := groupService.AddUser(ctx, g1.ID, user.ID); err != nil {
+	if err := userGroupService.AddUser(ctx, g1.ID, user.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := groupService.AddUser(ctx, g2.ID, user.ID); err != nil {
+	if err := userGroupService.AddUser(ctx, g2.ID, user.ID); err != nil {
 		t.Fatal(err)
 	}
 
 	// 1. Effective access for DB 1 must be View Only
-	acc1, err := groupService.EffectiveDatabaseAccess(ctx, user.ID, db1.ID)
+	acc1, err := userGroupService.GetEffectiveDatabaseAccess(ctx, user.ID, db1.ID)
 	if err != nil || acc1 != domain.AccessViewOnly {
 		t.Fatalf("db1 effective access = %q err = %v, want view_only", acc1, err)
 	}
 
 	// 2. Effective access for DB 2 must be View + Edit
-	acc2, err := groupService.EffectiveDatabaseAccess(ctx, user.ID, db2.ID)
+	acc2, err := userGroupService.GetEffectiveDatabaseAccess(ctx, user.ID, db2.ID)
 	if err != nil || acc2 != domain.AccessViewEdit {
 		t.Fatalf("db2 effective access = %q err = %v, want view_edit", acc2, err)
 	}
 
 	// 3. Effective access for DB 3 must be denied (user in no group that grants DB 3)
-	_, err = groupService.EffectiveDatabaseAccess(ctx, user.ID, db3.ID)
+	_, err = userGroupService.GetEffectiveDatabaseAccess(ctx, user.ID, db3.ID)
 	if err != domain.ErrDatabaseAccessDenied {
 		t.Fatalf("db3 access err = %v, want ErrDatabaseAccessDenied", err)
 	}

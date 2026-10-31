@@ -37,32 +37,32 @@ func TestIntegrationRepositoriesPersistAndReadRelationships(t *testing.T) {
 		t.Fatalf("ExistsAll missing ID exists=%v err=%v", exists, err)
 	}
 
-	groups, totalGroups, err := stack.groupRepo.List(ctx, pagination.NewPaginationParams(1, 10))
+	groups, totalGroups, err := stack.groupRepo.FindAll(ctx, pagination.NewPaginationParams(1, 10))
 	if err != nil || totalGroups != 1 || len(groups) != 1 {
 		t.Fatalf("groups=%v total=%d err=%v", groups, totalGroups, err)
 	}
-	members, err := stack.groupRepo.ListUserIDs(ctx, stack.group.ID)
+	members, err := stack.userGroupRepo.FindAllUserIDsByGroupID(ctx, stack.group.ID)
 	if err != nil || len(members) != 1 || members[0] != stack.user.ID {
 		t.Fatalf("members=%v err=%v", members, err)
 	}
-	accesses, err := stack.groupRepo.ListAccessTypes(ctx, stack.user.ID, stack.target.ID)
+	accesses, err := stack.userGroupRepo.FindAllAccessTypes(ctx, stack.user.ID, stack.target.ID)
 	if err != nil || len(accesses) != 1 || accesses[0] != domain.AccessViewEdit {
 		t.Fatalf("accesses=%v err=%v", accesses, err)
 	}
-	count, err := stack.groupRepo.CountUserGroups(ctx, stack.user.ID)
+	count, err := stack.userGroupRepo.CountByUserID(ctx, stack.user.ID)
 	if err != nil || count != 1 {
 		t.Fatalf("group count=%d err=%v", count, err)
 	}
-	userIDs, err := stack.groupRepo.ListUserIDsByDatabase(ctx, stack.target.ID)
+	userIDs, err := stack.userGroupRepo.FindAllUserIDsByDatabaseID(ctx, stack.target.ID)
 	if err != nil || len(userIDs) != 1 || userIDs[0] != stack.user.ID {
 		t.Fatalf("database users=%v err=%v", userIDs, err)
 	}
-	leavesEmpty, err := stack.groupRepo.HasGroupWithOnlyDatabase(ctx, stack.target.ID)
+	leavesEmpty, err := stack.userGroupRepo.HasGroupWithOnlyThisDatabase(ctx, stack.target.ID)
 	if err != nil || !leavesEmpty {
 		t.Fatalf("HasGroupWithOnlyDatabase=%v err=%v", leavesEmpty, err)
 	}
 
-	users, totalUsers, err := stack.userRepo.List(ctx, pagination.NewPaginationParams(1, 10))
+	users, totalUsers, err := stack.userRepo.FindAll(ctx, pagination.NewPaginationParams(1, 10))
 	if err != nil || totalUsers != 1 || len(users) != 1 || users[0].Password != "" {
 		t.Fatalf("users=%v total=%d err=%v", users, totalUsers, err)
 	}
@@ -76,7 +76,7 @@ func TestIntegrationSessionRepositoryLifecycle(t *testing.T) {
 	stack := newIntegrationStack(t, domain.AccessViewOnly)
 	ctx := context.Background()
 
-	session, err := stack.sessionService.Create(ctx, stack.user.ID)
+	session, err := stack.sessionService.CreateSession(ctx, stack.user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

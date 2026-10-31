@@ -13,10 +13,12 @@ import (
 	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
 	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
+	usergrouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
+	usergroupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user_group"
 )
 
 func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
@@ -49,13 +51,17 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		sessionrepository.NewSessionRepository(db),
 	)
 
+	userGroupRepo := usergrouprepository.NewUserGroupRepository(db)
+	userGroupService := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionService)
+
 	userService := userservice.NewUserService(
 		userRepo,
 		groupRepo,
 		sessionService,
+		userGroupRepo,
 	)
-
 	groupService := groupservice.NewGroupService(
+		userGroupRepo,
 		groupRepo,
 		userRepo,
 		databaseRepo,
@@ -73,7 +79,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	group, err := groupService.Create(
+	group, err := groupService.CreateGroup(
 		ctx,
 		domain.CreateGroupInput{
 			Name: "qa-team",
@@ -93,7 +99,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		)
 	}
 
-	user, err := userService.Create(
+	user, err := userService.CreateUser(
 		ctx,
 		domain.CreateUserInput{
 			Username: "integration-user",
@@ -120,7 +126,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 
 	newName := "integration-user-renamed"
 
-	updated, err := userService.Update(
+	updated, err := userService.UpdateUser(
 		ctx,
 		user.ID,
 		domain.UpdateUserInput{
@@ -143,7 +149,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		)
 	}
 
-	updated, err = userService.SetRole(
+	updated, err = userService.UpdateUserRole(
 		ctx,
 		user.ID,
 		domain.RoleAdmin,
@@ -174,7 +180,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := groupService.AddUser(
+	if err := userGroupService.AddUser(
 		ctx,
 		adminGroup.ID,
 		user.ID,
@@ -185,7 +191,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		)
 	}
 
-	count, err := groupRepo.CountUserGroups(
+	count, err := userGroupRepo.CountByUserID(
 		ctx,
 		user.ID,
 	)
@@ -201,7 +207,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		)
 	}
 
-	if err := groupService.RemoveUser(
+	if err := userGroupService.RemoveUser(
 		ctx,
 		adminGroup.ID,
 		user.ID,
@@ -212,7 +218,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		)
 	}
 
-	count, err = groupRepo.CountUserGroups(
+	count, err = userGroupRepo.CountByUserID(
 		ctx,
 		user.ID,
 	)
@@ -228,7 +234,7 @@ func TestIntegrationUserAndGroupManagementPersists(t *testing.T) {
 		)
 	}
 
-	if err := userService.Delete(
+	if err := userService.DeleteUser(
 		ctx,
 		user.ID,
 	); err != nil {

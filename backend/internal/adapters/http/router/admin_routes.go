@@ -14,6 +14,7 @@ func registerAdminRoutes(api *gin.RouterGroup, dependencies routerDependencies) 
 
 	registerAdminUserRoutes(admin, dependencies)
 	registerAdminGroupRoutes(admin, dependencies)
+	registerAdminUserGroupRoutes(admin, dependencies)
 	registerAdminDatabaseRoutes(admin, dependencies)
 }
 
@@ -34,8 +35,14 @@ func registerAdminGroupRoutes(admin *gin.RouterGroup, dependencies routerDepende
 	groups.POST("", dependencies.groupHandler.Create)
 	groups.PATCH("/:groupId", dependencies.groupHandler.Update)
 	groups.DELETE("/:groupId", dependencies.groupHandler.Delete)
-	groups.POST("/:groupId/users/:userId", dependencies.groupHandler.AddUser)
-	groups.DELETE("/:groupId/users/:userId", dependencies.groupHandler.RemoveUser)
+}
+
+func registerAdminUserGroupRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
+	groups := admin.Group("/groups")
+	if dependencies.userGroupHandler != nil {
+		groups.POST("/:groupId/users/:userId", dependencies.userGroupHandler.AddUser)
+		groups.DELETE("/:groupId/users/:userId", dependencies.userGroupHandler.RemoveUser)
+	}
 }
 
 func registerAdminDatabaseRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {

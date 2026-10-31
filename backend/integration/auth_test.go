@@ -14,6 +14,7 @@ import (
 	grouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/group"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
 	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
+	usergrouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user_group"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
@@ -39,10 +40,12 @@ func authRouter(db *gorm.DB) *gin.Engine {
 		sessionService,
 	)
 
+	userGroupRepo := usergrouprepository.NewUserGroupRepository(db)
 	userService := userservice.NewUserService(
 		userRepo,
 		groupRepo,
 		sessionService,
+		userGroupRepo,
 	)
 
 	authHandler := authhandler.NewAuthHandler(

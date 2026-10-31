@@ -17,6 +17,7 @@ import (
 	migrationrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/migration"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
 	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
+	usergrouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
@@ -25,6 +26,7 @@ import (
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
+	usergroupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user_group"
 	"gorm.io/gorm"
 )
 
@@ -37,11 +39,13 @@ type integrationStack struct {
 	group            domain.Group
 	databaseRepo     ports.DatabaseRepository
 	groupRepo        ports.GroupRepository
+	userGroupRepo    ports.UserGroupRepository
 	userRepo         ports.UserRepository
 	sessionRepo      ports.SessionRepository
 	migrationRepo    ports.MigrationRepository
 	sessionService   ports.SessionService
 	groupService     ports.GroupService
+	userGroupService ports.UserGroupService
 	userService      ports.UserService
 	databaseService  ports.DatabaseService
 	executor         ports.DatabaseExecutor
@@ -92,11 +96,13 @@ func newIntegrationStack(t *testing.T, access domain.AccessType) *integrationSta
 	databaseRepo := databaserepository.NewDatabaseRepository(db, cipher)
 	groupRepo := grouprepository.NewGroupRepository(db)
 	userRepo := userrepository.NewUserRepository(db)
+	userGroupRepo := usergrouprepository.NewUserGroupRepository(db)
 	sessionRepo := sessionrepository.NewSessionRepository(db)
 	migrationRepo := migrationrepository.NewMigrationRepository(db)
 	sessionService := sessionservice.NewSessionService(sessionRepo)
-	groupService := groupservice.NewGroupService(groupRepo, userRepo, databaseRepo, sessionService)
-	userService := userservice.NewUserService(userRepo, groupRepo, sessionService)
+	userGroupService := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionService)
+	groupService := groupservice.NewGroupService(userGroupRepo, groupRepo, userRepo, databaseRepo, sessionService)
+	userService := userservice.NewUserService(userRepo, groupRepo, sessionService, userGroupRepo)
 
 	targetInput := targetDatabaseFromPlatformDSN(t)
 	createdTarget, err := databaseRepo.CreateDatabase(ctx, &targetInput)
@@ -105,7 +111,7 @@ func newIntegrationStack(t *testing.T, access domain.AccessType) *integrationSta
 	}
 	targetInput.ID = createdTarget.ID
 
-	group, err := groupService.Create(ctx, domain.CreateGroupInput{
+	group, err := groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "integration-target-users",
 		DatabaseAccesses: []domain.DatabaseAccess{{
 			DatabaseID: targetInput.ID,
@@ -116,7 +122,7 @@ func newIntegrationStack(t *testing.T, access domain.AccessType) *integrationSta
 		t.Fatalf("create integration group: %v", err)
 	}
 
-	user, err := userService.Create(ctx, domain.CreateUserInput{
+	user, err := userService.CreateUser(ctx, domain.CreateUserInput{
 		Username: "integration-target-user",
 		Password: "secret123",
 		GroupIDs: []uint{group.ID},
@@ -132,9 +138,9 @@ func newIntegrationStack(t *testing.T, access domain.AccessType) *integrationSta
 		}
 	})
 	executor := driver.NewDatabaseExecutor(poolManager)
-	databaseService := databaseservice.NewDatabaseService(databaseRepo, nil, groupRepo, sessionService, poolManager)
-	executorService := databaseexecutorservice.NewDatabaseExecutorService(databaseService, databaseRepo, executor, groupService)
-	migrationService := migrationservice.NewMigrationService(migrationRepo, databaseRepo, executor, groupService)
+	databaseService := databaseservice.NewDatabaseService(databaseRepo, nil, userGroupRepo, sessionService, poolManager)
+	executorService := databaseexecutorservice.NewDatabaseExecutorService(databaseService, databaseRepo, executor, userGroupService)
+	migrationService := migrationservice.NewMigrationService(migrationRepo, databaseRepo, executor, userGroupService)
 
 	return &integrationStack{
 		db:               db,
@@ -143,11 +149,13 @@ func newIntegrationStack(t *testing.T, access domain.AccessType) *integrationSta
 		group:            group,
 		databaseRepo:     databaseRepo,
 		groupRepo:        groupRepo,
+		userGroupRepo:    userGroupRepo,
 		userRepo:         userRepo,
 		sessionRepo:      sessionRepo,
 		migrationRepo:    migrationRepo,
 		sessionService:   sessionService,
 		groupService:     groupService,
+		userGroupService: userGroupService,
 		userService:      userService,
 		databaseService:  databaseService,
 		executor:         executor,

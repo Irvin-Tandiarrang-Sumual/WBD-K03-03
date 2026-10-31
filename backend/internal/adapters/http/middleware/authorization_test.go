@@ -229,7 +229,7 @@ func TestRequireDatabaseViewAndEditWrappers(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		middleware func(ports.GroupService) gin.HandlerFunc
+		middleware func(ports.UserGroupService) gin.HandlerFunc
 		effective  domain.AccessType
 		wantStatus int
 	}{

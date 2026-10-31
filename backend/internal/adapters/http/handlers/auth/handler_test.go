@@ -28,6 +28,10 @@ func (f *fakeUserService) Get(ctx context.Context, id uint) (domain.User, error)
 	return domain.User{}, domain.ErrUserNotFound
 }
 
+func (f *fakeUserService) GetUserByID(ctx context.Context, id uint) (domain.User, error) {
+	return f.Get(ctx, id)
+}
+
 type fakeAuthService struct {
 	ports.AuthService
 	loginUser    domain.User

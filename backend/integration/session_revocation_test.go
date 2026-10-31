@@ -14,7 +14,7 @@ func TestIntegrationAccessChangeRevokesExistingSession(t *testing.T) {
 	stack := newIntegrationStack(t, domain.AccessViewOnly)
 	ctx := context.Background()
 
-	session, err := stack.sessionService.Create(ctx, stack.user.ID)
+	session, err := stack.sessionService.CreateSession(ctx, stack.user.ID)
 	if err != nil {
 		t.Fatalf("Create session: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestIntegrationAccessChangeRevokesExistingSession(t *testing.T) {
 		DatabaseID: stack.target.ID,
 		AccessType: domain.AccessViewEdit,
 	}}
-	updated, err := stack.groupService.Update(ctx, stack.group.ID, domain.UpdateGroupInput{DatabaseAccesses: &newAccesses})
+	updated, err := stack.groupService.UpdateGroup(ctx, stack.group.ID, domain.UpdateGroupInput{DatabaseAccesses: &newAccesses})
 	if err != nil {
 		t.Fatalf("Update group access: %v", err)
 	}
@@ -44,11 +44,11 @@ func TestIntegrationRoleChangeRevokesExistingSession(t *testing.T) {
 	stack := newIntegrationStack(t, domain.AccessViewOnly)
 	ctx := context.Background()
 
-	session, err := stack.sessionService.Create(ctx, stack.user.ID)
+	session, err := stack.sessionService.CreateSession(ctx, stack.user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := stack.userService.SetRole(ctx, stack.user.ID, domain.RoleAdmin)
+	updated, err := stack.userService.UpdateUserRole(ctx, stack.user.ID, domain.RoleAdmin)
 	if err != nil {
 		t.Fatalf("SetRole() error=%v", err)
 	}
