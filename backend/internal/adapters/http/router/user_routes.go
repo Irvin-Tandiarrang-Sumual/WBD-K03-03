@@ -17,37 +17,37 @@ func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependen
 	databases.GET("", dependencies.databaseHandler.GetDatabasesByUserID)
 	databases.GET(
 		"/:database_id",
-		middleware.RequireDatabaseView(dependencies.groupService),
+		middleware.RequireDatabaseView(dependencies.userGroupService),
 		dependencies.databaseHandler.GetDatabaseByIDAndUserID,
 	)
 	databases.POST(
 		"/:database_id/query",
-		middleware.RequireDatabaseView(dependencies.groupService),
+		middleware.RequireDatabaseView(dependencies.userGroupService),
 		dependencies.databaseExecutorHandler.ExecuteDatabaseQuery,
 	)
 	databases.POST(
 		"/:database_id/explain",
-		middleware.RequireDatabaseView(dependencies.groupService),
+		middleware.RequireDatabaseView(dependencies.userGroupService),
 		dependencies.databaseExecutorHandler.ExplainDatabaseQuery,
 	)
 	databases.GET(
 		"/:database_id/migrations",
-		middleware.RequireDatabaseView(dependencies.groupService),
+		middleware.RequireDatabaseView(dependencies.userGroupService),
 		dependencies.migrationHandler.GetMigrationsByDatabaseID,
 	)
 	databases.POST(
 		"/:database_id/migrations",
-		middleware.RequireDatabaseEdit(dependencies.groupService),
+		middleware.RequireDatabaseEdit(dependencies.userGroupService),
 		dependencies.migrationHandler.CreateMigration,
 	)
 	databases.GET(
 		"/:database_id/migrations/compare",
-		middleware.RequireDatabaseView(dependencies.groupService),
+		middleware.RequireDatabaseView(dependencies.userGroupService),
 		dependencies.migrationHandler.CompareMigrations,
 	)
 	databases.GET(
 		"/:database_id/migrations/:migration_id",
-		middleware.RequireDatabaseView(dependencies.groupService),
+		middleware.RequireDatabaseView(dependencies.userGroupService),
 		dependencies.migrationHandler.GetMigrationByIDAndDatabaseID,
 	)
 	databases.POST(

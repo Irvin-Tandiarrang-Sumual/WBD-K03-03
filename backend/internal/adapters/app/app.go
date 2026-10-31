@@ -87,6 +87,7 @@ func buildApplication() (*application, error) {
 		handlers.auth,
 		handlers.user,
 		handlers.group,
+		handlers.userGroup,
 		handlers.database,
 		handlers.databaseExecutor,
 		handlers.migration,
@@ -94,6 +95,7 @@ func buildApplication() (*application, error) {
 		services.session,
 		services.user,
 		services.group,
+		services.userGroup,
 	)
 
 	return &application{

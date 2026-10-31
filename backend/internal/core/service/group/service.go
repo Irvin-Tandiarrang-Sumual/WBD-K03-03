@@ -11,23 +11,28 @@ import (
 )
 
 type groupService struct {
-	groups    ports.GroupRepository
-	users     ports.UserRepository
-	databases ports.DatabaseRepository
-	sessions  ports.SessionService
+	userGroups ports.UserGroupRepository
+	groups     ports.GroupRepository
+	users      ports.UserRepository
+	databases  ports.DatabaseRepository
+	sessions   ports.SessionService
 }
 
+var _ ports.GroupService = (*groupService)(nil)
+
 func NewGroupService(
+	userGroups ports.UserGroupRepository,
 	groups ports.GroupRepository,
 	users ports.UserRepository,
 	databases ports.DatabaseRepository,
 	sessions ports.SessionService,
 ) ports.GroupService {
 	return &groupService{
-		groups:    groups,
-		users:     users,
-		databases: databases,
-		sessions:  sessions,
+		userGroups: userGroups,
+		groups:     groups,
+		users:      users,
+		databases:  databases,
+		sessions:   sessions,
 	}
 }
 
@@ -109,11 +114,11 @@ func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.Up
 	}
 
 	if accessChanged {
-		userIDs, err := s.groups.ListUserIDs(ctx, id)
+		userIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, id)
 		if err != nil {
 			return domain.Group{}, err
 		}
-		if err := s.revokeUsers(ctx, userIDs); err != nil {
+		if err := s.sessions.RevokeUsers(ctx, userIDs); err != nil {
 			return domain.Group{}, err
 		}
 	}
@@ -127,7 +132,7 @@ func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 		return err
 	}
 
-	userIDs, err := s.groups.ListUserIDs(ctx, id)
+	userIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -138,7 +143,7 @@ func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 			return err
 		}
 
-		groupCount, err := s.groups.CountUserGroups(ctx, userID)
+		groupCount, err := s.userGroups.CountByUserID(ctx, userID)
 		if err != nil {
 			return err
 		}
@@ -152,91 +157,7 @@ func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 		return err
 	}
 
-	return s.revokeUsers(ctx, userIDs)
-}
-
-func (s *groupService) AddUser(ctx context.Context, groupID uint, userID uint) error {
-
-	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
-		return err
-	}
-	if _, err := s.users.FindByID(ctx, userID); err != nil {
-		return err
-	}
-	if err := s.groups.AddUser(ctx, groupID, userID); err != nil {
-		return err
-	}
-
-	return s.sessions.RevokeUser(ctx, userID)
-}
-
-func (s *groupService) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
-	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
-		return err
-	}
-
-	user, err := s.users.FindByID(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	memberIDs, err := s.groups.ListUserIDs(ctx, groupID)
-	if err != nil {
-		return err
-	}
-	if !containsUserID(memberIDs, userID) {
-		return domain.ErrMembershipNotFound
-	}
-
-	groupCount, err := s.groups.CountUserGroups(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	if user.Role == "user" && groupCount <= 1 {
-		return domain.ErrUserMustHaveGroup
-	}
-
-	if err := s.groups.RemoveUser(ctx, groupID, userID); err != nil {
-		return err
-	}
-
-	return s.sessions.RevokeUser(ctx, userID)
-}
-
-func (s *groupService) EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
-	accesses, err := s.groups.ListAccessTypes(ctx, userID, databaseID)
-	if err != nil {
-		return "", err
-	}
-
-	effective := domain.AccessType("")
-
-	for _, access := range accesses {
-		if access == domain.AccessViewEdit {
-			return domain.AccessViewEdit, nil
-		}
-		if access == domain.AccessViewOnly {
-			effective = domain.AccessViewOnly
-		}
-	}
-
-	if effective == "" {
-		return "", domain.ErrDatabaseAccessDenied
-	}
-
-	return effective, nil
-}
-
-func (s *groupService) revokeUsers(ctx context.Context, userIDs []uint) error {
-	for _, userID := range userIDs {
-		err := s.sessions.RevokeUser(ctx, userID)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return s.sessions.RevokeUsers(ctx, userIDs)
 }
 
 func normalizeAccesses(accesses []domain.DatabaseAccess) ([]domain.DatabaseAccess, error) {
@@ -270,15 +191,6 @@ func normalizeAccesses(accesses []domain.DatabaseAccess) ([]domain.DatabaseAcces
 	return result, nil
 }
 
-func databaseIDs(accesses []domain.DatabaseAccess) []uint {
-	ids := make([]uint, 0, len(accesses))
-	for _, access := range accesses {
-		ids = append(ids, access.DatabaseID)
-	}
-
-	return ids
-}
-
 func sameAccesses(left []domain.DatabaseAccess, right []domain.DatabaseAccess) bool {
 	if len(left) != len(right) {
 		return false
@@ -297,12 +209,11 @@ func sameAccesses(left []domain.DatabaseAccess, right []domain.DatabaseAccess) b
 	return true
 }
 
-func containsUserID(userIDs []uint, target uint) bool {
-	for _, userID := range userIDs {
-		if userID == target {
-			return true
-		}
+func databaseIDs(accesses []domain.DatabaseAccess) []uint {
+	ids := make([]uint, 0, len(accesses))
+	for _, access := range accesses {
+		ids = append(ids, access.DatabaseID)
 	}
 
-	return false
+	return ids
 }

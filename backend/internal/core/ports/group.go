@@ -13,10 +13,6 @@ type GroupService interface {
 	CreateGroup(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error)
 	UpdateGroup(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error)
 	DeleteGroup(ctx context.Context, id uint) error
-
-	AddUser(ctx context.Context, groupID uint, userID uint) error
-	RemoveUser(ctx context.Context, groupID uint, userID uint) error
-	EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error)
 }
 
 type GroupRepository interface {
@@ -26,12 +22,4 @@ type GroupRepository interface {
 	Save(ctx context.Context, group domain.Group) (domain.Group, error)
 	Update(ctx context.Context, group domain.Group) (domain.Group, error)
 	Delete(ctx context.Context, id uint) error
-
-	AddUser(ctx context.Context, groupID uint, userID uint) error
-	RemoveUser(ctx context.Context, groupID uint, userID uint) error
-	CountUserGroups(ctx context.Context, userID uint) (int64, error)
-	ListUserIDs(ctx context.Context, groupID uint) ([]uint, error)
-	ListAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error)
-	ListUserIDsByDatabase(ctx context.Context, databaseID uint) ([]uint, error)
-	HasGroupWithOnlyDatabase(ctx context.Context, databaseID uint) (bool, error)
 }

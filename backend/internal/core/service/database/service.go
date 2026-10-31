@@ -12,7 +12,7 @@ import (
 type databaseService struct {
 	databaseRepository       ports.DatabaseRepository
 	databaseConnectionTester ports.DatabaseConnectionTester
-	groupRepository          ports.GroupRepository
+	userGroupsRepository     ports.UserGroupRepository
 	sessionService           ports.SessionService
 	databasePoolInvalidator  ports.DatabasePoolInvalidator
 }
@@ -22,14 +22,14 @@ var _ ports.DatabaseService = (*databaseService)(nil)
 func NewDatabaseService(
 	databaseRepository ports.DatabaseRepository,
 	databaseConnectionTester ports.DatabaseConnectionTester,
-	groupRepository ports.GroupRepository,
+	userGroupsRepository ports.UserGroupRepository,
 	sessionService ports.SessionService,
 	databasePoolInvalidator ports.DatabasePoolInvalidator,
 ) ports.DatabaseService {
 	return &databaseService{
 		databaseRepository:       databaseRepository,
 		databaseConnectionTester: databaseConnectionTester,
-		groupRepository:          groupRepository,
+		userGroupsRepository:     userGroupsRepository,
 		sessionService:           sessionService,
 		databasePoolInvalidator:  databasePoolInvalidator,
 	}
@@ -92,8 +92,8 @@ func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) e
 		return err
 	}
 
-	if s.groupRepository != nil {
-		leavesEmptyGroup, err := s.groupRepository.HasGroupWithOnlyDatabase(ctx, databaseID)
+	if s.userGroupsRepository != nil {
+		leavesEmptyGroup, err := s.userGroupsRepository.HasGroupWithOnlyThisDatabase(ctx, databaseID)
 		if err != nil {
 			return err
 		}
@@ -103,9 +103,9 @@ func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) e
 	}
 
 	var userIDs []uint
-	if s.groupRepository != nil {
+	if s.userGroupsRepository != nil {
 		var err error
-		userIDs, err = s.groupRepository.ListUserIDsByDatabase(ctx, databaseID)
+		userIDs, err = s.userGroupsRepository.FindAllUserIDsByDatabaseID(ctx, databaseID)
 		if err != nil {
 			return err
 		}
@@ -134,9 +134,9 @@ func (s *databaseService) GetDatabasesByUserID(ctx context.Context, userID uint,
 		return nil, 0, err
 	}
 
-	if s.groupRepository != nil {
+	if s.userGroupsRepository != nil {
 		for _, db := range databases {
-			if accessTypes, err := s.groupRepository.ListAccessTypes(ctx, userID, db.ID); err == nil {
+			if accessTypes, err := s.userGroupsRepository.FindAllAccessTypes(ctx, userID, db.ID); err == nil {
 				effective := domain.AccessType("")
 				for _, at := range accessTypes {
 					if at == domain.AccessViewEdit {
@@ -161,8 +161,8 @@ func (s *databaseService) GetDatabaseByIDAndUserID(ctx context.Context, database
 		return nil, err
 	}
 
-	if s.groupRepository != nil && db != nil {
-		if accessTypes, err := s.groupRepository.ListAccessTypes(ctx, userID, db.ID); err == nil {
+	if s.userGroupsRepository != nil && db != nil {
+		if accessTypes, err := s.userGroupsRepository.FindAllAccessTypes(ctx, userID, db.ID); err == nil {
 			effective := domain.AccessType("")
 			for _, at := range accessTypes {
 				if at == domain.AccessViewEdit {

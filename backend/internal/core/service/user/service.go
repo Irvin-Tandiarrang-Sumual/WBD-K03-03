@@ -11,18 +11,20 @@ import (
 )
 
 type userService struct {
-	users    ports.UserRepository
-	groups   ports.GroupRepository
-	sessions ports.SessionService
+	users      ports.UserRepository
+	groups     ports.GroupRepository
+	sessions   ports.SessionService
+	userGroups ports.UserGroupRepository
 }
 
 var _ ports.UserService = (*userService)(nil)
 
-func NewUserService(users ports.UserRepository, groups ports.GroupRepository, sessions ports.SessionService) ports.UserService {
+func NewUserService(users ports.UserRepository, groups ports.GroupRepository, sessions ports.SessionService, userGroups ports.UserGroupRepository) ports.UserService {
 	return &userService{
-		users:    users,
-		groups:   groups,
-		sessions: sessions,
+		users:      users,
+		groups:     groups,
+		sessions:   sessions,
+		userGroups: userGroups,
 	}
 }
 
@@ -166,10 +168,13 @@ func (s *userService) UpdateUserRole(ctx context.Context, id uint, role string) 
 	}
 
 	if role == domain.RoleUser {
-		groupCount, err := s.groups.CountUserGroups(ctx, id)
-
-		if err != nil {
-			return domain.User{}, err
+		var groupCount int64
+		if s.userGroups != nil {
+			var err error
+			groupCount, err = s.userGroups.CountByUserID(ctx, id)
+			if err != nil {
+				return domain.User{}, err
+			}
 		}
 
 		if groupCount == 0 {

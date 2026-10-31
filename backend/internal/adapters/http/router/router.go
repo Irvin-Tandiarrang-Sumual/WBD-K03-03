@@ -8,6 +8,7 @@ import (
 	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
+	usergrouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -18,6 +19,7 @@ type routerDependencies struct {
 	authHandler             *authhandler.AuthHandler
 	userHandler             *userhandler.UserHandler
 	groupHandler            *grouphandler.GroupHandler
+	userGroupHandler        *usergrouphandler.UserGroupHandler
 	databaseHandler         *databasehandler.DatabaseHandler
 	databaseExecutorHandler *databaseexecutorhandler.DatabaseExecutorHandler
 	migrationHandler        *migrationhandler.MigrationHandler
@@ -25,6 +27,7 @@ type routerDependencies struct {
 	sessionService          ports.SessionService
 	userService             ports.UserService
 	groupService            ports.GroupService
+	userGroupService        ports.UserGroupService
 }
 
 func SetupRouter(
@@ -32,6 +35,7 @@ func SetupRouter(
 	authHandler *authhandler.AuthHandler,
 	userHandler *userhandler.UserHandler,
 	groupHandler *grouphandler.GroupHandler,
+	userGroupHandler *usergrouphandler.UserGroupHandler,
 	databaseHandler *databasehandler.DatabaseHandler,
 	databaseExecutorHandler *databaseexecutorhandler.DatabaseExecutorHandler,
 	migrationHandler *migrationhandler.MigrationHandler,
@@ -39,11 +43,13 @@ func SetupRouter(
 	sessionService ports.SessionService,
 	userService ports.UserService,
 	groupService ports.GroupService,
+	userGroupService ports.UserGroupService,
 ) {
 	dependencies := routerDependencies{
 		authHandler:             authHandler,
 		userHandler:             userHandler,
 		groupHandler:            groupHandler,
+		userGroupHandler:        userGroupHandler,
 		databaseHandler:         databaseHandler,
 		databaseExecutorHandler: databaseExecutorHandler,
 		migrationHandler:        migrationHandler,
@@ -51,6 +57,7 @@ func SetupRouter(
 		sessionService:          sessionService,
 		userService:             userService,
 		groupService:            groupService,
+		userGroupService:        userGroupService,
 	}
 
 	api := engine.Group("/api/v1")

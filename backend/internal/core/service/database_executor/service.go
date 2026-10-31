@@ -12,7 +12,7 @@ type databaseExecutorService struct {
 	databaseService    ports.DatabaseService
 	databaseRepository ports.DatabaseRepository
 	databaseExecutor   ports.DatabaseExecutor
-	groupService       ports.GroupService
+	userGroupsService  ports.UserGroupService
 }
 
 var _ ports.DatabaseExecutorService = (*databaseExecutorService)(nil)
@@ -21,13 +21,13 @@ func NewDatabaseExecutorService(
 	databaseService ports.DatabaseService,
 	databaseRepository ports.DatabaseRepository,
 	databaseExecutor ports.DatabaseExecutor,
-	groupService ports.GroupService,
+	userGroupsService ports.UserGroupService,
 ) ports.DatabaseExecutorService {
 	return &databaseExecutorService{
 		databaseService:    databaseService,
 		databaseRepository: databaseRepository,
 		databaseExecutor:   databaseExecutor,
-		groupService:       groupService,
+		userGroupsService:  userGroupsService,
 	}
 }
 
@@ -86,7 +86,7 @@ func (s *databaseExecutorService) requireDatabaseAccess(
 	databaseID uint,
 	required domain.AccessType,
 ) error {
-	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	access, err := s.userGroupsService.GetEffectiveDatabaseAccess(ctx, userID, databaseID)
 	if err != nil {
 		return err
 	}

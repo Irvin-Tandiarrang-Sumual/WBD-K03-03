@@ -6,6 +6,7 @@ import (
 	migrationrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/migration"
 	sessionrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/session"
 	userrepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user"
+	usergrouprepository "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories/user_group"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
@@ -14,6 +15,7 @@ import (
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
+	usergroupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user_group"
 	"gorm.io/gorm"
 )
 
@@ -21,6 +23,7 @@ type applicationServices struct {
 	auth             ports.AuthService
 	user             ports.UserService
 	group            ports.GroupService
+	userGroup        ports.UserGroupService
 	session          ports.SessionService
 	database         ports.DatabaseService
 	databaseExecutor ports.DatabaseExecutorService
@@ -33,6 +36,7 @@ func buildServices(
 ) (*applicationServices, error) {
 	userRepository := userrepository.NewUserRepository(systemDatabase)
 	groupRepository := grouprepository.NewGroupRepository(systemDatabase)
+	userGroupRepository := usergrouprepository.NewUserGroupRepository(systemDatabase)
 	databaseRepository := databaserepository.NewDatabaseRepository(
 		systemDatabase,
 		infrastructure.credentialCipher,
@@ -42,8 +46,10 @@ func buildServices(
 
 	sessionService := sessionservice.NewSessionService(sessionRepository)
 	authService := authservice.NewAuthService(userRepository, sessionService)
-	userService := userservice.NewUserService(userRepository, groupRepository, sessionService)
+	userService := userservice.NewUserService(userRepository, groupRepository, sessionService, userGroupRepository)
+	userGroupService := usergroupservice.NewUserGroupService(userGroupRepository, groupRepository, userRepository, sessionService)
 	groupService := groupservice.NewGroupService(
+		userGroupRepository,
 		groupRepository,
 		userRepository,
 		databaseRepository,
@@ -52,7 +58,7 @@ func buildServices(
 	databaseService := databaseservice.NewDatabaseService(
 		databaseRepository,
 		infrastructure.connectionTester,
-		groupRepository,
+		userGroupRepository,
 		sessionService,
 		infrastructure.poolManager,
 	)
@@ -60,19 +66,20 @@ func buildServices(
 		databaseService,
 		databaseRepository,
 		infrastructure.databaseExecutor,
-		groupService,
+		userGroupService,
 	)
 	migrationService := migrationservice.NewMigrationService(
 		migrationRepository,
 		databaseRepository,
 		infrastructure.databaseExecutor,
-		groupService,
+		userGroupService,
 	)
 
 	return &applicationServices{
 		auth:             authService,
 		user:             userService,
 		group:            groupService,
+		userGroup:        userGroupService,
 		session:          sessionService,
 		database:         databaseService,
 		databaseExecutor: databaseExecutorService,

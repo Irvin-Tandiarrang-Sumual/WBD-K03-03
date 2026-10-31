@@ -15,20 +15,17 @@ type migrationService struct {
 	repository         ports.MigrationRepository
 	databaseRepository ports.DatabaseRepository
 	databaseExecutor   ports.DatabaseExecutor
-	groupService       ports.GroupService
+	userGroupsService  ports.UserGroupService
 }
 
-func NewMigrationService(
-	repository ports.MigrationRepository,
-	databaseRepository ports.DatabaseRepository,
-	databaseExecutor ports.DatabaseExecutor,
-	groupService ports.GroupService,
-) ports.MigrationService {
+func NewMigrationService(repository ports.MigrationRepository,
+	databaseRepository ports.DatabaseRepository, databaseExecutor ports.DatabaseExecutor,
+	userGroupService ports.UserGroupService) ports.MigrationService {
 	return &migrationService{
 		repository:         repository,
 		databaseRepository: databaseRepository,
 		databaseExecutor:   databaseExecutor,
-		groupService:       groupService,
+		userGroupsService:  userGroupService,
 	}
 }
 
@@ -65,7 +62,7 @@ func (s *migrationService) CreateMigration(ctx context.Context, databaseID uint,
 		return nil, domain.ErrInvalidMigrationInput
 	}
 
-	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	access, err := s.userGroupsService.GetEffectiveDatabaseAccess(ctx, userID, databaseID)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +242,7 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, databaseID ui
 	if databaseID == 0 || userID == 0 || targetMigrationID == 0 {
 		return nil, domain.ErrInvalidMigrationInput
 	}
-	access, err := s.groupService.EffectiveDatabaseAccess(ctx, userID, databaseID)
+	access, err := s.userGroupsService.GetEffectiveDatabaseAccess(ctx, userID, databaseID)
 	if err != nil {
 		return nil, err
 	}

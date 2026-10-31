@@ -76,7 +76,7 @@ func RequireAdmin(users ports.UserService) gin.HandlerFunc {
 	}
 }
 
-func RequireDatabaseAccess(groups ports.GroupService, required domain.AccessType) gin.HandlerFunc {
+func RequireDatabaseAccess(userGroups ports.UserGroupService, required domain.AccessType) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := AuthenticatedUserID(c)
 		if !ok {
@@ -92,7 +92,7 @@ func RequireDatabaseAccess(groups ports.GroupService, required domain.AccessType
 			return
 		}
 
-		effectiveAccess, err := groups.EffectiveDatabaseAccess(c.Request.Context(), userID, databaseID)
+		effectiveAccess, err := userGroups.GetEffectiveDatabaseAccess(c.Request.Context(), userID, databaseID)
 		if err != nil {
 			switch {
 			case errors.Is(err, domain.ErrDatabaseAccessDenied):
@@ -135,10 +135,10 @@ func parseDatabaseID(c *gin.Context) (uint, error) {
 	return uint(id), nil
 }
 
-func RequireDatabaseView(groups ports.GroupService) gin.HandlerFunc {
-	return RequireDatabaseAccess(groups, domain.AccessViewOnly)
+func RequireDatabaseView(userGroups ports.UserGroupService) gin.HandlerFunc {
+	return RequireDatabaseAccess(userGroups, domain.AccessViewOnly)
 }
 
-func RequireDatabaseEdit(groups ports.GroupService) gin.HandlerFunc {
-	return RequireDatabaseAccess(groups, domain.AccessViewEdit)
+func RequireDatabaseEdit(userGroups ports.UserGroupService) gin.HandlerFunc {
+	return RequireDatabaseAccess(userGroups, domain.AccessViewEdit)
 }
