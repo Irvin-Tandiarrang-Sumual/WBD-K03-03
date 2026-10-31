@@ -157,3 +157,7 @@ func toDomain(storedSession models.Session) domain.Session {
 		UserID:              storedSession.UserID,
 	}
 }
+
+func (r *sessionRepository) DeleteByUserIDs(ctx context.Context, userIDs []uint) error {
+	return r.db.WithContext(ctx).Where("user_id", userIDs).Delete(&models.Session{}).Error
+}

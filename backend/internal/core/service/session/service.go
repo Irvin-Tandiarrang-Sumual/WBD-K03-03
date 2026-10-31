@@ -149,3 +149,7 @@ func generateOpaqueToken() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
+
+func (s *sessionService) RevokeUsers(ctx context.Context, userIDs []uint) error {
+	return s.sessions.DeleteByUserIDs(ctx, userIDs)
+}

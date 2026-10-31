@@ -12,6 +12,7 @@ type SessionService interface {
 	Resolve(ctx context.Context, opaqueToken string) (domain.Session, error)
 	Revoke(ctx context.Context, opaqueToken string) error
 	RevokeUser(ctx context.Context, userID uint) error
+	RevokeUsers(ctx context.Context, userIDs []uint) error
 }
 
 type SessionRepository interface {
@@ -21,4 +22,5 @@ type SessionRepository interface {
 	Rotate(ctx context.Context, session domain.Session) error
 	DeleteByToken(ctx context.Context, opaqueToken string) error
 	DeleteByUserID(ctx context.Context, userID uint) error
+	DeleteByUserIDs(ctx context.Context, userIDs []uint) error
 }
