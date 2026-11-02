@@ -10,6 +10,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func RequireDatabaseView(userGroups ports.UserGroupService) gin.HandlerFunc {
+	return RequireDatabaseAccess(userGroups, domain.AccessViewOnly)
+}
+
+func RequireDatabaseEdit(userGroups ports.UserGroupService) gin.HandlerFunc {
+	return RequireDatabaseAccess(userGroups, domain.AccessViewEdit)
+}
+
 func RequireDatabaseAccess(userGroups ports.UserGroupService, required domain.AccessType) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := AuthenticatedUserID(c)
@@ -67,12 +75,4 @@ func parseDatabaseID(c *gin.Context) (uint, error) {
 	}
 
 	return uint(id), nil
-}
-
-func RequireDatabaseView(userGroups ports.UserGroupService) gin.HandlerFunc {
-	return RequireDatabaseAccess(userGroups, domain.AccessViewOnly)
-}
-
-func RequireDatabaseEdit(userGroups ports.UserGroupService) gin.HandlerFunc {
-	return RequireDatabaseAccess(userGroups, domain.AccessViewEdit)
 }
