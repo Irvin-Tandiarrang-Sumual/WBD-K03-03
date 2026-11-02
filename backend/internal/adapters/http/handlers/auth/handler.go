@@ -133,7 +133,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 //	@Failure		500	{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, ok := middleware.AuthenticatedUserID(c)
+	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, response.Error("authentication required"))
 		return

@@ -124,7 +124,7 @@ func (h *DatabaseExecutorHandler) ExplainDatabaseQuery(c *gin.Context) {
 }
 
 func currentDatabaseExecutorUserID(c *gin.Context) (uint, error) {
-	userID, exists := middleware.AuthenticatedUserID(c)
+	userID, exists := middleware.GetUserID(c)
 	if !exists {
 		return 0, domain.ErrCurrentUserUnavailable
 	}

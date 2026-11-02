@@ -225,7 +225,7 @@ func (h *DatabaseHandler) DeleteDatabase(c *gin.Context) {
 }
 
 func currentUserID(c *gin.Context) (uint, error) {
-	userID, exists := middleware.AuthenticatedUserID(c)
+	userID, exists := middleware.GetUserID(c)
 	if !exists {
 		return 0, domain.ErrCurrentUserUnavailable
 	}

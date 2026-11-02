@@ -8,8 +8,8 @@ import (
 func registerAdminRoutes(api *gin.RouterGroup, dependencies routerDependencies) {
 	admin := api.Group("/admin")
 	admin.Use(
-		middleware.Authenticate(dependencies.sessionService),
-		middleware.RequireAdmin(dependencies.userService),
+		dependencies.authMiddleware.Authenticate(),
+		middleware.RequireAdmin(),
 	)
 
 	registerAdminUserRoutes(admin, dependencies)

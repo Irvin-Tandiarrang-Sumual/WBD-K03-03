@@ -9,6 +9,7 @@ import (
 	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
 	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
 	usergrouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user_group"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -16,6 +17,7 @@ import (
 )
 
 type routerDependencies struct {
+	authMiddleware          *middleware.AuthMiddleware
 	authHandler             *authhandler.AuthHandler
 	userHandler             *userhandler.UserHandler
 	groupHandler            *grouphandler.GroupHandler
@@ -24,14 +26,11 @@ type routerDependencies struct {
 	databaseExecutorHandler *databaseexecutorhandler.DatabaseExecutorHandler
 	migrationHandler        *migrationhandler.MigrationHandler
 	healthHandler           *healthhandler.HealthHandler
-	sessionService          ports.SessionService
-	userService             ports.UserService
-	groupService            ports.GroupService
-	userGroupService        ports.UserGroupService
 }
 
 func SetupRouter(
 	engine *gin.Engine,
+	authMiddleware *middleware.AuthMiddleware,
 	authHandler *authhandler.AuthHandler,
 	userHandler *userhandler.UserHandler,
 	groupHandler *grouphandler.GroupHandler,
@@ -42,10 +41,9 @@ func SetupRouter(
 	healthHandler *healthhandler.HealthHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
-	groupService ports.GroupService,
-	userGroupService ports.UserGroupService,
 ) {
 	dependencies := routerDependencies{
+		authMiddleware:          authMiddleware,
 		authHandler:             authHandler,
 		userHandler:             userHandler,
 		groupHandler:            groupHandler,
@@ -54,10 +52,6 @@ func SetupRouter(
 		databaseExecutorHandler: databaseExecutorHandler,
 		migrationHandler:        migrationHandler,
 		healthHandler:           healthHandler,
-		sessionService:          sessionService,
-		userService:             userService,
-		groupService:            groupService,
-		userGroupService:        userGroupService,
 	}
 
 	api := engine.Group("/api/v1")

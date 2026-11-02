@@ -68,6 +68,8 @@ func buildApplication() (*application, error) {
 		return nil, err
 	}
 
+	middlewares := buildMiddlewares(services.session, services.user, configuration.Session.CookieSecure)
+
 	handlers := buildHandlers(configuration, services, systemDatabase)
 	engine := gin.Default()
 	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))
@@ -84,6 +86,7 @@ func buildApplication() (*application, error) {
 	engine.GET("/health", handlers.health.Check)
 	router.SetupRouter(
 		engine,
+		middlewares.authMiddleware,
 		handlers.auth,
 		handlers.user,
 		handlers.group,
@@ -94,8 +97,6 @@ func buildApplication() (*application, error) {
 		handlers.health,
 		services.session,
 		services.user,
-		services.group,
-		services.userGroup,
 	)
 
 	return &application{
