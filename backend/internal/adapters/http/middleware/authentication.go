@@ -12,10 +12,6 @@ import (
 
 const SessionCookieName = "session"
 
-type authenticationErrorResponse struct {
-	Error string `json:"error"`
-}
-
 func Authenticate(sessions ports.SessionService, secureCookie ...bool) gin.HandlerFunc {
 	isSecure := true
 	if len(secureCookie) > 0 {
@@ -85,4 +81,8 @@ func Authenticate(sessions ports.SessionService, secureCookie ...bool) gin.Handl
 
 		c.Next()
 	}
+}
+
+func SetAuthenticatedUserID(c *gin.Context, userID uint) {
+	c.Set(AuthenticatedUserIDKey, userID)
 }
