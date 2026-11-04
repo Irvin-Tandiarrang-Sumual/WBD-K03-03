@@ -15,20 +15,20 @@ import (
 type migrationService struct {
 	repository         ports.MigrationRepository
 	databaseRepository ports.DatabaseRepository
-	databaseExecutor   ports.DatabaseExecutor
+	databaseDriver     ports.DatabaseDriver
 	userGroupsService  ports.UserGroupService
 }
 
 func NewMigrationService(
 	repository ports.MigrationRepository,
 	databaseRepository ports.DatabaseRepository,
-	databaseExecutor ports.DatabaseExecutor,
+	databaseDriver ports.DatabaseDriver,
 	userGroupService ports.UserGroupService,
 ) ports.MigrationService {
 	return &migrationService{
 		repository:         repository,
 		databaseRepository: databaseRepository,
-		databaseExecutor:   databaseExecutor,
+		databaseDriver:     databaseDriver,
 		userGroupsService:  userGroupService,
 	}
 }
@@ -115,17 +115,17 @@ func (s *migrationService) CreateMigration(ctx context.Context, input domain.Cre
 		return nil, err
 	}
 
-	sqlDown, err := s.databaseExecutor.GenerateSQLDown(ctx, dbWithCred, input.SqlUp)
+	sqlDown, err := s.databaseDriver.GenerateSQLDown(ctx, dbWithCred, input.SqlUp)
 	if err != nil {
 		return s.failMigration(ctx, migration, err)
 	}
 	migration.SqlDown = sqlDown
 
-	if _, err := s.databaseExecutor.ExecuteCommand(ctx, dbWithCred, input.SqlUp); err != nil {
+	if _, err := s.databaseDriver.ExecuteCommand(ctx, dbWithCred, input.SqlUp); err != nil {
 		return s.failMigration(ctx, migration, err)
 	}
 
-	if snapshotBytes, _, err := captureDatabaseSnapshot(ctx, s.databaseExecutor, dbWithCred); err == nil && len(snapshotBytes) > 0 {
+	if snapshotBytes, _, err := captureDatabaseSnapshot(ctx, s.databaseDriver, dbWithCred); err == nil && len(snapshotBytes) > 0 {
 		migration.Snapshot = snapshotBytes
 	}
 
@@ -147,7 +147,7 @@ func (s *migrationService) ensureBaseline(ctx context.Context, db domain.Databas
 }
 
 func (s *migrationService) createInitialBaseline(ctx context.Context, db domain.Database, userID uint) (*domain.Migration, error) {
-	baselineBytes, baselineStruct, snapErr := captureDatabaseSnapshot(ctx, s.databaseExecutor, db)
+	baselineBytes, baselineStruct, snapErr := captureDatabaseSnapshot(ctx, s.databaseDriver, db)
 	if snapErr != nil || len(baselineBytes) == 0 {
 		return nil, nil
 	}
@@ -257,7 +257,7 @@ func (s *migrationService) executeRollbackRange(
 	for version := latestVer; version > targetVer; version-- {
 		migration, err := s.repository.FindByVersionAndDatabaseID(ctx, strconv.Itoa(version), db.ID)
 		if err != nil {
-			rollbackExecutedStatements(ctx, s.databaseExecutor, db, compensatingUps)
+			rollbackExecutedStatements(ctx, s.databaseDriver, db, compensatingUps)
 			return nil, err
 		}
 
@@ -266,13 +266,13 @@ func (s *migrationService) executeRollbackRange(
 		}
 
 		if migration.SqlDown == "" {
-			rollbackExecutedStatements(ctx, s.databaseExecutor, db, compensatingUps)
+			rollbackExecutedStatements(ctx, s.databaseDriver, db, compensatingUps)
 			return nil, domain.ErrMigrationRollbackUnavailable
 		}
 
 		upsToCompensate, err := s.applyRollbackStatement(ctx, db, migration)
 		if err != nil {
-			rollbackExecutedStatements(ctx, s.databaseExecutor, db, compensatingUps)
+			rollbackExecutedStatements(ctx, s.databaseDriver, db, compensatingUps)
 			return nil, err
 		}
 
@@ -292,7 +292,7 @@ func (s *migrationService) applyRollbackStatement(
 	executedUps := make([]string, 0, len(downStatements))
 
 	for idx, downStmt := range downStatements {
-		if _, err := s.databaseExecutor.ExecuteCommand(ctx, db, downStmt); err != nil {
+		if _, err := s.databaseDriver.ExecuteCommand(ctx, db, downStmt); err != nil {
 			return nil, err
 		}
 
@@ -333,7 +333,7 @@ func (s *migrationService) recordRollbackMigration(
 }
 
 func (s *migrationService) resolveRollbackSnapshot(ctx context.Context, db domain.Database, target *domain.Migration) []byte {
-	snapshotBytes, _, _ := captureDatabaseSnapshot(ctx, s.databaseExecutor, db)
+	snapshotBytes, _, _ := captureDatabaseSnapshot(ctx, s.databaseDriver, db)
 	if len(snapshotBytes) == 0 && len(target.Snapshot) > 0 {
 		return target.Snapshot
 	}
@@ -394,7 +394,7 @@ func parseVersion(v string) (int, error) {
 }
 
 func rollbackExecutedStatements(
-	ctx context.Context, executor ports.DatabaseExecutor,
+	ctx context.Context, driver ports.DatabaseDriver,
 	database domain.Database, executedDowns []string,
 ) {
 	for index := len(executedDowns) - 1; index >= 0; index-- {
@@ -402,12 +402,12 @@ func rollbackExecutedStatements(
 		subStatements := sqlutil.SplitStatements(downScript)
 		if len(subStatements) <= 1 {
 			if strings.TrimSpace(downScript) != "" {
-				_, _ = executor.ExecuteCommand(ctx, database, downScript)
+				_, _ = driver.ExecuteCommand(ctx, database, downScript)
 			}
 			continue
 		}
 		for _, subStmt := range subStatements {
-			_, _ = executor.ExecuteCommand(ctx, database, subStmt)
+			_, _ = driver.ExecuteCommand(ctx, database, subStmt)
 		}
 	}
 }

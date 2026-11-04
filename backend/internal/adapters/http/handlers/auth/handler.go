@@ -18,15 +18,11 @@ type AuthHandler struct {
 	userService  ports.UserService
 }
 
-func NewAuthHandler(service ports.AuthService, secureCookie bool, userService ...ports.UserService) *AuthHandler {
-	var us ports.UserService
-	if len(userService) > 0 {
-		us = userService[0]
-	}
+func NewAuthHandler(service ports.AuthService, secureCookie bool, userService ports.UserService) *AuthHandler {
 	return &AuthHandler{
 		service:      service,
 		secureCookie: secureCookie,
-		userService:  us,
+		userService:  userService,
 	}
 }
 
@@ -62,22 +58,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	maxAge := int(time.Until(session.AbsoluteExpiration).Seconds())
-	if maxAge < 0 {
-		maxAge = 0
-	}
+	maxAge := calculateMaxAge(session)
 
 	c.SetSameSite(http.SameSiteStrictMode)
-
-	c.SetCookie(
-		middleware.SessionCookieName,
-		session.OpaqueToken,
-		maxAge,
-		"/",
-		"",
-		h.secureCookie,
-		true,
-	)
+	middleware.SetSessionCookie(c, session.OpaqueToken, maxAge, h.secureCookie)
 
 	c.JSON(http.StatusOK, response.Success("login successful", LoginResponse{
 		ID:       user.ID,
@@ -108,15 +92,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	c.SetSameSite(http.SameSiteStrictMode)
 
-	c.SetCookie(
-		middleware.SessionCookieName,
-		"",
-		-1,
-		"/",
-		"",
-		h.secureCookie,
-		true,
-	)
+	middleware.ClearSessionCookie(c, h.secureCookie)
 
 	c.Status(http.StatusNoContent)
 }
@@ -161,4 +137,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Username: user.Username,
 		Role:     user.Role,
 	}))
+}
+
+func calculateMaxAge(session domain.Session) int {
+	maxAge := int(time.Until(session.AbsoluteExpiration).Seconds())
+	if maxAge < 0 {
+		maxAge = 0
+	}
+	return maxAge
 }

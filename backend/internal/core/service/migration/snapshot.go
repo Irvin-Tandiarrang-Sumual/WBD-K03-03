@@ -38,14 +38,14 @@ func (s *SchemaSnapshot) ToJSON() ([]byte, error) {
 }
 
 func captureDatabaseSnapshot(
-	ctx context.Context, executor ports.DatabaseExecutor,
+	ctx context.Context, inspector ports.SchemaInspectorRepository,
 	database domain.Database,
 ) ([]byte, *SchemaSnapshot, error) {
-	if executor == nil {
+	if inspector == nil {
 		return nil, nil, nil
 	}
 
-	metadata, err := executor.GetDatabaseMetadata(ctx, database)
+	metadata, err := inspector.GetDatabaseMetadata(ctx, database)
 	if err != nil || metadata == nil {
 		return nil, nil, err
 	}
