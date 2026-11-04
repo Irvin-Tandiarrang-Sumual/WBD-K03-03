@@ -11,15 +11,8 @@ type MigrationService interface {
 	GetMigrationsByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error)
 	CreateMigration(ctx context.Context, input domain.CreateMigrationInput) (*domain.Migration, error)
 	GetMigrationByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint) (*domain.Migration, int64, error)
-	CompareMigrations(ctx context.Context, input domain.CompareMigrationsInput) (*MigrationComparison, error)
+	CompareMigrations(ctx context.Context, input domain.CompareMigrationsInput) (*domain.MigrationComparison, error)
 	RollbackMigrations(ctx context.Context, input domain.RollbackMigrationsInput) ([]*domain.Migration, error)
-}
-
-type MigrationComparison struct {
-	FirstMigration  *domain.Migration
-	SecondMigration *domain.Migration
-	SQLUpEqual      bool
-	SQLDownEqual    bool
 }
 
 type MigrationRepository interface {
