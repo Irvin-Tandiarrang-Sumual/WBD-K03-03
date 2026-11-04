@@ -1,4 +1,4 @@
-package database_executor
+package database_driver
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 type databaseExecutorService struct {
 	databaseService    ports.DatabaseService
 	databaseRepository ports.DatabaseRepository
-	databaseExecutor   ports.DatabaseExecutor
+	databaseExecutor   ports.DatabaseExecutorRepository
 	userGroupsService  ports.UserGroupService
 }
 
@@ -20,7 +20,7 @@ var _ ports.DatabaseExecutorService = (*databaseExecutorService)(nil)
 func NewDatabaseExecutorService(
 	databaseService ports.DatabaseService,
 	databaseRepository ports.DatabaseRepository,
-	databaseExecutor ports.DatabaseExecutor,
+	databaseExecutor ports.DatabaseExecutorRepository,
 	userGroupsService ports.UserGroupService,
 ) ports.DatabaseExecutorService {
 	return &databaseExecutorService{
@@ -41,8 +41,8 @@ func (s *databaseExecutorService) ExecuteDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
-		return nil, err
+	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+		return nil, domain.ErrDatabaseAccessDenied
 	}
 	if err := validateSelectQuery(query); err != nil {
 		return nil, err
@@ -66,8 +66,8 @@ func (s *databaseExecutorService) ExplainDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
-		return nil, err
+	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+		return nil, domain.ErrDatabaseAccessDenied
 	}
 	cleanedQuery := stripLeadingExplain(stripTrailingSemicolons(query))
 	if err := validateSelectQuery(cleanedQuery); err != nil {
@@ -77,23 +77,10 @@ func (s *databaseExecutorService) ExplainDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	return s.databaseExecutor.ExplainQuery(ctx, databaseWithCredential, cleanedQuery, analyze)
-}
-
-func (s *databaseExecutorService) requireDatabaseAccess(
-	ctx context.Context,
-	userID uint,
-	databaseID uint,
-	required domain.AccessType,
-) error {
-	access, err := s.userGroupsService.GetEffectiveDatabaseAccess(ctx, userID, databaseID)
-	if err != nil {
-		return err
+	if analyze {
+		return s.databaseExecutor.ExplainAnalyze(ctx, databaseWithCredential, cleanedQuery)
 	}
-	if !access.Allows(required) {
-		return domain.ErrDatabaseAccessDenied
-	}
-	return nil
+	return s.databaseExecutor.Explain(ctx, databaseWithCredential, cleanedQuery)
 }
 
 func (s *databaseExecutorService) getAccessibleDatabase(
