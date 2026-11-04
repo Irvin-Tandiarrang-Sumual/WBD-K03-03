@@ -79,7 +79,20 @@ func (s *userGroupService) RemoveUser(ctx context.Context, groupID uint, userID 
 	return s.sessions.RevokeUser(ctx, userID)
 }
 
-func (s *userGroupService) GetEffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
+func (s *userGroupService) Authorize(ctx context.Context,
+	userID uint, databaseID uint, requiredAccessType domain.AccessType) error {
+
+	access, err := s.getEffectiveDatabaseAccess(ctx, userID, databaseID)
+	if err != nil {
+		return err
+	}
+	if !access.Allows(domain.AccessViewEdit) {
+		return domain.ErrDatabaseAccessDenied
+	}
+	return nil
+}
+
+func (s *userGroupService) getEffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
 	accesses, err := s.userGroups.FindAllAccessTypes(ctx, userID, databaseID)
 	if err != nil {
 		return "", err
@@ -101,10 +114,6 @@ func (s *userGroupService) GetEffectiveDatabaseAccess(ctx context.Context, userI
 	}
 
 	return effective, nil
-}
-
-func (s *userGroupService) EffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
-	return s.GetEffectiveDatabaseAccess(ctx, userID, databaseID)
 }
 
 func containsUserID(userIDs []uint, target uint) bool {
