@@ -9,8 +9,7 @@ import (
 type UserGroupService interface {
 	AddUser(ctx context.Context, groupID uint, userID uint) error
 	RemoveUser(ctx context.Context, groupID uint, userID uint) error
-	GetEffectiveDatabaseAccess(ctx context.Context,
-		userID uint, databaseID uint) (domain.AccessType, error)
+	Authorize(ctx context.Context, userID uint, databaseID uint, requiredAccessType domain.AccessType) error
 }
 
 type UserGroupRepository interface {

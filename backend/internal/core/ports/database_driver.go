@@ -47,9 +47,23 @@ type DatabaseExecutorService interface {
 	ExplainDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string, analyze bool) (*DatabaseQueryResult, error)
 }
 
-type DatabaseExecutor interface {
-	ExecuteQuery(ctx context.Context, database domain.Database, query string, args ...any) (*DatabaseQueryResult, error)
-	ExecuteCommand(ctx context.Context, database domain.Database, command string, args ...any) (*DatabaseCommandResult, error)
-	ExplainQuery(ctx context.Context, database domain.Database, query string, analyze bool, args ...any) (*DatabaseQueryResult, error)
+type DatabaseExecutorRepository interface {
+	ExecuteQuery(ctx context.Context, database domain.Database, query string) (*DatabaseQueryResult, error)
+	ExecuteCommand(ctx context.Context, database domain.Database, command string) (*DatabaseCommandResult, error)
+	Explain(ctx context.Context, database domain.Database, query string) (*DatabaseQueryResult, error)
+	ExplainAnalyze(ctx context.Context, database domain.Database, query string) (*DatabaseQueryResult, error)
+}
+
+type SchemaInspectorRepository interface {
 	GetDatabaseMetadata(ctx context.Context, database domain.Database) (*DatabaseMetadata, error)
+}
+
+type SQLDialect interface {
+	GenerateSQLDown(ctx context.Context, database domain.Database, sqlUp string) (string, error)
+}
+
+type DatabaseDriver interface {
+	DatabaseExecutorRepository
+	SchemaInspectorRepository
+	SQLDialect
 }
