@@ -5,7 +5,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
-	databaseexecutorservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_executor"
+	databasedriverservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_driver"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
@@ -15,14 +15,14 @@ import (
 )
 
 type applicationServices struct {
-	auth             ports.AuthService
-	user             ports.UserService
-	group            ports.GroupService
-	userGroup        ports.UserGroupService
-	session          ports.SessionService
-	database         ports.DatabaseService
-	databaseExecutor ports.DatabaseExecutorService
-	migration        ports.MigrationService
+	auth           ports.AuthService
+	user           ports.UserService
+	group          ports.GroupService
+	userGroup      ports.UserGroupService
+	session        ports.SessionService
+	database       ports.DatabaseService
+	databaseDriver ports.DatabaseDriverService
+	migration      ports.MigrationService
 }
 
 func buildServices(
@@ -57,27 +57,27 @@ func buildServices(
 		sessionService,
 		infrastructure.poolManager,
 	)
-	databaseExecutorService := databaseexecutorservice.NewDatabaseExecutorService(
+	databaseDriverService := databasedriverservice.NewDatabaseDriverService(
 		databaseService,
 		databaseRepository,
-		infrastructure.databaseExecutor,
+		infrastructure.databaseDriver,
 		userGroupService,
 	)
 	migrationService := migrationservice.NewMigrationService(
 		migrationRepository,
 		databaseRepository,
-		infrastructure.databaseExecutor,
+		infrastructure.databaseDriver,
 		userGroupService,
 	)
 
 	return &applicationServices{
-		auth:             authService,
-		user:             userService,
-		group:            groupService,
-		userGroup:        userGroupService,
-		session:          sessionService,
-		database:         databaseService,
-		databaseExecutor: databaseExecutorService,
-		migration:        migrationService,
+		auth:           authService,
+		user:           userService,
+		group:          groupService,
+		userGroup:      userGroupService,
+		session:        sessionService,
+		database:       databaseService,
+		databaseDriver: databaseDriverService,
+		migration:      migrationService,
 	}, nil
 }

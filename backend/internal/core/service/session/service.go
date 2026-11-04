@@ -12,14 +12,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 )
 
-const (
-	DefaultIdleTimeout         = 30 * time.Minute
-	DefaultAbsoluteLifetime    = 24 * time.Hour
-	DefaultRotationInterval    = 15 * time.Minute
-	DefaultRotationGracePeriod = 30 * time.Second
-
-	sessionTokenBytes = 32
-)
+const sessionTokenBytes = 32
 
 type sessionService struct {
 	sessions ports.SessionRepository
@@ -39,107 +32,109 @@ func (s *sessionService) CreateSession(ctx context.Context, userID uint) (domain
 		return domain.Session{}, err
 	}
 
-	now := time.Now().UTC()
-
-	session := domain.Session{
-		OpaqueToken:        opaqueToken,
-		RotatedAt:          now,
-		IdleTimeout:        DefaultIdleTimeout,
-		LastActive:         now,
-		AbsoluteExpiration: now.Add(DefaultAbsoluteLifetime),
-		UserID:             userID,
-	}
-
+	session := buildNewSession(userID, opaqueToken, time.Now().UTC())
 	return s.sessions.Save(ctx, session)
 }
 
 func (s *sessionService) Resolve(ctx context.Context, opaqueToken string) (domain.Session, error) {
-	opaqueToken = strings.TrimSpace(opaqueToken)
-
-	if opaqueToken == "" {
+	cleanToken := strings.TrimSpace(opaqueToken)
+	if cleanToken == "" {
 		return domain.Session{}, domain.ErrInvalidSession
 	}
 
-	session, err := s.sessions.FindByToken(ctx, opaqueToken)
+	session, err := s.sessions.FindByToken(ctx, cleanToken)
 	if err != nil {
 		return domain.Session{}, err
 	}
 
 	now := time.Now().UTC()
+	if session.IsExpired(now) {
+		return domain.Session{}, s.purgeExpiredSession(ctx, cleanToken)
+	}
 
-	absoluteExpired :=
-		!session.AbsoluteExpiration.IsZero() &&
-			!now.Before(session.AbsoluteExpiration)
+	if session.IsPreviousToken(cleanToken) {
+		return s.resolveGracePeriodSession(ctx, session, now)
+	}
 
-	idleExpired :=
-		session.IdleTimeout > 0 &&
-			now.Sub(session.LastActive) > session.IdleTimeout
+	if session.NeedsRotation(now) {
+		return s.rotateSessionToken(ctx, session, now)
+	}
 
-	if absoluteExpired || idleExpired {
-		if err := s.sessions.DeleteByToken(ctx, opaqueToken); err != nil {
-			return domain.Session{}, err
-		}
+	return s.updateSessionActivity(ctx, session, now)
+}
 
+func (s *sessionService) Revoke(ctx context.Context, opaqueToken string) error {
+	cleanToken := strings.TrimSpace(opaqueToken)
+	if cleanToken == "" {
+		return nil
+	}
+	return s.sessions.DeleteByToken(ctx, cleanToken)
+}
+
+func (s *sessionService) RevokeUser(ctx context.Context, userID uint) error {
+	return s.sessions.DeleteByUserID(ctx, userID)
+}
+
+func (s *sessionService) RevokeUsers(ctx context.Context, userIDs []uint) error {
+	return s.sessions.DeleteByUserIDs(ctx, userIDs)
+}
+
+func (s *sessionService) purgeExpiredSession(ctx context.Context, token string) error {
+	if err := s.sessions.DeleteByToken(ctx, token); err != nil {
+		return err
+	}
+	return domain.ErrInvalidSession
+}
+
+func (s *sessionService) resolveGracePeriodSession(ctx context.Context, session domain.Session, now time.Time) (domain.Session, error) {
+	if !session.IsWithinGracePeriod(now) {
 		return domain.Session{}, domain.ErrInvalidSession
 	}
 
-	// Jika request datang menggunakan identifier lama (PreviousOpaqueToken),
-	// periksa apakah masih berada dalam masa grace period.
-	if session.PreviousOpaqueToken != "" &&
-		opaqueToken == session.PreviousOpaqueToken &&
-		opaqueToken != session.OpaqueToken {
-		if session.GracePeriodUntil.IsZero() || !now.Before(session.GracePeriodUntil) {
-			return domain.Session{}, domain.ErrInvalidSession
-		}
+	return s.updateSessionActivity(ctx, session, now)
+}
 
-		if err := s.sessions.Touch(ctx, session.ID, now); err != nil {
-			return domain.Session{}, err
-		}
-
-		session.LastActive = now
-		return session, nil
+func (s *sessionService) rotateSessionToken(ctx context.Context, session domain.Session, now time.Time) (domain.Session, error) {
+	newToken, err := generateOpaqueToken()
+	if err != nil {
+		return domain.Session{}, err
 	}
 
-	// Rotasi berkala apabila umur token saat ini telah mencapai DefaultRotationInterval,
-	// tanpa memperpanjang AbsoluteExpiration.
-	if !session.RotatedAt.IsZero() && now.Sub(session.RotatedAt) >= DefaultRotationInterval {
-		newToken, genErr := generateOpaqueToken()
-		if genErr != nil {
-			return domain.Session{}, genErr
-		}
-
-		session.PreviousOpaqueToken = session.OpaqueToken
-		session.OpaqueToken = newToken
-		session.GracePeriodUntil = now.Add(DefaultRotationGracePeriod)
-		session.RotatedAt = now
-		session.LastActive = now
-
-		if err := s.sessions.Rotate(ctx, session); err != nil {
-			return domain.Session{}, err
-		}
-
-		return session, nil
+	rotatedSession := applyTokenRotation(session, newToken, now)
+	if err := s.sessions.Rotate(ctx, rotatedSession); err != nil {
+		return domain.Session{}, err
 	}
 
+	return rotatedSession, nil
+}
+
+func (s *sessionService) updateSessionActivity(ctx context.Context, session domain.Session, now time.Time) (domain.Session, error) {
 	if err := s.sessions.Touch(ctx, session.ID, now); err != nil {
 		return domain.Session{}, err
 	}
 
 	session.LastActive = now
-
 	return session, nil
 }
 
-func (s *sessionService) Revoke(ctx context.Context, opaqueToken string) error {
-	if strings.TrimSpace(opaqueToken) == "" {
-		return nil
+func buildNewSession(userID uint, token string, now time.Time) domain.Session {
+	return domain.Session{
+		OpaqueToken:        token,
+		RotatedAt:          now,
+		IdleTimeout:        domain.DefaultSessionIdleTimeout,
+		LastActive:         now,
+		AbsoluteExpiration: now.Add(domain.DefaultSessionAbsoluteLifetime),
+		UserID:             userID,
 	}
-
-	return s.sessions.DeleteByToken(ctx, opaqueToken)
 }
 
-func (s *sessionService) RevokeUser(ctx context.Context, userID uint) error {
-	return s.sessions.DeleteByUserID(ctx, userID)
+func applyTokenRotation(session domain.Session, newToken string, now time.Time) domain.Session {
+	session.PreviousOpaqueToken = session.OpaqueToken
+	session.OpaqueToken = newToken
+	session.GracePeriodUntil = now.Add(domain.DefaultSessionRotationGracePeriod)
+	session.RotatedAt = now
+	session.LastActive = now
+	return session
 }
 
 func generateOpaqueToken() (string, error) {
@@ -148,8 +143,4 @@ func generateOpaqueToken() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
-}
-
-func (s *sessionService) RevokeUsers(ctx context.Context, userIDs []uint) error {
-	return s.sessions.DeleteByUserIDs(ctx, userIDs)
 }
