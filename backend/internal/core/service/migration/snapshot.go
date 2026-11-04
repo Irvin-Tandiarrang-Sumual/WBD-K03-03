@@ -33,9 +33,12 @@ type SchemaSnapshot struct {
 	Tables map[string]SchemaTableSnapshot `json:"tables"`
 }
 
+func (s *SchemaSnapshot) ToJSON() ([]byte, error) {
+	return json.Marshal(s)
+}
+
 func captureDatabaseSnapshot(
-	ctx context.Context,
-	executor ports.DatabaseExecutor,
+	ctx context.Context, executor ports.DatabaseExecutor,
 	database domain.Database,
 ) ([]byte, *SchemaSnapshot, error) {
 	if executor == nil {
@@ -48,11 +51,12 @@ func captureDatabaseSnapshot(
 	}
 
 	snapshot := buildSchemaSnapshot(metadata)
-	raw, err := json.Marshal(snapshot)
+	rawBytes, err := snapshot.ToJSON()
 	if err != nil {
 		return nil, nil, err
 	}
-	return raw, snapshot, nil
+
+	return rawBytes, snapshot, nil
 }
 
 func buildSchemaSnapshot(metadata *ports.DatabaseMetadata) *SchemaSnapshot {
@@ -61,29 +65,29 @@ func buildSchemaSnapshot(metadata *ports.DatabaseMetadata) *SchemaSnapshot {
 		return &SchemaSnapshot{Tables: tables}
 	}
 
-	for _, tbl := range metadata.Tables {
+	populateTables(tables, metadata.Tables)
+	populateColumns(tables, metadata.Columns)
+	populateIndexes(tables, metadata.Indexes)
+
+	return &SchemaSnapshot{Tables: tables}
+}
+
+func populateTables(tables map[string]SchemaTableSnapshot, metaTables []ports.DatabaseTableMetadata) {
+	for _, tbl := range metaTables {
 		if tbl.Name == "" {
 			continue
 		}
-		tables[tbl.Name] = SchemaTableSnapshot{
-			Schema:  tbl.Schema,
-			Columns: []SchemaColumnSnapshot{},
-			Indexes: []SchemaIndexSnapshot{},
-		}
+		tables[tbl.Name] = ensureTableSnapshot(tables, tbl.Name, tbl.Schema)
 	}
+}
 
-	for _, col := range metadata.Columns {
+func populateColumns(tables map[string]SchemaTableSnapshot, metaColumns []ports.DatabaseColumnMetadata) {
+	for _, col := range metaColumns {
 		if col.Table == "" || col.Name == "" {
 			continue
 		}
-		entry, exists := tables[col.Table]
-		if !exists {
-			entry = SchemaTableSnapshot{
-				Schema:  col.Schema,
-				Columns: []SchemaColumnSnapshot{},
-				Indexes: []SchemaIndexSnapshot{},
-			}
-		}
+
+		entry := ensureTableSnapshot(tables, col.Table, col.Schema)
 		entry.Columns = append(entry.Columns, SchemaColumnSnapshot{
 			Name:     col.Name,
 			Type:     col.DataType,
@@ -91,38 +95,47 @@ func buildSchemaSnapshot(metadata *ports.DatabaseMetadata) *SchemaSnapshot {
 		})
 		tables[col.Table] = entry
 	}
+}
 
-	for _, idx := range metadata.Indexes {
+func populateIndexes(tables map[string]SchemaTableSnapshot, metaIndexes []ports.DatabaseIndexMetadata) {
+	for _, idx := range metaIndexes {
 		if idx.Table == "" || idx.Name == "" {
 			continue
 		}
-		entry, exists := tables[idx.Table]
-		if !exists {
-			entry = SchemaTableSnapshot{
-				Schema:  idx.Schema,
-				Columns: []SchemaColumnSnapshot{},
-				Indexes: []SchemaIndexSnapshot{},
-			}
+
+		entry := ensureTableSnapshot(tables, idx.Table, idx.Schema)
+		if hasIndex(entry.Indexes, idx.Name) {
+			continue
 		}
-		// Avoid duplicate index names when multi-column index rows are returned
-		alreadyAdded := false
-		for _, existing := range entry.Indexes {
-			if existing.Name == idx.Name {
-				alreadyAdded = true
-				break
-			}
-		}
-		if !alreadyAdded {
-			entry.Indexes = append(entry.Indexes, SchemaIndexSnapshot{
-				Name:    idx.Name,
-				Unique:  idx.IsUnique,
-				Primary: idx.IsPrimary,
-			})
-		}
+
+		entry.Indexes = append(entry.Indexes, SchemaIndexSnapshot{
+			Name:    idx.Name,
+			Unique:  idx.IsUnique,
+			Primary: idx.IsPrimary,
+		})
 		tables[idx.Table] = entry
 	}
+}
 
-	return &SchemaSnapshot{Tables: tables}
+func ensureTableSnapshot(tables map[string]SchemaTableSnapshot, tableName, schema string) SchemaTableSnapshot {
+	entry, exists := tables[tableName]
+	if !exists {
+		return SchemaTableSnapshot{
+			Schema:  schema,
+			Columns: make([]SchemaColumnSnapshot, 0),
+			Indexes: make([]SchemaIndexSnapshot, 0),
+		}
+	}
+	return entry
+}
+
+func hasIndex(indexes []SchemaIndexSnapshot, indexName string) bool {
+	for _, idx := range indexes {
+		if idx.Name == indexName {
+			return true
+		}
+	}
+	return false
 }
 
 func formatSnapshotAsBaselineSQL(snapshot *SchemaSnapshot) string {
@@ -130,33 +143,43 @@ func formatSnapshotAsBaselineSQL(snapshot *SchemaSnapshot) string {
 		return "-- Initial Schema Snapshot (Empty Database)"
 	}
 
-	tableNames := make([]string, 0, len(snapshot.Tables))
-	for name := range snapshot.Tables {
-		tableNames = append(tableNames, name)
+	sortedNames := getSortedTableNames(snapshot.Tables)
+	tableStatements := make([]string, 0, len(sortedNames))
+
+	for _, name := range sortedNames {
+		tableStatements = append(tableStatements, formatCreateTableSQL(name, snapshot.Tables[name]))
 	}
-	sort.Strings(tableNames)
 
 	var sb strings.Builder
 	sb.WriteString("-- Initial Schema Snapshot (Migration #1)\n")
-	for i, tableName := range tableNames {
-		tbl := snapshot.Tables[tableName]
-		sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", tableName))
-		for cIdx, col := range tbl.Columns {
-			nullStr := "NOT NULL"
-			if col.Nullable {
-				nullStr = "NULL"
-			}
-			comma := ","
-			if cIdx == len(tbl.Columns)-1 {
-				comma = ""
-			}
-			sb.WriteString(fmt.Sprintf("  %s %s %s%s\n", col.Name, col.Type, nullStr, comma))
-		}
-		sb.WriteString(");")
-		if i < len(tableNames)-1 {
-			sb.WriteString("\n\n")
-		}
-	}
+	sb.WriteString(strings.Join(tableStatements, "\n\n"))
 	return sb.String()
 }
 
+func getSortedTableNames(tables map[string]SchemaTableSnapshot) []string {
+	names := make([]string, 0, len(tables))
+	for name := range tables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func formatCreateTableSQL(tableName string, table SchemaTableSnapshot) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", tableName))
+
+	columnLines := make([]string, 0, len(table.Columns))
+	for _, col := range table.Columns {
+		nullability := "NOT NULL"
+		if col.Nullable {
+			nullability = "NULL"
+		}
+		columnLines = append(columnLines, fmt.Sprintf("  %s %s %s", col.Name, col.Type, nullability))
+	}
+
+	sb.WriteString(strings.Join(columnLines, ",\n"))
+	sb.WriteString("\n);")
+
+	return sb.String()
+}
