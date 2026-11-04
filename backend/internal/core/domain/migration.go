@@ -14,3 +14,22 @@ type Migration struct {
 	Snapshot     []byte
 	UserID       uint
 }
+
+type CreateMigrationInput struct {
+	databaseID uint
+	userID     uint
+	sqlUp      string
+}
+
+type CompareMigrationsInput struct {
+	DatabaseID        uint
+	UserID            uint
+	FirstMigrationID  uint
+	SecondMigrationID uint
+}
+
+type RollbackMigrationsInput struct {
+	databaseID        uint
+	userID            uint
+	targetMigrationID uint
+}

@@ -100,7 +100,14 @@ func (h *MigrationHandler) CreateMigration(c *gin.Context) {
 		return
 	}
 
-	migration, err := h.service.CreateMigration(c.Request.Context(), databaseID, userID, req.SqlUp)
+	migration, err := h.service.CreateMigration(
+		c.Request.Context(),
+		domain.CreateMigrationInput{
+			DatabaseID: databaseID,
+			UserID:     userID,
+			SqlUp:      req.SqlUp,
+		},
+	)
 	if err != nil {
 		writeErrorResponse(c, err)
 		return
@@ -187,10 +194,12 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 	}
 	comparison, err := h.service.CompareMigrations(
 		c.Request.Context(),
-		databaseID,
-		userID,
-		uint(firstMigrationID),
-		uint(secondMigrationID),
+		domain.CompareMigrationsInput{
+			DatabaseID:        databaseID,
+			UserID:            userID,
+			FirstMigrationID:  uint(firstMigrationID),
+			SecondMigrationID: uint(secondMigrationID),
+		},
 	)
 	if err != nil {
 		writeErrorResponse(c, err)
@@ -233,9 +242,11 @@ func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
 	}
 	rolledBack, err := h.service.RollbackMigrations(
 		c.Request.Context(),
-		request.DatabaseID,
-		userID,
-		request.TargetMigrationID,
+		domain.RollbackMigrationsInput{
+			DatabaseID:        request.DatabaseID,
+			UserID:            userID,
+			TargetMigrationID: request.TargetMigrationID,
+		},
 	)
 	if err != nil {
 		writeErrorResponse(c, err)
