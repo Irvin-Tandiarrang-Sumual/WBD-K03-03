@@ -42,7 +42,7 @@ type DatabaseMetadata struct {
 	Indexes []DatabaseIndexMetadata  `json:"indexes"`
 }
 
-type DatabaseExecutorService interface {
+type DatabaseDriverService interface {
 	ExecuteDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string) (*DatabaseQueryResult, error)
 	ExplainDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string, analyze bool) (*DatabaseQueryResult, error)
 }

@@ -61,7 +61,7 @@ type targetDatabaseInfrastructure struct {
 	credentialCipher ports.DatabaseCredentialCipher
 	connectionTester ports.DatabaseConnectionTester
 	poolManager      *driver.DatabasePoolManager
-	databaseExecutor ports.DatabaseExecutor
+	databaseDriver   ports.DatabaseDriver
 	close            func()
 }
 
@@ -78,7 +78,7 @@ func buildTargetDatabaseInfrastructure(configuration *config.Config) (*targetDat
 		credentialCipher: credentialCipher,
 		connectionTester: driver.NewDatabaseConnectionTester(),
 		poolManager:      poolManager,
-		databaseExecutor: driver.NewDatabaseExecutor(poolManager),
+		databaseDriver:   driver.NewDatabaseDriver(poolManager),
 		close: func() {
 			if err := poolManager.CloseAll(); err != nil {
 				log.Printf("failed to close target database pools: %v", err)

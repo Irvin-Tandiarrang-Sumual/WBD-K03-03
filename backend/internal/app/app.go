@@ -10,7 +10,6 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/gin-gonic/gin"
 
-	// Auto-generated Swagger docs — registers spec on init
 	_ "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/docs"
 )
 
@@ -92,7 +91,7 @@ func buildApplication() (*application, error) {
 		handlers.group,
 		handlers.userGroup,
 		handlers.database,
-		handlers.databaseExecutor,
+		handlers.databaseDriver,
 		handlers.migration,
 		handlers.health,
 		services.session,

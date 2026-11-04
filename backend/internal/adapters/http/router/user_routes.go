@@ -20,11 +20,11 @@ func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependen
 	)
 	databases.POST(
 		"/:database_id/query",
-		dependencies.databaseExecutorHandler.ExecuteDatabaseQuery,
+		dependencies.databaseDriverHandler.ExecuteDatabaseQuery,
 	)
 	databases.POST(
 		"/:database_id/explain",
-		dependencies.databaseExecutorHandler.ExplainDatabaseQuery,
+		dependencies.databaseDriverHandler.ExplainDatabaseQuery,
 	)
 	databases.GET(
 		"/:database_id/migrations",
