@@ -3,14 +3,13 @@ package database_driver
 import (
 	"errors"
 	"net/http"
-	"strconv"
-	"strings"
 
-	"github.com/gin-gonic/gin"
-
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/ginutil"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
+	"github.com/gin-gonic/gin"
 )
 
 type DatabaseDriverHandler struct {
@@ -22,29 +21,16 @@ func NewDatabaseDriverHandler(databaseDriverService ports.DatabaseDriverService)
 }
 
 func (h *DatabaseDriverHandler) ExecuteDatabaseQuery(c *gin.Context) {
-	databaseIDParam := c.Param("database_id")
-	databaseID, err := strconv.ParseUint(databaseIDParam, 10, 64)
-	if err != nil {
-		writeDatabaseDriverErrorResponse(c, domain.ErrInvalidDatabaseID)
-		return
-	}
-	userID, err := currentDatabaseDriverUserID(c)
-	if err != nil {
-		writeDatabaseDriverErrorResponse(c, err)
-		return
-	}
-
-	var request DatabaseQueryRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, response.Error(domain.ErrInvalidInput.Error()))
+	databaseID, userID, query, ok := h.extractQueryContext(c)
+	if !ok {
 		return
 	}
 
 	result, err := h.databaseDriverService.ExecuteDatabaseQuery(
 		c.Request.Context(),
-		uint(databaseID),
+		databaseID,
 		userID,
-		request.Query,
+		query,
 	)
 	if err != nil {
 		writeDatabaseDriverErrorResponse(c, err)
@@ -55,32 +41,16 @@ func (h *DatabaseDriverHandler) ExecuteDatabaseQuery(c *gin.Context) {
 }
 
 func (h *DatabaseDriverHandler) ExplainDatabaseQuery(c *gin.Context) {
-	databaseIDParam := c.Param("database_id")
-	databaseID, err := strconv.ParseUint(databaseIDParam, 10, 64)
-	if err != nil {
-		writeDatabaseDriverErrorResponse(c, domain.ErrInvalidDatabaseID)
+	databaseID, userID, query, ok := h.extractQueryContext(c)
+	if !ok {
 		return
 	}
-	userID, err := currentDatabaseDriverUserID(c)
-	if err != nil {
-		writeDatabaseDriverErrorResponse(c, err)
-		return
-	}
-
-	var request DatabaseQueryRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, response.Error(domain.ErrInvalidInput.Error()))
-		return
-	}
-
-	analyze := strings.EqualFold(c.Query("analyze"), "true")
 
 	result, err := h.databaseDriverService.ExplainDatabaseQuery(
 		c.Request.Context(),
-		uint(databaseID),
+		databaseID,
 		userID,
-		request.Query,
-		analyze,
+		query,
 	)
 	if err != nil {
 		writeDatabaseDriverErrorResponse(c, err)
@@ -90,16 +60,45 @@ func (h *DatabaseDriverHandler) ExplainDatabaseQuery(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success("query execution plan generated successfully", result))
 }
 
-func currentDatabaseDriverUserID(c *gin.Context) (uint, error) {
-	value, exists := c.Get("user_id")
-	if !exists {
-		return 0, domain.ErrCurrentUserUnavailable
+func (h *DatabaseDriverHandler) ExplainAnalyzeDatabaseQuery(c *gin.Context) {
+	databaseID, userID, query, ok := h.extractQueryContext(c)
+	if !ok {
+		return
 	}
-	userID, ok := value.(uint)
-	if !ok || userID == 0 {
-		return 0, domain.ErrCurrentUserUnavailable
+
+	result, err := h.databaseDriverService.ExplainAnalyzeDatabaseQuery(
+		c.Request.Context(),
+		databaseID,
+		userID,
+		query,
+	)
+	if err != nil {
+		writeDatabaseDriverErrorResponse(c, err)
+		return
 	}
-	return userID, nil
+
+	c.JSON(http.StatusOK, response.Success("query execution plan with runtime analysis generated successfully", result))
+}
+
+func (h *DatabaseDriverHandler) extractQueryContext(c *gin.Context) (uint, uint, string, bool) {
+	databaseID, err := ginutil.ParseUintParam(c, "database_id")
+	if err != nil {
+		writeDatabaseDriverErrorResponse(c, domain.ErrInvalidDatabaseID)
+		return 0, 0, "", false
+	}
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		writeDatabaseDriverErrorResponse(c, err)
+		return 0, 0, "", false
+	}
+
+	var request DatabaseQueryRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, response.Error(domain.ErrInvalidInput.Error()))
+		return 0, 0, "", false
+	}
+
+	return databaseID, userID, request.Query, true
 }
 
 func writeDatabaseDriverErrorResponse(c *gin.Context, err error) {
