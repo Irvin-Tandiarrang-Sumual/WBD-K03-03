@@ -3,6 +3,7 @@ package domain
 const (
 	RoleUser  = "user"
 	RoleAdmin = "admin"
+	MaxPasswordBytes = 72
 )
 
 type User struct {
@@ -21,4 +22,15 @@ type CreateUserInput struct {
 type UpdateUserInput struct {
 	Username *string
 	Password *string
+}
+
+func ValidatePassword(password string) error {
+	if password == "" || len([]byte(password)) > MaxPasswordBytes {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+func IsValidRole(role string) bool {
+	return role == RoleUser || role == RoleAdmin
 }

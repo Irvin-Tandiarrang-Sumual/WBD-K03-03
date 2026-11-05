@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+const (
+	MigrationStatusSuccess = "success"
+	MigrationStatusFail    = "fail"
+)
+
 type Migration struct {
 	ID           uint
 	DatabaseID   uint
