@@ -81,7 +81,7 @@ func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *por
 		}
 	}
 
-	return s.databaseRepository.CreateDatabase(ctx, &database)
+	return s.databaseRepository.Save(ctx, &database)
 }
 
 func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) error {
@@ -182,11 +182,8 @@ func (s *databaseService) populateAccessType(ctx context.Context, userID uint, d
 			db.AccessType = domain.AccessViewEdit
 			return
 		}
-	}
-	for _, access := range accessTypes {
 		if access == domain.AccessViewOnly {
 			db.AccessType = domain.AccessViewOnly
-			return
 		}
 	}
 }
