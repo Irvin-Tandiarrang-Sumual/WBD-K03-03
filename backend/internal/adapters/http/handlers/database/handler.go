@@ -101,7 +101,7 @@ func (h *DatabaseHandler) GetAllDatabases(c *gin.Context) {
 //	@Failure		500		{object}	response.BaseResponse[any]						"Internal server error"
 //	@Router			/me/databases [get]
 func (h *DatabaseHandler) GetDatabasesByUserID(c *gin.Context) {
-	userID, err := currentUserID(c)
+	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
 		writeDatabaseErrorResponse(c, err)
 		return
@@ -147,7 +147,7 @@ func (h *DatabaseHandler) GetDatabaseByIDAndUserID(c *gin.Context) {
 		writeDatabaseErrorResponse(c, domain.ErrInvalidDatabaseID)
 		return
 	}
-	userID, err := currentUserID(c)
+	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
 		writeDatabaseErrorResponse(c, err)
 		return
@@ -224,13 +224,6 @@ func (h *DatabaseHandler) DeleteDatabase(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success[any]("database deleted successfully", nil))
 }
 
-func currentUserID(c *gin.Context) (uint, error) {
-	userID, exists := middleware.GetUserID(c)
-	if !exists {
-		return 0, domain.ErrCurrentUserUnavailable
-	}
-	return userID, nil
-}
 
 func toResponse(database *domain.Database) DatabaseResponse {
 	return DatabaseResponse{

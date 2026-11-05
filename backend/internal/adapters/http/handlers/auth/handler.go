@@ -3,7 +3,6 @@ package auth
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -58,10 +57,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	maxAge := calculateMaxAge(session)
-
-	c.SetSameSite(http.SameSiteStrictMode)
-	middleware.SetSessionCookie(c, session.OpaqueToken, maxAge, h.secureCookie)
+	middleware.SetSessionCookie(c, session, h.secureCookie)
 
 	c.JSON(http.StatusOK, response.Success("login successful", LoginResponse{
 		ID:       user.ID,
@@ -90,8 +86,6 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 	}
 
-	c.SetSameSite(http.SameSiteStrictMode)
-
 	middleware.ClearSessionCookie(c, h.secureCookie)
 
 	c.Status(http.StatusNoContent)
@@ -109,8 +103,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 //	@Failure		500	{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.Error("authentication required"))
 		return
 	}
@@ -137,12 +131,4 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Username: user.Username,
 		Role:     user.Role,
 	}))
-}
-
-func calculateMaxAge(session domain.Session) int {
-	maxAge := int(time.Until(session.AbsoluteExpiration).Seconds())
-	if maxAge < 0 {
-		maxAge = 0
-	}
-	return maxAge
 }
