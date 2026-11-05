@@ -45,67 +45,39 @@ func (s *groupService) GetGroupByID(ctx context.Context, id uint) (domain.Group,
 }
 
 func (s *groupService) CreateGroup(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
-
-	input.Name = strings.TrimSpace(input.Name)
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return domain.Group{}, domain.ErrInvalidInput
+	}
 
 	accesses, err := normalizeAccesses(input.DatabaseAccesses)
 	if err != nil {
 		return domain.Group{}, err
 	}
-	if input.Name == "" {
-		return domain.Group{}, domain.ErrInvalidInput
-	}
 
-	exists, err := s.databases.ExistsAll(ctx, databaseIDs(accesses))
-	if err != nil {
+	if err := s.ensureDatabasesExist(ctx, accesses); err != nil {
 		return domain.Group{}, err
 	}
-	if !exists {
-		return domain.Group{}, domain.ErrDatabaseNotFound
-	}
 
-	group := domain.Group{
-		Name:             input.Name,
+	return s.groups.Save(ctx, domain.Group{
+		Name:             name,
 		DatabaseAccesses: accesses,
-	}
-
-	return s.groups.Save(ctx, group)
+	})
 }
 
 func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
-
 	current, err := s.groups.FindByID(ctx, id)
 	if err != nil {
 		return domain.Group{}, err
 	}
 
-	accessChanged := false
-
-	if input.Name != nil {
-		current.Name = strings.TrimSpace(*input.Name)
-
-		if current.Name == "" {
-			return domain.Group{}, domain.ErrInvalidInput
-		}
+	if err := applyGroupNameUpdate(&current, input.Name); err != nil {
+		return domain.Group{}, err
 	}
 
-	if input.DatabaseAccesses != nil {
-		accesses, err := normalizeAccesses(*input.DatabaseAccesses)
-		if err != nil {
-			return domain.Group{}, err
-		}
-
-		exists, err := s.databases.ExistsAll(ctx, databaseIDs(accesses))
-		if err != nil {
-			return domain.Group{}, err
-		}
-		if !exists {
-			return domain.Group{}, domain.ErrDatabaseNotFound
-		}
-
-		accessChanged = !sameAccesses(current.DatabaseAccesses, accesses)
-
-		current.DatabaseAccesses = accesses
+	accessChanged, err := s.applyGroupAccessesUpdate(ctx, &current, input.DatabaseAccesses)
+	if err != nil {
+		return domain.Group{}, err
 	}
 
 	updated, err := s.groups.Update(ctx, current)
@@ -127,7 +99,6 @@ func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.Up
 }
 
 func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
-
 	if _, err := s.groups.FindByID(ctx, id); err != nil {
 		return err
 	}
@@ -137,6 +108,29 @@ func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 		return err
 	}
 
+	if err := s.ensureNoOrphanedUsers(ctx, userIDs); err != nil {
+		return err
+	}
+
+	if err := s.groups.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	return s.sessions.RevokeUsers(ctx, userIDs)
+}
+
+func (s *groupService) ensureDatabasesExist(ctx context.Context, accesses []domain.DatabaseAccess) error {
+	exists, err := s.databases.ExistsAll(ctx, databaseIDs(accesses))
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrDatabaseNotFound
+	}
+	return nil
+}
+
+func (s *groupService) ensureNoOrphanedUsers(ctx context.Context, userIDs []uint) error {
 	for _, userID := range userIDs {
 		user, err := s.users.FindByID(ctx, userID)
 		if err != nil {
@@ -148,16 +142,46 @@ func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 			return err
 		}
 
-		if user.Role == "user" && groupCount <= 1 {
+		if user.Role == domain.RoleUser && groupCount <= 1 {
 			return domain.ErrUserMustHaveGroup
 		}
 	}
+	return nil
+}
 
-	if err := s.groups.Delete(ctx, id); err != nil {
-		return err
+func (s *groupService) applyGroupAccessesUpdate(
+	ctx context.Context,
+	current *domain.Group,
+	inputAccesses *[]domain.DatabaseAccess,
+) (bool, error) {
+	if inputAccesses == nil {
+		return false, nil
 	}
 
-	return s.sessions.RevokeUsers(ctx, userIDs)
+	accesses, err := normalizeAccesses(*inputAccesses)
+	if err != nil {
+		return false, err
+	}
+
+	if err := s.ensureDatabasesExist(ctx, accesses); err != nil {
+		return false, err
+	}
+
+	accessChanged := !sameAccesses(current.DatabaseAccesses, accesses)
+	current.DatabaseAccesses = accesses
+	return accessChanged, nil
+}
+
+func applyGroupNameUpdate(current *domain.Group, inputName *string) error {
+	if inputName == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*inputName)
+	if trimmed == "" {
+		return domain.ErrInvalidInput
+	}
+	current.Name = trimmed
+	return nil
 }
 
 func normalizeAccesses(accesses []domain.DatabaseAccess) ([]domain.DatabaseAccess, error) {
@@ -184,7 +208,7 @@ func normalizeAccesses(accesses []domain.DatabaseAccess) ([]domain.DatabaseAcces
 		result = append(result, access)
 	}
 
-	sort.Slice(result, func(i int, j int) bool {
+	sort.Slice(result, func(i, j int) bool {
 		return result[i].DatabaseID < result[j].DatabaseID
 	})
 
@@ -214,6 +238,5 @@ func databaseIDs(accesses []domain.DatabaseAccess) []uint {
 	for _, access := range accesses {
 		ids = append(ids, access.DatabaseID)
 	}
-
 	return ids
 }
