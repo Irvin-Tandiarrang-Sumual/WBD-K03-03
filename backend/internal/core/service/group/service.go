@@ -71,8 +71,12 @@ func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.Up
 		return domain.Group{}, err
 	}
 
-	if err := applyGroupNameUpdate(&current, input.Name); err != nil {
-		return domain.Group{}, err
+	if input.Name != nil {
+		name := strings.TrimSpace(*input.Name)
+		if name == "" {
+			return domain.Group{}, domain.ErrInvalidInput
+		}
+		current.Name = name
 	}
 
 	accessChanged, err := s.applyGroupAccessesUpdate(ctx, &current, input.DatabaseAccesses)
@@ -170,18 +174,6 @@ func (s *groupService) applyGroupAccessesUpdate(
 	accessChanged := !sameAccesses(current.DatabaseAccesses, accesses)
 	current.DatabaseAccesses = accesses
 	return accessChanged, nil
-}
-
-func applyGroupNameUpdate(current *domain.Group, inputName *string) error {
-	if inputName == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(*inputName)
-	if trimmed == "" {
-		return domain.ErrInvalidInput
-	}
-	current.Name = trimmed
-	return nil
 }
 
 func normalizeAccesses(accesses []domain.DatabaseAccess) ([]domain.DatabaseAccess, error) {
