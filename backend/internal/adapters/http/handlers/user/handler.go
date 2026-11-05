@@ -34,7 +34,7 @@ func NewUserHandler(service ports.UserService) *UserHandler {
 //	@Failure		403		{object}	response.BaseResponse[any]				"Forbidden (not admin)"
 //	@Failure		500		{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/admin/users [get]
-func (h *UserHandler) List(c *gin.Context) {
+func (h *UserHandler) GetAllUsers(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
 		writeError(c, domain.ErrInvalidPagination)
@@ -77,7 +77,7 @@ func (h *UserHandler) List(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
 //	@Router			/admin/users/{userId} [get]
-func (h *UserHandler) Get(c *gin.Context) {
+func (h *UserHandler) GetUserByID(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
@@ -110,7 +110,7 @@ func (h *UserHandler) Get(c *gin.Context) {
 //	@Failure		409		{object}	response.BaseResponse[any]		"Username already taken"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
 //	@Router			/admin/users [post]
-func (h *UserHandler) Create(c *gin.Context) {
+func (h *UserHandler) CreateUser(c *gin.Context) {
 	var request CreateUserRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -151,7 +151,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 //	@Failure		409		{object}	response.BaseResponse[any]		"Username already taken"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
 //	@Router			/admin/users/{userId} [patch]
-func (h *UserHandler) Update(c *gin.Context) {
+func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
@@ -195,7 +195,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 //	@Failure		409		{object}	response.BaseResponse[any]	"User must have at least one group"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
 //	@Router			/admin/users/{userId} [delete]
-func (h *UserHandler) Delete(c *gin.Context) {
+func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
@@ -227,7 +227,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
 //	@Router			/admin/users/{userId}/role [patch]
-func (h *UserHandler) SetRole(c *gin.Context) {
+func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
