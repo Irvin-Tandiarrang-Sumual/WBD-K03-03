@@ -55,28 +55,25 @@ func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *por
 		return nil, domain.ErrInvalidDatabaseInput
 	}
 
+	databaseType := strings.ToLower(strings.TrimSpace(databaseInput.Type))
+	if databaseType == "" {
+		databaseType = domain.DatabaseTypePostgreSQL
+	}
+
 	database := domain.Database{
 		Port:     databaseInput.Port,
 		Host:     strings.TrimSpace(databaseInput.Host),
 		User:     strings.TrimSpace(databaseInput.User),
 		Password: databaseInput.Password,
-		Type:     strings.ToLower(strings.TrimSpace(databaseInput.Type)),
+		Type:     databaseType,
 		Name:     strings.TrimSpace(databaseInput.Name),
 	}
-	if database.Type == "" {
-		database.Type = "postgresql"
-	}
-	if database.Port == 0 || database.Port > 65535 || database.Host == "" ||
-		database.User == "" || database.Name == "" || database.Type != "postgresql" && database.Type != "mysql" {
-		return nil, domain.ErrInvalidInput
+
+	if err := database.Validate(); err != nil {
+		return nil, err
 	}
 
-	// If password is not provided, attempt to reuse credential from existing database on that host & port
-	if database.Password == "" && s.databaseRepository != nil {
-		if pwd, err := s.databaseRepository.FindCredentialByHostAndPort(ctx, database.Host, database.Port, database.User); err == nil && pwd != "" {
-			database.Password = pwd
-		}
-	}
+	s.enrichMissingCredential(ctx, &database)
 
 	if s.databaseConnectionTester != nil {
 		if err := s.databaseConnectionTester.Test(ctx, database); err != nil {
@@ -92,14 +89,8 @@ func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) e
 		return err
 	}
 
-	if s.userGroupsRepository != nil {
-		leavesEmptyGroup, err := s.userGroupsRepository.HasGroupWithOnlyThisDatabase(ctx, databaseID)
-		if err != nil {
-			return err
-		}
-		if leavesEmptyGroup {
-			return domain.ErrDatabaseInUse
-		}
+	if err := s.ensureDatabaseNotInUse(ctx, databaseID); err != nil {
+		return err
 	}
 
 	var userIDs []uint
@@ -110,21 +101,21 @@ func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) e
 			return err
 		}
 	}
+
 	if s.databasePoolInvalidator != nil {
 		if err := s.databasePoolInvalidator.Invalidate(databaseID); err != nil {
 			return err
 		}
 	}
+
 	if err := s.databaseRepository.Delete(ctx, databaseID); err != nil {
 		return err
 	}
-	if s.sessionService != nil {
-		for _, userID := range userIDs {
-			if err := s.sessionService.RevokeUser(ctx, userID); err != nil {
-				return err
-			}
-		}
+
+	if s.sessionService != nil && len(userIDs) > 0 {
+		return s.sessionService.RevokeUsers(ctx, userIDs)
 	}
+
 	return nil
 }
 
@@ -134,22 +125,8 @@ func (s *databaseService) GetDatabasesByUserID(ctx context.Context, userID uint,
 		return nil, 0, err
 	}
 
-	if s.userGroupsRepository != nil {
-		for _, db := range databases {
-			if accessTypes, err := s.userGroupsRepository.FindAllAccessTypes(ctx, userID, db.ID); err == nil {
-				effective := domain.AccessType("")
-				for _, at := range accessTypes {
-					if at == domain.AccessViewEdit {
-						effective = domain.AccessViewEdit
-						break
-					}
-					if at == domain.AccessViewOnly {
-						effective = domain.AccessViewOnly
-					}
-				}
-				db.AccessType = effective
-			}
-		}
+	for _, db := range databases {
+		s.populateAccessType(ctx, userID, db)
 	}
 
 	return databases, total, nil
@@ -161,21 +138,55 @@ func (s *databaseService) GetDatabaseByIDAndUserID(ctx context.Context, database
 		return nil, err
 	}
 
-	if s.userGroupsRepository != nil && db != nil {
-		if accessTypes, err := s.userGroupsRepository.FindAllAccessTypes(ctx, userID, db.ID); err == nil {
-			effective := domain.AccessType("")
-			for _, at := range accessTypes {
-				if at == domain.AccessViewEdit {
-					effective = domain.AccessViewEdit
-					break
-				}
-				if at == domain.AccessViewOnly {
-					effective = domain.AccessViewOnly
-				}
-			}
-			db.AccessType = effective
-		}
+	if db != nil {
+		s.populateAccessType(ctx, userID, db)
 	}
 
 	return db, nil
+}
+
+func (s *databaseService) ensureDatabaseNotInUse(ctx context.Context, databaseID uint) error {
+	if s.userGroupsRepository == nil {
+		return nil
+	}
+	leavesEmptyGroup, err := s.userGroupsRepository.HasGroupWithOnlyThisDatabase(ctx, databaseID)
+	if err != nil {
+		return err
+	}
+	if leavesEmptyGroup {
+		return domain.ErrDatabaseInUse
+	}
+	return nil
+}
+
+func (s *databaseService) enrichMissingCredential(ctx context.Context, database *domain.Database) {
+	if database.Password != "" || s.databaseRepository == nil {
+		return
+	}
+	pwd, err := s.databaseRepository.FindCredentialByHostAndPort(ctx, database.Host, database.Port, database.User)
+	if err == nil && pwd != "" {
+		database.Password = pwd
+	}
+}
+
+func (s *databaseService) populateAccessType(ctx context.Context, userID uint, db *domain.Database) {
+	if s.userGroupsRepository == nil || db == nil {
+		return
+	}
+	accessTypes, err := s.userGroupsRepository.FindAllAccessTypes(ctx, userID, db.ID)
+	if err != nil {
+		return
+	}
+	for _, access := range accessTypes {
+		if access == domain.AccessViewEdit {
+			db.AccessType = domain.AccessViewEdit
+			return
+		}
+	}
+	for _, access := range accessTypes {
+		if access == domain.AccessViewOnly {
+			db.AccessType = domain.AccessViewOnly
+			return
+		}
+	}
 }
