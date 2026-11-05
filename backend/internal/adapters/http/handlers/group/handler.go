@@ -36,7 +36,7 @@ func NewGroupHandler(service ports.GroupService) *GroupHandler {
 //	@Failure		403		{object}	response.BaseResponse[any]				"Forbidden (not admin)"
 //	@Failure		500		{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/admin/groups [get]
-func (h *GroupHandler) List(c *gin.Context) {
+func (h *GroupHandler) GetAllGroups(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
 		writeError(c, domain.ErrInvalidPagination)
@@ -79,7 +79,7 @@ func (h *GroupHandler) List(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
 //	@Router			/admin/groups/{groupId} [get]
-func (h *GroupHandler) Get(c *gin.Context) {
+func (h *GroupHandler) GetGroupByID(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
@@ -112,7 +112,7 @@ func (h *GroupHandler) Get(c *gin.Context) {
 //	@Failure		409		{object}	response.BaseResponse[any]	"Group name already taken"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
 //	@Router			/admin/groups [post]
-func (h *GroupHandler) Create(c *gin.Context) {
+func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	var request CreateGroupRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -152,7 +152,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 //	@Failure		409		{object}	response.BaseResponse[any]	"Group name already taken"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
 //	@Router			/admin/groups/{groupId} [patch]
-func (h *GroupHandler) Update(c *gin.Context) {
+func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
@@ -200,7 +200,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 //	@Failure		409		{object}	response.BaseResponse[any]	"Group still has users / must have database"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
 //	@Router			/admin/groups/{groupId} [delete]
-func (h *GroupHandler) Delete(c *gin.Context) {
+func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
 		writeError(c, domain.ErrInvalidInput)
