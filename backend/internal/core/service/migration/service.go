@@ -129,7 +129,7 @@ func (s *migrationService) CreateMigration(ctx context.Context, input domain.Cre
 		migration.Snapshot = snapshotBytes
 	}
 
-	migration.Status = "success"
+	migration.Status = domain.MigrationStatusSuccess
 	return s.repository.Update(ctx, migration)
 }
 
@@ -155,7 +155,7 @@ func (s *migrationService) createInitialBaseline(ctx context.Context, db domain.
 	baseline := &domain.Migration{
 		DatabaseID: db.ID,
 		Version:    "1",
-		Status:     "success",
+		Status:     domain.MigrationStatusSuccess,
 		SqlUp:      formatSnapshotAsBaselineSQL(baselineStruct),
 		SqlDown:    "-- Baseline schema snapshot (initial state)",
 		Snapshot:   baselineBytes,
@@ -219,19 +219,19 @@ func (s *migrationService) resolveTargetMigration(ctx context.Context, targetID,
 	if err != nil {
 		return nil, err
 	}
-	if target.Status != "success" {
+	if target.Status != domain.MigrationStatusSuccess {
 		return nil, domain.ErrMigrationRollbackUnavailable
 	}
 	return target, nil
 }
 
 func (s *migrationService) validateRollbackOrder(target, latest *domain.Migration) error {
-	targetVersion, err := parseVersion(target.Version)
+	targetVersion, err := strconv.Atoi(target.Version)
 	if err != nil {
 		return domain.ErrMigrationVersionUnavailable
 	}
 
-	latestVersion, err := parseVersion(latest.Version)
+	latestVersion, err := strconv.Atoi(latest.Version)
 	if err != nil {
 		return domain.ErrMigrationVersionUnavailable
 	}
@@ -248,8 +248,8 @@ func (s *migrationService) executeRollbackRange(
 	db domain.Database,
 	target, latest *domain.Migration,
 ) ([]*domain.Migration, error) {
-	targetVer, _ := parseVersion(target.Version)
-	latestVer, _ := parseVersion(latest.Version)
+	targetVer, _ := strconv.Atoi(target.Version)
+	latestVer, _ := strconv.Atoi(latest.Version)
 
 	rolledBack := make([]*domain.Migration, 0)
 	compensatingUps := make([]string, 0)
@@ -261,7 +261,7 @@ func (s *migrationService) executeRollbackRange(
 			return nil, err
 		}
 
-		if migration.Status != "success" {
+		if migration.Status != domain.MigrationStatusSuccess {
 			continue
 		}
 
@@ -324,7 +324,7 @@ func (s *migrationService) recordRollbackMigration(
 	return s.repository.Save(ctx, &domain.Migration{
 		DatabaseID: db.ID,
 		Version:    nextVersion,
-		Status:     "success",
+		Status:     domain.MigrationStatusSuccess,
 		SqlUp:      buildRollbackSQLUp(rolledBack),
 		SqlDown:    buildRollbackSQLDown(rolledBack),
 		Snapshot:   snapshot,
@@ -363,7 +363,7 @@ func (s *migrationService) createPendingMigration(
 	migration := &domain.Migration{
 		DatabaseID: input.DatabaseID,
 		Version:    version,
-		Status:     "fail",
+		Status:     domain.MigrationStatusFail,
 		SqlUp:      input.SqlUp,
 		UserID:     input.UserID,
 	}
@@ -382,16 +382,13 @@ func (s *migrationService) resolveNextVersion(latest *domain.Migration) (string,
 	if latest == nil {
 		return "1", nil
 	}
-	latestVersion, err := parseVersion(latest.Version)
+	latestVersion, err := strconv.Atoi(latest.Version)
 	if err != nil {
 		return "", domain.ErrMigrationVersionUnavailable
 	}
 	return strconv.Itoa(latestVersion + 1), nil
 }
 
-func parseVersion(v string) (int, error) {
-	return strconv.Atoi(v)
-}
 
 func rollbackExecutedStatements(
 	ctx context.Context, driver ports.DatabaseDriver,
