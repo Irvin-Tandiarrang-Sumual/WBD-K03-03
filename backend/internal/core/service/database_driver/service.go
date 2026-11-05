@@ -41,7 +41,7 @@ func (s *databaseDriverService) ExecuteDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
 		return nil, err
 	}
 	if err := validateSelectQuery(query); err != nil {
@@ -60,40 +60,49 @@ func (s *databaseDriverService) ExplainDatabaseQuery(
 	databaseID uint,
 	userID uint,
 	query string,
-	analyze bool,
 ) (*ports.DatabaseQueryResult, error) {
-	database, err := s.getAccessibleDatabase(ctx, databaseID, userID)
+	databaseWithCredential, cleanedQuery, err := s.prepareExplain(ctx, databaseID, userID, query)
 	if err != nil {
 		return nil, err
-	}
-	if err := s.requireDatabaseAccess(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
-		return nil, err
-	}
-	cleanedQuery := stripLeadingExplain(stripTrailingSemicolons(query))
-	if err := validateSelectQuery(cleanedQuery); err != nil {
-		return nil, err
-	}
-	databaseWithCredential, err := s.databaseRepository.FindWithCredentialByID(ctx, database.ID)
-	if err != nil {
-		return nil, err
-	}
-	if analyze {
-		return s.databaseExecutor.ExplainAnalyze(ctx, databaseWithCredential, cleanedQuery)
 	}
 	return s.databaseExecutor.Explain(ctx, databaseWithCredential, cleanedQuery)
 }
 
-func (s *databaseDriverService) requireDatabaseAccess(
+func (s *databaseDriverService) ExplainAnalyzeDatabaseQuery(
 	ctx context.Context,
-	userID uint,
 	databaseID uint,
-	required domain.AccessType,
-) error {
-	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, required); err != nil {
-		return domain.ErrDatabaseAccessDenied
+	userID uint,
+	query string,
+) (*ports.DatabaseQueryResult, error) {
+	databaseWithCredential, cleanedQuery, err := s.prepareExplain(ctx, databaseID, userID, query)
+	if err != nil {
+		return nil, err
 	}
+	return s.databaseExecutor.ExplainAnalyze(ctx, databaseWithCredential, cleanedQuery)
+}
 
-	return nil
+func (s *databaseDriverService) prepareExplain(
+	ctx context.Context,
+	databaseID uint,
+	userID uint,
+	query string,
+) (domain.Database, string, error) {
+	database, err := s.getAccessibleDatabase(ctx, databaseID, userID)
+	if err != nil {
+		return domain.Database{}, "", err
+	}
+	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+		return domain.Database{}, "", err
+	}
+	cleanedQuery := stripLeadingExplain(stripTrailingSemicolons(query))
+	if err := validateSelectQuery(cleanedQuery); err != nil {
+		return domain.Database{}, "", err
+	}
+	databaseWithCredential, err := s.databaseRepository.FindWithCredentialByID(ctx, database.ID)
+	if err != nil {
+		return domain.Database{}, "", err
+	}
+	return databaseWithCredential, cleanedQuery, nil
 }
 
 func (s *databaseDriverService) getAccessibleDatabase(
@@ -116,15 +125,37 @@ func (s *databaseDriverService) getAccessibleDatabase(
 }
 
 func validateSelectQuery(query string) error {
-	normalized := strings.ToUpper(strings.TrimSpace(query))
-	if !strings.HasPrefix(normalized, "SELECT") {
+	normalizedQuery := strings.ToLower(stripTrailingSemicolons(query))
+	if normalizedQuery == "" {
+		return domain.ErrInvalidDatabaseQuery
+	}
+	if !hasKeywordPrefix(normalizedQuery, "select") && !hasKeywordPrefix(normalizedQuery, "with") {
+		return domain.ErrInvalidDatabaseQuery
+	}
+	if strings.Contains(normalizedQuery, ";") {
 		return domain.ErrInvalidDatabaseQuery
 	}
 	return nil
 }
 
+func hasKeywordPrefix(normalizedQuery, keyword string) bool {
+	if !strings.HasPrefix(normalizedQuery, keyword) {
+		return false
+	}
+	rest := normalizedQuery[len(keyword):]
+	if rest == "" {
+		return false
+	}
+	first := rest[0]
+	return first == ' ' || first == '\n' || first == '\t' || first == '\r' || first == '*' || first == '('
+}
+
 func stripTrailingSemicolons(query string) string {
-	return strings.TrimRight(strings.TrimSpace(query), ";")
+	trimmed := strings.TrimSpace(query)
+	for strings.HasSuffix(trimmed, ";") {
+		trimmed = strings.TrimSpace(strings.TrimSuffix(trimmed, ";"))
+	}
+	return trimmed
 }
 
 func stripLeadingExplain(query string) string {
