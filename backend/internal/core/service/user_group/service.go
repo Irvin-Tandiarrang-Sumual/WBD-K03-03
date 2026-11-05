@@ -17,11 +17,9 @@ type userGroupService struct {
 var _ ports.UserGroupService = (*userGroupService)(nil)
 
 func NewUserGroupService(
-	userGroups ports.UserGroupRepository,
-	groups ports.GroupRepository,
-	users ports.UserRepository,
-	sessions ports.SessionService,
-) ports.UserGroupService {
+	userGroups ports.UserGroupRepository, groups ports.GroupRepository,
+	users ports.UserRepository, sessions ports.SessionService,
+) *userGroupService {
 	return &userGroupService{
 		userGroups: userGroups,
 		groups:     groups,
@@ -31,7 +29,6 @@ func NewUserGroupService(
 }
 
 func (s *userGroupService) AddUser(ctx context.Context, groupID uint, userID uint) error {
-
 	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
 		return err
 	}
@@ -55,65 +52,54 @@ func (s *userGroupService) RemoveUser(ctx context.Context, groupID uint, userID 
 		return err
 	}
 
+	if err := s.ensureCanRemoveUser(ctx, groupID, user); err != nil {
+		return err
+	}
+
+	if err := s.userGroups.RemoveUser(ctx, groupID, user.ID); err != nil {
+		return err
+	}
+
+	return s.sessions.RevokeUser(ctx, user.ID)
+}
+
+func (s *userGroupService) Authorize(
+	ctx context.Context, userID uint,
+	databaseID uint, requiredAccessType domain.AccessType,
+) error {
+	accesses, err := s.userGroups.FindAllAccessTypes(ctx, userID, databaseID)
+	if err != nil {
+		return err
+	}
+
+	for _, access := range accesses {
+		if access.Allows(requiredAccessType) {
+			return nil
+		}
+	}
+
+	return domain.ErrDatabaseAccessDenied
+}
+
+func (s *userGroupService) ensureCanRemoveUser(ctx context.Context, groupID uint, user domain.User) error {
 	memberIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, groupID)
 	if err != nil {
 		return err
 	}
-	if !containsUserID(memberIDs, userID) {
+	if !containsUserID(memberIDs, user.ID) {
 		return domain.ErrMembershipNotFound
 	}
 
-	groupCount, err := s.userGroups.CountByUserID(ctx, userID)
+	groupCount, err := s.userGroups.CountByUserID(ctx, user.ID)
 	if err != nil {
 		return err
 	}
 
-	if user.Role == "user" && groupCount <= 1 {
+	if user.Role == domain.RoleUser && groupCount <= 1 {
 		return domain.ErrUserMustHaveGroup
 	}
 
-	if err := s.userGroups.RemoveUser(ctx, groupID, userID); err != nil {
-		return err
-	}
-
-	return s.sessions.RevokeUser(ctx, userID)
-}
-
-func (s *userGroupService) Authorize(ctx context.Context,
-	userID uint, databaseID uint, requiredAccessType domain.AccessType) error {
-
-	access, err := s.getEffectiveDatabaseAccess(ctx, userID, databaseID)
-	if err != nil {
-		return err
-	}
-	if !access.Allows(domain.AccessViewEdit) {
-		return domain.ErrDatabaseAccessDenied
-	}
 	return nil
-}
-
-func (s *userGroupService) getEffectiveDatabaseAccess(ctx context.Context, userID uint, databaseID uint) (domain.AccessType, error) {
-	accesses, err := s.userGroups.FindAllAccessTypes(ctx, userID, databaseID)
-	if err != nil {
-		return "", err
-	}
-
-	effective := domain.AccessType("")
-
-	for _, access := range accesses {
-		if access == domain.AccessViewEdit {
-			return domain.AccessViewEdit, nil
-		}
-		if access == domain.AccessViewOnly {
-			effective = domain.AccessViewOnly
-		}
-	}
-
-	if effective == "" {
-		return "", domain.ErrDatabaseAccessDenied
-	}
-
-	return effective, nil
 }
 
 func containsUserID(userIDs []uint, target uint) bool {
