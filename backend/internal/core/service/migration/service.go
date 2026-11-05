@@ -64,7 +64,7 @@ func (s *migrationService) CompareMigrations(
 	ctx context.Context,
 	input domain.CompareMigrationsInput,
 ) (*domain.MigrationComparison, error) {
-	if err := input.IsValid(); err != nil {
+	if err := input.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -87,7 +87,7 @@ func (s *migrationService) CompareMigrations(
 }
 
 func (s *migrationService) CreateMigration(ctx context.Context, input domain.CreateMigrationInput) (*domain.Migration, error) {
-	if err := input.IsValid(); err != nil {
+	if err := input.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -170,7 +170,7 @@ func (s *migrationService) createInitialBaseline(ctx context.Context, db domain.
 }
 
 func (s *migrationService) RollbackMigrations(ctx context.Context, input domain.RollbackMigrationsInput) ([]*domain.Migration, error) {
-	if err := input.IsValid(); err != nil {
+	if err := input.Validate(); err != nil {
 		return nil, domain.ErrInvalidMigrationInput
 	}
 

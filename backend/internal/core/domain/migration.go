@@ -35,7 +35,7 @@ type MigrationComparison struct {
 	SQLDownEqual    bool
 }
 
-func (d *CreateMigrationInput) IsValid() error {
+func (d *CreateMigrationInput) Validate() error {
 	if d.DatabaseID == 0 || d.UserID == 0 || d.SqlUp == "" {
 		return ErrInvalidMigrationInput
 	}
@@ -49,7 +49,7 @@ type CompareMigrationsInput struct {
 	SecondMigrationID uint
 }
 
-func (d *CompareMigrationsInput) IsValid() error {
+func (d *CompareMigrationsInput) Validate() error {
 	if d.DatabaseID == 0 || d.UserID == 0 || d.FirstMigrationID == 0 || d.SecondMigrationID == 0 || d.FirstMigrationID == d.SecondMigrationID {
 		return ErrInvalidMigrationComparison
 	}
@@ -62,7 +62,7 @@ type RollbackMigrationsInput struct {
 	TargetMigrationID uint
 }
 
-func (d *RollbackMigrationsInput) IsValid() error {
+func (d *RollbackMigrationsInput) Validate() error {
 	if d.DatabaseID == 0 || d.UserID == 0 || d.TargetMigrationID == 0 {
 		return ErrInvalidMigrationInput
 	}
