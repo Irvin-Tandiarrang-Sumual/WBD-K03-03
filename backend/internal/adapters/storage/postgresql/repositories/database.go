@@ -59,7 +59,31 @@ func (r *databaseRepository) Save(ctx context.Context, database *domain.Database
 	if database == nil {
 		return nil, domain.ErrInvalidDatabaseInput
 	}
-	return r.CreateDatabase(ctx, database)
+
+	encryptedPassword, err := r.cipher.Encrypt(database.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	storedDatabase := model.Database{
+		Port:     database.Port,
+		Host:     database.Host,
+		User:     database.User,
+		Password: encryptedPassword,
+		Type:     database.Type,
+		Name:     database.Name,
+	}
+	if err := r.db.WithContext(ctx).Create(&storedDatabase).Error; err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, domain.ErrDatabaseAlreadyExists
+		}
+		return nil, err
+	}
+
+	createdDatabase := *database
+	createdDatabase.ID = storedDatabase.ID
+	createdDatabase.Password = ""
+	return &createdDatabase, nil
 }
 
 func (r *databaseRepository) FindAllByUserID(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
@@ -206,37 +230,6 @@ func (r *databaseRepository) ExistsAll(ctx context.Context, databaseIDs []uint) 
 		return false, err
 	}
 	return count == int64(len(uniqueIDs)), nil
-}
-
-func (r *databaseRepository) CreateDatabase(ctx context.Context, database *domain.Database) (*domain.Database, error) {
-	if database == nil {
-		return nil, domain.ErrInvalidDatabaseInput
-	}
-
-	encryptedPassword, err := r.cipher.Encrypt(database.Password)
-	if err != nil {
-		return nil, err
-	}
-
-	storedDatabase := model.Database{
-		Port:     database.Port,
-		Host:     database.Host,
-		User:     database.User,
-		Password: encryptedPassword,
-		Type:     database.Type,
-		Name:     database.Name,
-	}
-	if err := r.db.WithContext(ctx).Create(&storedDatabase).Error; err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return nil, domain.ErrDatabaseAlreadyExists
-		}
-		return nil, err
-	}
-
-	createdDatabase := *database
-	createdDatabase.ID = storedDatabase.ID
-	createdDatabase.Password = ""
-	return &createdDatabase, nil
 }
 
 func (r *databaseRepository) Delete(ctx context.Context, databaseID uint) error {
