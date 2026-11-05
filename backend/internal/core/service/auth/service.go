@@ -7,7 +7,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/hasher"
 )
 
 type authService struct {
@@ -40,7 +40,7 @@ func (s *authService) Login(ctx context.Context, username string, password strin
 		return domain.User{}, domain.Session{}, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := hasher.ComparePassword(user.Password, password); err != nil {
 		return domain.User{}, domain.Session{}, domain.ErrInvalidCredentials
 	}
 
