@@ -46,3 +46,12 @@ func (s Session) IsWithinGracePeriod(now time.Time) bool {
 func (s Session) NeedsRotation(now time.Time) bool {
 	return !s.RotatedAt.IsZero() && now.Sub(s.RotatedAt) >= DefaultSessionRotationInterval
 }
+
+func (s Session) Rotate(newToken string, now time.Time) Session {
+	s.PreviousOpaqueToken = s.OpaqueToken
+	s.OpaqueToken = newToken
+	s.GracePeriodUntil = now.Add(DefaultSessionRotationGracePeriod)
+	s.RotatedAt = now
+	s.LastActive = now
+	return s
+}

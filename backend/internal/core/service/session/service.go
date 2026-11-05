@@ -100,7 +100,7 @@ func (s *sessionService) rotateSessionToken(ctx context.Context, session domain.
 		return domain.Session{}, err
 	}
 
-	rotatedSession := applyTokenRotation(session, newToken, now)
+	rotatedSession := session.Rotate(newToken, now)
 	if err := s.sessions.Rotate(ctx, rotatedSession); err != nil {
 		return domain.Session{}, err
 	}
@@ -126,15 +126,6 @@ func buildNewSession(userID uint, token string, now time.Time) domain.Session {
 		AbsoluteExpiration: now.Add(domain.DefaultSessionAbsoluteLifetime),
 		UserID:             userID,
 	}
-}
-
-func applyTokenRotation(session domain.Session, newToken string, now time.Time) domain.Session {
-	session.PreviousOpaqueToken = session.OpaqueToken
-	session.OpaqueToken = newToken
-	session.GracePeriodUntil = now.Add(domain.DefaultSessionRotationGracePeriod)
-	session.RotatedAt = now
-	session.LastActive = now
-	return session
 }
 
 func generateOpaqueToken() (string, error) {
