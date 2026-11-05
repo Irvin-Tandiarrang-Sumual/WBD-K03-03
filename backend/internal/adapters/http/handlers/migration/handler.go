@@ -88,7 +88,7 @@ func (h *MigrationHandler) CreateMigration(c *gin.Context) {
 		return
 	}
 
-	userID, err := currentUserID(c)
+	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
 		writeErrorResponse(c, err)
 		return
@@ -177,7 +177,7 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 		writeErrorResponse(c, domain.ErrInvalidDatabaseID)
 		return
 	}
-	userID, err := currentUserID(c)
+	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
 		writeErrorResponse(c, err)
 		return
@@ -230,7 +230,7 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 //	@Failure		500		{object}	response.BaseResponse[any]						"Internal server error"
 //	@Router			/me/databases/migrations/rollback [post]
 func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
-	userID, err := currentUserID(c)
+	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
 		writeErrorResponse(c, err)
 		return
@@ -259,13 +259,6 @@ func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success("migrations rolled back successfully", data))
 }
 
-func currentUserID(c *gin.Context) (uint, error) {
-	userID, exists := middleware.GetUserID(c)
-	if !exists {
-		return 0, domain.ErrCurrentUserUnavailable
-	}
-	return userID, nil
-}
 
 func toResponse(migration *domain.Migration) MigrationResponse {
 	var snapshot json.RawMessage
