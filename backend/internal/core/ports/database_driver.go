@@ -44,7 +44,8 @@ type DatabaseMetadata struct {
 
 type DatabaseDriverService interface {
 	ExecuteDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string) (*DatabaseQueryResult, error)
-	ExplainDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string, analyze bool) (*DatabaseQueryResult, error)
+	ExplainDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string) (*DatabaseQueryResult, error)
+	ExplainAnalyzeDatabaseQuery(ctx context.Context, databaseID uint, userID uint, query string) (*DatabaseQueryResult, error)
 }
 
 type DatabaseExecutorRepository interface {
@@ -66,4 +67,17 @@ type DatabaseDriver interface {
 	DatabaseExecutorRepository
 	SchemaInspectorRepository
 	SQLDialect
+}
+
+type DatabaseCredentialCipher interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(ciphertext string) (string, error)
+}
+
+type DatabaseConnectionTester interface {
+	Test(ctx context.Context, database domain.Database) error
+}
+
+type DatabasePoolInvalidator interface {
+	Invalidate(databaseID uint) error
 }
