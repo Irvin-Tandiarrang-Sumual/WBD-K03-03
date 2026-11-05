@@ -3,14 +3,11 @@ package middleware
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/gin-gonic/gin"
 )
-
-const SessionCookieName = "session"
 
 type AuthMiddleware struct {
 	sessionService ports.SessionService
@@ -68,28 +65,7 @@ func shouldRefreshSessionCookie(currentCookieToken string, newSessionToken strin
 }
 
 func (am *AuthMiddleware) refreshSessionCookie(c *gin.Context, session domain.Session) {
-	maxAge := 86400
-	if !session.AbsoluteExpiration.IsZero() {
-		maxAge = int(time.Until(session.AbsoluteExpiration).Seconds())
-		if maxAge < 0 {
-			maxAge = 0
-		}
-	}
-
-	c.SetSameSite(http.SameSiteStrictMode)
-	am.setSessionCookie(c, session.OpaqueToken, maxAge)
-}
-func (am *AuthMiddleware) setSessionCookie(c *gin.Context, token string, maxAge int) {
-	path := "/"
-	domain := ""
-	httpOnly := true
-
-	c.SetCookie(SessionCookieName, token, maxAge, path, domain, am.isSecureCookie, httpOnly)
-}
-
-func SetUserContext(c *gin.Context, userID uint, role string) {
-	c.Set(AuthenticatedUserIDKey, userID)
-	c.Set(AuthenticatedUserRoleKey, role)
+	SetSessionCookie(c, session, am.isSecureCookie)
 }
 
 func handleUserFetchError(c *gin.Context, err error) {

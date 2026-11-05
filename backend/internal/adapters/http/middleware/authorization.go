@@ -7,8 +7,7 @@ import (
 
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		_, ok := GetUserID(c)
-		if !ok {
+		if _, err := CurrentUserID(c); err != nil {
 			abortUnauthorized(c)
 			return
 		}
