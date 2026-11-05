@@ -26,6 +26,7 @@ export const api = {
   removeUserFromGroup: adminApi.removeUserFromGroup,
   query: executorApi.query,
   explain: executorApi.explain,
+  explainAnalyze: executorApi.explainAnalyze,
   migrations: migrationApi.list,
   createMigration: migrationApi.create,
   compareMigrations: migrationApi.compare,

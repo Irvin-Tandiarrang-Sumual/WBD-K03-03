@@ -302,7 +302,9 @@ export default function DatabaseDetailView({
     try {
       let res: QueryResponse;
       if (explain) {
-        res = await api.explain(databaseId, sqlQuery.trim(), analyze);
+        res = analyze
+          ? await api.explainAnalyze(databaseId, sqlQuery.trim())
+          : await api.explain(databaseId, sqlQuery.trim());
         setPlanAnalysis(parseExecutionPlan(res, analyze, db?.type));
         toast.info(
           `Hasil ${analyze ? "EXPLAIN ANALYZE" : "EXPLAIN"} execution plan berhasil diperoleh.`,

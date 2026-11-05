@@ -265,7 +265,9 @@ export default function MigrationDiff({
       }
 
       const queryToExplain = targetQuery || sanitizeSqlQuery(sql, true);
-      const response: QueryResponse = await api.explain(databaseId, queryToExplain, analyze);
+      const response: QueryResponse = analyze
+        ? await api.explainAnalyze(databaseId, queryToExplain)
+        : await api.explain(databaseId, queryToExplain);
       setPlanAnalysis(parseExecutionPlan(response, analyze, database?.type));
 
       toast.info(

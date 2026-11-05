@@ -2,7 +2,6 @@ import type { QueryResponse } from "@/lib/types";
 import { request } from "@/lib/api/client";
 
 export function sanitizeSqlQuery(rawQuery: string, stripExplainPrefix = false): string {
-  // Remove leading SQL line comments (-- ...) and block comments (/* ... */)
   let cleaned = rawQuery.trim();
   while (cleaned.startsWith("--") || cleaned.startsWith("/*")) {
     if (cleaned.startsWith("--")) {
@@ -14,7 +13,6 @@ export function sanitizeSqlQuery(rawQuery: string, stripExplainPrefix = false): 
     }
   }
 
-  // Strip trailing semicolons and whitespace so single statements ending with ';' pass validation
   cleaned = cleaned.replace(/;+\s*$/, "").trim();
 
   if (stripExplainPrefix) {
@@ -35,13 +33,15 @@ export const executorApi = {
       body: JSON.stringify({ query: sanitizeSqlQuery(query, false) }),
     }),
 
-  explain: (
-    databaseId: number | string,
-    query: string,
-    analyze = false,
-  ) =>
+  explain: (databaseId: number | string, query: string) =>
+    request<QueryResponse>(`/api/v1/me/databases/${databaseId}/explain`, {
+      method: "POST",
+      body: JSON.stringify({ query: sanitizeSqlQuery(query, true) }),
+    }),
+
+  explainAnalyze: (databaseId: number | string, query: string) =>
     request<QueryResponse>(
-      `/api/v1/me/databases/${databaseId}/explain?analyzer=${analyze}`,
+      `/api/v1/me/databases/${databaseId}/explain-analyze`,
       {
         method: "POST",
         body: JSON.stringify({ query: sanitizeSqlQuery(query, true) }),
