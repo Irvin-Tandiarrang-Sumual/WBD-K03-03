@@ -7,7 +7,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/hasher"
 )
 
 type userService struct {
@@ -19,7 +19,12 @@ type userService struct {
 
 var _ ports.UserService = (*userService)(nil)
 
-func NewUserService(users ports.UserRepository, groups ports.GroupRepository, sessions ports.SessionService, userGroups ports.UserGroupRepository) ports.UserService {
+func NewUserService(
+	users ports.UserRepository,
+	groups ports.GroupRepository,
+	sessions ports.SessionService,
+	userGroups ports.UserGroupRepository,
+) ports.UserService {
 	return &userService{
 		users:      users,
 		groups:     groups,
@@ -38,28 +43,18 @@ func (s *userService) GetUserByID(ctx context.Context, id uint) (domain.User, er
 
 func (s *userService) CreateUser(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
 	username := strings.TrimSpace(input.Username)
-
-	if username == "" ||
-		input.Password == "" ||
-		len(input.GroupIDs) == 0 ||
-		len([]byte(input.Password)) > 72 {
+	if username == "" || len(input.GroupIDs) == 0 {
 		return domain.User{}, domain.ErrInvalidInput
 	}
-
-	exists, err := s.groups.AllExist(ctx, input.GroupIDs)
-	if err != nil {
+	if err := domain.ValidatePassword(input.Password); err != nil {
 		return domain.User{}, err
 	}
 
-	if !exists {
-		return domain.User{}, domain.ErrInvalidGroupsIDs
+	if err := s.ensureGroupsExist(ctx, input.GroupIDs); err != nil {
+		return domain.User{}, err
 	}
 
-	passwordHash, err := bcrypt.GenerateFromPassword(
-		[]byte(input.Password),
-		bcrypt.DefaultCost,
-	)
-
+	passwordHash, err := hasher.HashPassword(input.Password)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -68,7 +63,7 @@ func (s *userService) CreateUser(ctx context.Context, input domain.CreateUserInp
 		ctx,
 		domain.User{
 			Username: username,
-			Password: string(passwordHash),
+			Password: passwordHash,
 			Role:     domain.RoleUser,
 		},
 		input.GroupIDs,
@@ -80,40 +75,17 @@ func (s *userService) UpdateUser(ctx context.Context, id uint, input domain.Upda
 		return domain.User{}, err
 	}
 
-	var username *string
-
-	if input.Username != nil {
-		trimmed := strings.TrimSpace(*input.Username)
-
-		if trimmed == "" {
-			return domain.User{}, domain.ErrInvalidInput
-		}
-
-		username = &trimmed
+	username, err := resolveUpdatedUsername(input.Username)
+	if err != nil {
+		return domain.User{}, err
 	}
 
-	var passwordHash *string
-
-	if input.Password != nil {
-		if *input.Password == "" || len([]byte(*input.Password)) > 72 {
-			return domain.User{}, domain.ErrInvalidInput
-		}
-
-		hash, err := bcrypt.GenerateFromPassword(
-			[]byte(*input.Password),
-			bcrypt.DefaultCost,
-		)
-
-		if err != nil {
-			return domain.User{}, err
-		}
-
-		hashed := string(hash)
-		passwordHash = &hashed
+	passwordHash, err := resolveUpdatedPassword(input.Password)
+	if err != nil {
+		return domain.User{}, err
 	}
 
 	updated, err := s.users.Update(ctx, id, username, passwordHash)
-
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -134,12 +106,8 @@ func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 	}
 
 	if current.Role == domain.RoleAdmin {
-		adminCount, err := s.users.CountByRole(ctx, domain.RoleAdmin)
-		if err != nil {
+		if err := s.ensureNotLastAdmin(ctx); err != nil {
 			return err
-		}
-		if adminCount <= 1 {
-			return domain.ErrLastAdmin
 		}
 	}
 
@@ -151,49 +119,27 @@ func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 }
 
 func (s *userService) UpdateUserRole(ctx context.Context, id uint, role string) (domain.User, error) {
-	role = strings.ToLower(strings.TrimSpace(role))
-
-	if role != domain.RoleUser && role != domain.RoleAdmin {
+	normalizedRole := strings.ToLower(strings.TrimSpace(role))
+	if !domain.IsValidRole(normalizedRole) {
 		return domain.User{}, domain.ErrInvalidRole
 	}
 
 	current, err := s.users.FindByID(ctx, id)
-
 	if err != nil {
 		return domain.User{}, err
 	}
 
-	if current.Role == role {
+	if current.Role == normalizedRole {
 		return current, nil
 	}
 
-	if role == domain.RoleUser {
-		var groupCount int64
-		if s.userGroups != nil {
-			var err error
-			groupCount, err = s.userGroups.CountByUserID(ctx, id)
-			if err != nil {
-				return domain.User{}, err
-			}
-		}
-
-		if groupCount == 0 {
-			return domain.User{}, domain.ErrUserMustHaveGroup
-		}
-
-		if current.Role == domain.RoleAdmin {
-			adminCount, err := s.users.CountByRole(ctx, domain.RoleAdmin)
-			if err != nil {
-				return domain.User{}, err
-			}
-			if adminCount <= 1 {
-				return domain.User{}, domain.ErrLastAdmin
-			}
+	if normalizedRole == domain.RoleUser {
+		if err := s.ensureCanDemoteToUser(ctx, id, current.Role); err != nil {
+			return domain.User{}, err
 		}
 	}
 
-	updated, err := s.users.UpdateRole(ctx, id, role)
-
+	updated, err := s.users.UpdateRole(ctx, id, normalizedRole)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -204,3 +150,75 @@ func (s *userService) UpdateUserRole(ctx context.Context, id uint, role string) 
 
 	return updated, nil
 }
+
+func (s *userService) ensureGroupsExist(ctx context.Context, groupIDs []uint) error {
+	exists, err := s.groups.AllExist(ctx, groupIDs)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrInvalidGroupsIDs
+	}
+	return nil
+}
+
+func (s *userService) ensureCanDemoteToUser(ctx context.Context, userID uint, currentRole string) error {
+	if err := s.ensureHasGroupMembership(ctx, userID); err != nil {
+		return err
+	}
+	if currentRole == domain.RoleAdmin {
+		return s.ensureNotLastAdmin(ctx)
+	}
+	return nil
+}
+
+func (s *userService) ensureHasGroupMembership(ctx context.Context, userID uint) error {
+	if s.userGroups == nil {
+		return domain.ErrUserMustHaveGroup
+	}
+	groupCount, err := s.userGroups.CountByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if groupCount == 0 {
+		return domain.ErrUserMustHaveGroup
+	}
+	return nil
+}
+
+func (s *userService) ensureNotLastAdmin(ctx context.Context) error {
+	adminCount, err := s.users.CountByRole(ctx, domain.RoleAdmin)
+	if err != nil {
+		return err
+	}
+	if adminCount <= 1 {
+		return domain.ErrLastAdmin
+	}
+	return nil
+}
+
+func resolveUpdatedUsername(input *string) (*string, error) {
+	if input == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*input)
+	if trimmed == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	return &trimmed, nil
+}
+
+func resolveUpdatedPassword(input *string) (*string, error) {
+	if input == nil {
+		return nil, nil
+	}
+	if err := domain.ValidatePassword(*input); err != nil {
+		return nil, err
+	}
+	hashed, err := hasher.HashPassword(*input)
+	if err != nil {
+		return nil, err
+	}
+	return &hashed, nil
+}
+
