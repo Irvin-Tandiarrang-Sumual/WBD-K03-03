@@ -3,29 +3,29 @@ package migration
 import "encoding/json"
 
 type CreateMigrationRequest struct {
-	SqlUp string `json:"sql_up" binding:"required"`
+	SqlUp string `json:"sqlUp" binding:"required"`
 }
 
 type RollbackMigrationRequest struct {
-	DatabaseID        uint `json:"database_id" binding:"required"`
-	TargetMigrationID uint `json:"target_migration_id" binding:"required"`
+	DatabaseID        uint `json:"databaseId" binding:"required"`
+	TargetMigrationID uint `json:"targetMigrationId" binding:"required"`
 }
 
 type MigrationComparisonResponse struct {
-	FirstMigration  MigrationResponse `json:"first_migration"`
-	SecondMigration MigrationResponse `json:"second_migration"`
-	SQLUpEqual      bool              `json:"sql_up_equal"`
-	SQLDownEqual    bool              `json:"sql_down_equal"`
+	FirstMigration  MigrationResponse `json:"firstMigration"`
+	SecondMigration MigrationResponse `json:"secondMigration"`
+	SQLUpEqual      bool              `json:"sqlUpEqual"`
+	SQLDownEqual    bool              `json:"sqlDownEqual"`
 }
 
 type MigrationResponse struct {
 	ID           uint            `json:"id"`
-	DatabaseID   uint            `json:"database_id"`
+	DatabaseID   uint            `json:"databaseId"`
 	Version      string          `json:"version"`
 	Status       string          `json:"status"`
-	SqlUp        string          `json:"sql_up"`
-	SqlDown      string          `json:"sql_down"`
-	ErrorMessage string          `json:"error_message"`
+	SqlUp        string          `json:"sqlUp"`
+	SqlDown      string          `json:"sqlDown"`
+	ErrorMessage string          `json:"errorMessage"`
 	Snapshot     json.RawMessage `json:"snapshot,omitempty"`
-	UserID       uint            `json:"user_id"`
+	UserID       uint            `json:"userId"`
 }

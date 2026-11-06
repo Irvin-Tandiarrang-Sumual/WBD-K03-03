@@ -12,7 +12,7 @@ type DatabaseQueryResult struct {
 }
 
 type DatabaseCommandResult struct {
-	RowsAffected int64 `json:"rows_affected"`
+	RowsAffected int64 `json:"rowsAffected"`
 }
 
 type DatabaseTableMetadata struct {
@@ -24,16 +24,16 @@ type DatabaseColumnMetadata struct {
 	Schema     string `json:"schema"`
 	Table      string `json:"table"`
 	Name       string `json:"name"`
-	DataType   string `json:"data_type"`
-	IsNullable bool   `json:"is_nullable"`
+	DataType   string `json:"dataType"`
+	IsNullable bool   `json:"isNullable"`
 }
 
 type DatabaseIndexMetadata struct {
 	Schema    string `json:"schema"`
 	Table     string `json:"table"`
 	Name      string `json:"name"`
-	IsUnique  bool   `json:"is_unique"`
-	IsPrimary bool   `json:"is_primary"`
+	IsUnique  bool   `json:"isUnique"`
+	IsPrimary bool   `json:"isPrimary"`
 }
 
 type DatabaseMetadata struct {

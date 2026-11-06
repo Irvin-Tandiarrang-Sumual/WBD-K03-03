@@ -3,10 +3,10 @@ package response
 import "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 
 type PagingMetadata struct {
-	CurrentPage int   `json:"current_page"`
-	TotalPage   int   `json:"total_page"`
+	CurrentPage int   `json:"currentPage"`
+	TotalPage   int   `json:"totalPage"`
 	Limit       int   `json:"limit"`
-	TotalData   int64 `json:"total_data"`
+	TotalData   int64 `json:"totalData"`
 }
 
 type BaseResponse[T any] struct {

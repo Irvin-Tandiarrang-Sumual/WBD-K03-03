@@ -70,16 +70,16 @@ func (h *GroupHandler) GetAllGroups(c *gin.Context) {
 //	@Tags			Admin - Groups
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			groupId	path		int							true	"Group ID"
+//	@Param			id		path		int							true	"Group ID"
 //	@Success		200		{object}	GroupResponse				"Group found"
 //	@Failure		400		{object}	response.BaseResponse[any]	"Invalid group ID"
 //	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
 //	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not admin)"
 //	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
-//	@Router			/admin/groups/{groupId} [get]
+//	@Router			/admin/groups/{id} [get]
 func (h *GroupHandler) GetGroupByID(c *gin.Context) {
-	groupID, err := ginutil.ParseUintParam(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return
@@ -141,7 +141,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			groupId	path		int							true	"Group ID"
+//	@Param			id		path		int							true	"Group ID"
 //	@Param			body	body		UpdateGroupRequest			true	"Fields to update (all optional)"
 //	@Success		200		{object}	GroupResponse				"Group updated"
 //	@Failure		400		{object}	response.BaseResponse[any]	"Invalid input"
@@ -150,9 +150,9 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
 //	@Failure		409		{object}	response.BaseResponse[any]	"Group name already taken"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
-//	@Router			/admin/groups/{groupId} [patch]
+//	@Router			/admin/groups/{id} [patch]
 func (h *GroupHandler) UpdateGroup(c *gin.Context) {
-	groupID, err := ginutil.ParseUintParam(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return
@@ -190,7 +190,7 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 //	@Tags			Admin - Groups
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			groupId	path	int	true	"Group ID"
+//	@Param			id		path	int	true	"Group ID"
 //	@Success		204		"Group deleted"
 //	@Failure		400		{object}	response.BaseResponse[any]	"Invalid group ID"
 //	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
@@ -198,9 +198,9 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]	"Group not found"
 //	@Failure		409		{object}	response.BaseResponse[any]	"Group still has users / must have database"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
-//	@Router			/admin/groups/{groupId} [delete]
+//	@Router			/admin/groups/{id} [delete]
 func (h *GroupHandler) DeleteGroup(c *gin.Context) {
-	groupID, err := ginutil.ParseUintParam(c, "groupId")
+	groupID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return

@@ -68,16 +68,16 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 //	@Tags			Admin - Users
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			userId	path		int								true	"User ID"
+//	@Param			id		path		int								true	"User ID"
 //	@Success		200		{object}	UserResponse					"User found"
 //	@Failure		400		{object}	response.BaseResponse[any]		"Invalid user ID"
 //	@Failure		401		{object}	response.BaseResponse[any]		"Unauthorized"
 //	@Failure		403		{object}	response.BaseResponse[any]		"Forbidden (not admin)"
 //	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
-//	@Router			/admin/users/{userId} [get]
+//	@Router			/admin/users/{id} [get]
 func (h *UserHandler) GetUserByID(c *gin.Context) {
-	userID, err := ginutil.ParseUintParam(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return
@@ -140,7 +140,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			userId	path		int								true	"User ID"
+//	@Param			id		path		int								true	"User ID"
 //	@Param			body	body		UpdateUserRequest				true	"Fields to update (all optional)"
 //	@Success		200		{object}	UserResponse					"User updated"
 //	@Failure		400		{object}	response.BaseResponse[any]		"Invalid input"
@@ -149,9 +149,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
 //	@Failure		409		{object}	response.BaseResponse[any]		"Username already taken"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
-//	@Router			/admin/users/{userId} [patch]
+//	@Router			/admin/users/{id} [patch]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
-	userID, err := ginutil.ParseUintParam(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return
@@ -185,7 +185,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 //	@Tags			Admin - Users
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			userId	path	int	true	"User ID"
+//	@Param			id		path	int	true	"User ID"
 //	@Success		204		"User deleted"
 //	@Failure		400		{object}	response.BaseResponse[any]	"Invalid user ID"
 //	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
@@ -193,9 +193,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 //	@Failure		404		{object}	response.BaseResponse[any]	"User not found"
 //	@Failure		409		{object}	response.BaseResponse[any]	"User must have at least one group"
 //	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
-//	@Router			/admin/users/{userId} [delete]
+//	@Router			/admin/users/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	userID, err := ginutil.ParseUintParam(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return
@@ -217,7 +217,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			userId	path		int								true	"User ID"
+//	@Param			id		path		int								true	"User ID"
 //	@Param			body	body		SetRoleRequest					true	"Role to set"
 //	@Success		200		{object}	UserResponse					"Role updated"
 //	@Failure		400		{object}	response.BaseResponse[any]		"Invalid input or invalid role"
@@ -225,9 +225,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 //	@Failure		403		{object}	response.BaseResponse[any]		"Forbidden (not admin)"
 //	@Failure		404		{object}	response.BaseResponse[any]		"User not found"
 //	@Failure		500		{object}	response.BaseResponse[any]		"Internal server error"
-//	@Router			/admin/users/{userId}/role [patch]
+//	@Router			/admin/users/{id}/role [patch]
 func (h *UserHandler) UpdateUserRole(c *gin.Context) {
-	userID, err := ginutil.ParseUintParam(c, "userId")
+	userID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return

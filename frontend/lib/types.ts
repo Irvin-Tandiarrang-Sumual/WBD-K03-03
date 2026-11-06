@@ -33,21 +33,29 @@ export interface User {
 
 export interface Migration {
   id: number;
+  databaseId?: number;
   database_id: number;
   version: string;
   status: MigrationStatus;
+  sqlUp?: string;
   sql_up: string;
+  sqlDown?: string;
   sql_down: string;
+  errorMessage?: string;
   error_message: string;
   snapshot?: unknown;
+  userId?: number;
   user_id: number;
 }
 
 export interface Paging {
+  currentPage?: number;
   current_page?: number;
   page?: number;
   limit?: number;
+  totalPage?: number;
   total_page?: number;
+  totalData?: number;
   total_data?: number;
 }
 
@@ -72,9 +80,13 @@ export interface QueryResponse {
 }
 
 export interface MigrationComparison {
+  firstMigration?: Migration;
   first_migration: Migration;
+  secondMigration?: Migration;
   second_migration: Migration;
+  sqlUpEqual?: boolean;
   sql_up_equal: boolean;
+  sqlDownEqual?: boolean;
   sql_down_equal: boolean;
 }
 
@@ -108,4 +120,3 @@ export interface UpdateGroupInput {
   name?: string;
   databaseAccesses?: DatabaseAccess[];
 }
-
