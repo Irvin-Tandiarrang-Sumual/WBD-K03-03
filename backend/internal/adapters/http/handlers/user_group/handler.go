@@ -1,13 +1,11 @@
 package usergroup
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/ginutil"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,19 +39,19 @@ func NewUserGroupHandler(service ports.UserGroupService) *UserGroupHandler {
 func (h *UserGroupHandler) AddUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	if h.service != nil {
 		if err := h.service.AddUser(c.Request.Context(), groupID, userID); err != nil {
-			writeError(c, err)
+			c.Error(err)
 			return
 		}
 	}
@@ -81,41 +79,22 @@ func (h *UserGroupHandler) AddUser(c *gin.Context) {
 func (h *UserGroupHandler) RemoveUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	if h.service != nil {
 		if err := h.service.RemoveUser(c.Request.Context(), groupID, userID); err != nil {
-			writeError(c, err)
+			c.Error(err)
 			return
 		}
 	}
 
 	c.Status(http.StatusNoContent)
-}
-
-func writeError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, domain.ErrInvalidInput):
-		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
-
-	case errors.Is(err, domain.ErrGroupNotFound),
-		errors.Is(err, domain.ErrUserNotFound):
-		c.JSON(http.StatusNotFound, response.Error(err.Error()))
-
-	case errors.Is(err, domain.ErrMembershipExists),
-		errors.Is(err, domain.ErrMembershipNotFound),
-		errors.Is(err, domain.ErrUserMustHaveGroup):
-		c.JSON(http.StatusConflict, response.Error(err.Error()))
-
-	default:
-		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
-	}
 }
