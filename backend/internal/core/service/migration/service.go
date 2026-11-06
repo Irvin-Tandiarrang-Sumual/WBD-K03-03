@@ -36,10 +36,14 @@ func NewMigrationService(
 func (s *migrationService) GetMigrationsByDatabaseID(
 	ctx context.Context,
 	databaseID uint,
+	userID uint,
 	params pagination.PaginationParams,
 ) ([]*domain.Migration, int64, error) {
-	if databaseID == 0 {
+	if databaseID == 0 || userID == 0 {
 		return nil, 0, domain.ErrInvalidMigrationInput
+	}
+	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+		return nil, 0, err
 	}
 	return s.repository.FindAllByDatabaseID(ctx, databaseID, params)
 }
@@ -48,9 +52,13 @@ func (s *migrationService) GetMigrationByIDAndDatabaseID(
 	ctx context.Context,
 	migrationID uint,
 	databaseID uint,
+	userID uint,
 ) (*domain.Migration, int64, error) {
-	if migrationID == 0 || databaseID == 0 {
+	if migrationID == 0 || databaseID == 0 || userID == 0 {
 		return nil, 0, domain.ErrInvalidMigrationInput
+	}
+	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
+		return nil, 0, err
 	}
 
 	migration, err := s.repository.FindByIDAndDatabaseID(ctx, migrationID, databaseID)
@@ -65,6 +73,10 @@ func (s *migrationService) CompareMigrations(
 	input domain.CompareMigrationsInput,
 ) (*domain.MigrationComparison, error) {
 	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.userGroupsService.Authorize(ctx, input.UserID, input.DatabaseID, domain.AccessViewOnly); err != nil {
 		return nil, err
 	}
 

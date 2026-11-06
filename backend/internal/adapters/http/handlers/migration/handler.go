@@ -44,13 +44,19 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 		return
 	}
 
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
 		c.Error(domain.ErrInvalidPagination)
 		return
 	}
 
-	migrations, totalData, err := h.service.GetMigrationsByDatabaseID(c.Request.Context(), databaseID, params)
+	migrations, totalData, err := h.service.GetMigrationsByDatabaseID(c.Request.Context(), databaseID, userID, params)
 	if err != nil {
 		c.Error(err)
 		return
@@ -145,7 +151,12 @@ func (h *MigrationHandler) GetMigrationByIDAndDatabaseID(c *gin.Context) {
 		c.Error(domain.ErrInvalidDatabaseID)
 		return
 	}
-	migration, _, err := h.service.GetMigrationByIDAndDatabaseID(c.Request.Context(), migrationID, databaseID)
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	migration, _, err := h.service.GetMigrationByIDAndDatabaseID(c.Request.Context(), migrationID, databaseID, userID)
 	if err != nil {
 		c.Error(err)
 		return

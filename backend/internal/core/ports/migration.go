@@ -8,9 +8,9 @@ import (
 )
 
 type MigrationService interface {
-	GetMigrationsByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error)
+	GetMigrationsByDatabaseID(ctx context.Context, databaseID uint, userID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error)
 	CreateMigration(ctx context.Context, input domain.CreateMigrationInput) (*domain.Migration, error)
-	GetMigrationByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint) (*domain.Migration, int64, error)
+	GetMigrationByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint, userID uint) (*domain.Migration, int64, error)
 	CompareMigrations(ctx context.Context, input domain.CompareMigrationsInput) (*domain.MigrationComparison, error)
 	RollbackMigrations(ctx context.Context, input domain.RollbackMigrationsInput) ([]*domain.Migration, error)
 }
