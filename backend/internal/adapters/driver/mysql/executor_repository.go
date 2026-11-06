@@ -42,27 +42,7 @@ func (r *ExecutorRepository) Explain(ctx context.Context, database domain.Databa
 }
 
 func (r *ExecutorRepository) ExplainAnalyze(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
-	db, err := r.poolManager.Get(ctx, database)
-	if err != nil {
-		return nil, err
-	}
-
-	tx := db.WithContext(ctx).Begin(&sql.TxOptions{ReadOnly: true})
-	if tx.Error != nil {
-		tx = db.WithContext(ctx).Begin()
-	}
-	if tx.Error != nil {
-		return nil, fmt.Errorf("begin transaction: %w", tx.Error)
-	}
-	defer tx.Rollback()
-
-	rows, err := tx.Raw("EXPLAIN ANALYZE " + query).Rows()
-	if err != nil {
-		return nil, fmt.Errorf("explain analyze MySQL query: %w", err)
-	}
-	defer rows.Close()
-
-	return scanQueryResult(rows)
+	return r.query(ctx, database, "EXPLAIN ANALYZE "+query)
 }
 
 func (r *ExecutorRepository) GetDatabaseMetadata(ctx context.Context, database domain.Database) (*ports.DatabaseMetadata, error) {
@@ -169,7 +149,16 @@ func (r *ExecutorRepository) query(ctx context.Context, database domain.Database
 		return nil, err
 	}
 
-	rows, err := db.WithContext(ctx).Raw(query).Rows()
+	tx := db.WithContext(ctx).Begin(&sql.TxOptions{ReadOnly: true})
+	if tx.Error != nil {
+		tx = db.WithContext(ctx).Begin()
+	}
+	if tx.Error != nil {
+		return nil, fmt.Errorf("begin transaction: %w", tx.Error)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Raw(query).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("query MySQL database: %w", err)
 	}
