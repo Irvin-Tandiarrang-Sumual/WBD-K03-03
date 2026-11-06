@@ -6,6 +6,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
 
 type databaseDriverService struct {
@@ -125,29 +126,17 @@ func (s *databaseDriverService) getAccessibleDatabase(
 }
 
 func validateSelectQuery(query string) error {
-	normalizedQuery := strings.ToLower(stripTrailingSemicolons(query))
-	if normalizedQuery == "" {
+	trimmedQuery := stripTrailingSemicolons(query)
+	if strings.TrimSpace(trimmedQuery) == "" {
 		return domain.ErrInvalidDatabaseQuery
 	}
-	if !hasKeywordPrefix(normalizedQuery, "select") && !hasKeywordPrefix(normalizedQuery, "with") {
-		return domain.ErrInvalidDatabaseQuery
-	}
-	if strings.Contains(normalizedQuery, ";") {
-		return domain.ErrInvalidDatabaseQuery
-	}
-	return nil
-}
 
-func hasKeywordPrefix(normalizedQuery, keyword string) bool {
-	if !strings.HasPrefix(normalizedQuery, keyword) {
-		return false
+	isReadOnly, err := sqlutil.IsReadOnlyQuery(trimmedQuery)
+	if err != nil || !isReadOnly {
+		return domain.ErrInvalidDatabaseQuery
 	}
-	rest := normalizedQuery[len(keyword):]
-	if rest == "" {
-		return false
-	}
-	first := rest[0]
-	return first == ' ' || first == '\n' || first == '\t' || first == '\r' || first == '*' || first == '('
+
+	return nil
 }
 
 func stripTrailingSemicolons(query string) string {
