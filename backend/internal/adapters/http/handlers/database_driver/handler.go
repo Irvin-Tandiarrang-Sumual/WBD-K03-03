@@ -1,7 +1,6 @@
 package database_driver
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
@@ -33,7 +32,7 @@ func (h *DatabaseDriverHandler) ExecuteDatabaseQuery(c *gin.Context) {
 		query,
 	)
 	if err != nil {
-		writeDatabaseDriverErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -53,7 +52,7 @@ func (h *DatabaseDriverHandler) ExplainDatabaseQuery(c *gin.Context) {
 		query,
 	)
 	if err != nil {
-		writeDatabaseDriverErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -73,7 +72,7 @@ func (h *DatabaseDriverHandler) ExplainAnalyzeDatabaseQuery(c *gin.Context) {
 		query,
 	)
 	if err != nil {
-		writeDatabaseDriverErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -83,43 +82,20 @@ func (h *DatabaseDriverHandler) ExplainAnalyzeDatabaseQuery(c *gin.Context) {
 func (h *DatabaseDriverHandler) extractQueryContext(c *gin.Context) (uint, uint, string, bool) {
 	databaseID, err := ginutil.ParseUintParam(c, "database_id")
 	if err != nil {
-		writeDatabaseDriverErrorResponse(c, domain.ErrInvalidDatabaseID)
+		c.Error(domain.ErrInvalidDatabaseID)
 		return 0, 0, "", false
 	}
 	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
-		writeDatabaseDriverErrorResponse(c, err)
+		c.Error(err)
 		return 0, 0, "", false
 	}
 
 	var request DatabaseQueryRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, response.Error(domain.ErrInvalidInput.Error()))
+		c.Error(err)
 		return 0, 0, "", false
 	}
 
 	return databaseID, userID, request.Query, true
-}
-
-func writeDatabaseDriverErrorResponse(c *gin.Context, err error) {
-	status := http.StatusInternalServerError
-	message := "internal server error"
-	if err != nil && err.Error() != "" {
-		message = err.Error()
-	}
-
-	switch {
-	case errors.Is(err, domain.ErrInvalidDatabaseID),
-		errors.Is(err, domain.ErrInvalidDatabaseQuery),
-		errors.Is(err, domain.ErrInvalidInput):
-		status = http.StatusBadRequest
-	case errors.Is(err, domain.ErrDatabaseNotFound):
-		status = http.StatusNotFound
-	case errors.Is(err, domain.ErrDatabaseAccessDenied):
-		status = http.StatusForbidden
-	case errors.Is(err, domain.ErrCurrentUserUnavailable):
-		status = http.StatusUnauthorized
-	}
-
-	c.JSON(status, response.Error(message))
 }
