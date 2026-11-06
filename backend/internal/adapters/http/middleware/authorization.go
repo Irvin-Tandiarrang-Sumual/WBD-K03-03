@@ -8,12 +8,14 @@ import (
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, err := CurrentUserID(c); err != nil {
-			abortUnauthorized(c)
+			c.Error(err)
+			c.Abort()
 			return
 		}
 
 		if !isAdmin(c) {
-			abortForbidden(c)
+			c.Error(domain.ErrAccessDenied)
+			c.Abort()
 			return
 		}
 

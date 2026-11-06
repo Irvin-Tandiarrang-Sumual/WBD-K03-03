@@ -1,9 +1,6 @@
 package middleware
 
 import (
-	"errors"
-	"net/http"
-
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/gin-gonic/gin"
@@ -29,7 +26,8 @@ func (am *AuthMiddleware) Authenticate() gin.HandlerFunc {
 		opaqueToken, err := c.Cookie(SessionCookieName)
 
 		if err != nil || opaqueToken == "" {
-			abortUnauthorized(c)
+			c.Error(domain.ErrCurrentUserUnavailable)
+			c.Abort()
 			return
 		}
 
@@ -39,7 +37,8 @@ func (am *AuthMiddleware) Authenticate() gin.HandlerFunc {
 		)
 
 		if err != nil {
-			handleSessionError(c, err)
+			c.Error(err)
+			c.Abort()
 			return
 		}
 
@@ -50,7 +49,8 @@ func (am *AuthMiddleware) Authenticate() gin.HandlerFunc {
 		currentUser, err := am.userService.GetUserByID(c.Request.Context(), session.UserID)
 
 		if err != nil {
-			handleUserFetchError(c, err)
+			c.Error(err)
+			c.Abort()
 			return
 		}
 
@@ -66,26 +66,4 @@ func shouldRefreshSessionCookie(currentCookieToken string, newSessionToken strin
 
 func (am *AuthMiddleware) refreshSessionCookie(c *gin.Context, session domain.Session) {
 	SetSessionCookie(c, session, am.isSecureCookie)
-}
-
-func handleUserFetchError(c *gin.Context, err error) {
-	if errors.Is(err, domain.ErrUserNotFound) {
-		abortUnauthorized(c)
-		return
-	}
-
-	c.AbortWithStatusJSON(http.StatusInternalServerError, authorizationErrorResponse{
-		Error: "internal server error",
-	})
-}
-
-func handleSessionError(c *gin.Context, err error) {
-	if errors.Is(err, domain.ErrInvalidSession) {
-		abortUnauthorized(c)
-		return
-	}
-
-	c.AbortWithStatusJSON(http.StatusInternalServerError, authenticationErrorResponse{
-		Error: "internal server error",
-	})
 }

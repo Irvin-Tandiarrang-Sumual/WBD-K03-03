@@ -42,7 +42,8 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 	case errors.Is(err, domain.ErrCurrentUserUnavailable):
 		return http.StatusUnauthorized, response.Error("authentication required")
 
-	case errors.Is(err, domain.ErrDatabaseAccessDenied):
+	case errors.Is(err, domain.ErrAccessDenied),
+		errors.Is(err, domain.ErrDatabaseAccessDenied):
 		return http.StatusForbidden, response.Error("access denied")
 
 	case errors.Is(err, domain.ErrUserNotFound):
