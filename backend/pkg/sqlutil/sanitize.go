@@ -2,7 +2,14 @@ package sqlutil
 
 import (
 	"errors"
+	"regexp"
+	"strconv"
 	"strings"
+)
+
+var (
+	simpleIdentifierRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	quotedIdentifierRegex = regexp.MustCompile(`^("[^"\r\n]+"|` + "`" + `[^` + "`" + `\r\n]+` + "`" + `)$`)
 )
 
 var mutatingKeywords = []string{
@@ -211,4 +218,46 @@ func HasKeywordPrefix(normalizedQuery, keyword string) bool {
 	}
 	first := rest[0]
 	return first == ' ' || first == '\n' || first == '\t' || first == '\r' || first == '*' || first == '('
+}
+
+func IsValidIdentifier(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	parts := strings.Split(name, ".")
+	if len(parts) > 2 {
+		return false
+	}
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if !simpleIdentifierRegex.MatchString(trimmed) && !quotedIdentifierRegex.MatchString(trimmed) {
+			return false
+		}
+	}
+	return true
+}
+
+func IsValidLiteralValue(val string) bool {
+	trimmed := strings.TrimSpace(val)
+	if trimmed == "" {
+		return false
+	}
+
+	if strings.EqualFold(trimmed, "null") ||
+		strings.EqualFold(trimmed, "true") ||
+		strings.EqualFold(trimmed, "false") {
+		return true
+	}
+
+	if _, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		return true
+	}
+
+	if strings.HasPrefix(trimmed, "'") {
+		endIdx, err := consumeStringLiteral(trimmed, 0)
+		return err == nil && endIdx == len(trimmed)
+	}
+
+	return false
 }

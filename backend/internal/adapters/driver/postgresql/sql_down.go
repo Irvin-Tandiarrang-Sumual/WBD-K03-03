@@ -81,7 +81,11 @@ func generateCreateTableDown(statement string) (string, error) {
 	if len(matches) < 2 {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
-	return "DROP TABLE " + matches[1], nil
+	tableName := strings.TrimSpace(matches[1])
+	if !sqlutil.IsValidIdentifier(tableName) {
+		return "", domain.ErrInvalidMigrationInput
+	}
+	return "DROP TABLE " + tableName, nil
 }
 
 func generateCreateIndexDown(statement string) (string, error) {
@@ -89,7 +93,11 @@ func generateCreateIndexDown(statement string) (string, error) {
 	if len(matches) < 2 {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
-	return "DROP INDEX " + matches[1], nil
+	indexName := strings.TrimSpace(matches[1])
+	if !sqlutil.IsValidIdentifier(indexName) {
+		return "", domain.ErrInvalidMigrationInput
+	}
+	return "DROP INDEX " + indexName, nil
 }
 
 func generateAlterTableDown(statement string) (string, error) {
@@ -97,7 +105,12 @@ func generateAlterTableDown(statement string) (string, error) {
 	if len(matches) != 3 {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
-	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", matches[1], matches[2]), nil
+	tableName := strings.TrimSpace(matches[1])
+	columnName := strings.TrimSpace(matches[2])
+	if !sqlutil.IsValidIdentifier(tableName) || !sqlutil.IsValidIdentifier(columnName) {
+		return "", domain.ErrInvalidMigrationInput
+	}
+	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableName, columnName), nil
 }
 
 func generateInsertDown(statement string) (string, error) {
@@ -106,10 +119,21 @@ func generateInsertDown(statement string) (string, error) {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
 
+	tableName := strings.TrimSpace(matches[1])
+	if !sqlutil.IsValidIdentifier(tableName) {
+		return "", domain.ErrInvalidMigrationInput
+	}
+
 	columns := sqlutil.SplitValues(matches[2])
 	valueGroups, ok := sqlutil.SplitValueGroups(matches[3])
 	if !ok || len(valueGroups) == 0 {
 		return "", domain.ErrSQLDownGenerationUnsupported
+	}
+
+	for _, col := range columns {
+		if !sqlutil.IsValidIdentifier(strings.TrimSpace(col)) {
+			return "", domain.ErrInvalidMigrationInput
+		}
 	}
 
 	rowPredicates := make([]string, 0, len(valueGroups))
@@ -121,12 +145,20 @@ func generateInsertDown(statement string) (string, error) {
 
 		predicates := make([]string, 0, len(columns))
 		for i, col := range columns {
-			predicates = append(predicates, strings.TrimSpace(col)+" = "+strings.TrimSpace(values[i]))
+			colName := strings.TrimSpace(col)
+			val := strings.TrimSpace(values[i])
+			if !sqlutil.IsValidLiteralValue(val) {
+				return "", domain.ErrInvalidMigrationInput
+			}
+			if strings.EqualFold(val, "null") {
+				predicates = append(predicates, colName+" IS NULL")
+			} else {
+				predicates = append(predicates, colName+" = "+val)
+			}
 		}
 		rowPredicates = append(rowPredicates, strings.Join(predicates, " AND "))
 	}
 
-	tableName := matches[1]
 	if len(rowPredicates) == 1 {
 		return fmt.Sprintf("DELETE FROM %s WHERE %s", tableName, rowPredicates[0]), nil
 	}
@@ -143,10 +175,20 @@ func (d *SQLDialect) generateDeleteDown(ctx context.Context, database domain.Dat
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
 
-	tableName := matches[1]
-	whereClause := matches[2]
+	tableName := strings.TrimSpace(matches[1])
+	whereClause := strings.TrimSpace(matches[2])
 
-	result, err := d.executor.ExecuteQuery(ctx, database, "SELECT * FROM "+tableName+" WHERE "+whereClause)
+	if !sqlutil.IsValidIdentifier(tableName) {
+		return "", domain.ErrInvalidMigrationInput
+	}
+
+	query := "SELECT * FROM " + tableName + " WHERE " + whereClause
+	isReadOnly, err := sqlutil.IsReadOnlyQuery(query)
+	if err != nil || !isReadOnly {
+		return "", domain.ErrInvalidMigrationInput
+	}
+
+	result, err := d.executor.ExecuteQuery(ctx, database, query)
 	if err != nil {
 		return "", err
 	}
@@ -160,15 +202,27 @@ func (d *SQLDialect) generateUpdateDown(ctx context.Context, database domain.Dat
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
 
-	tableName := matches[1]
+	tableName := strings.TrimSpace(matches[1])
 	assignments := sqlutil.ParseAssignments(matches[2])
-	whereClause := matches[3]
+	whereClause := strings.TrimSpace(matches[3])
 
-	if len(assignments) == 0 {
+	if len(assignments) == 0 || !sqlutil.IsValidIdentifier(tableName) {
 		return "", domain.ErrSQLDownGenerationUnsupported
 	}
 
-	result, err := d.executor.ExecuteQuery(ctx, database, "SELECT * FROM "+tableName+" WHERE "+whereClause)
+	for col, val := range assignments {
+		if !sqlutil.IsValidIdentifier(col) || !sqlutil.IsValidLiteralValue(val) {
+			return "", domain.ErrInvalidMigrationInput
+		}
+	}
+
+	query := "SELECT * FROM " + tableName + " WHERE " + whereClause
+	isReadOnly, err := sqlutil.IsReadOnlyQuery(query)
+	if err != nil || !isReadOnly {
+		return "", domain.ErrInvalidMigrationInput
+	}
+
+	result, err := d.executor.ExecuteQuery(ctx, database, query)
 	if err != nil {
 		return "", err
 	}
@@ -190,12 +244,16 @@ func buildInverseUpdateRow(tableName string, row map[string]any, assignments map
 	whereParts := make([]string, 0, len(row))
 
 	for column, oldValue := range row {
-		newValue := oldValue
 		if assignment, exists := assignments[column]; exists {
-			newValue = assignment
 			setParts = append(setParts, column+" = "+sqlutil.FormatSQLValue(oldValue))
+			whereParts = append(whereParts, column+" = "+assignment)
+		} else {
+			if oldValue == nil {
+				whereParts = append(whereParts, column+" IS NULL")
+			} else {
+				whereParts = append(whereParts, column+" = "+sqlutil.FormatSQLValue(oldValue))
+			}
 		}
-		whereParts = append(whereParts, column+" = "+sqlutil.FormatSQLValue(newValue))
 	}
 
 	if len(setParts) == 0 {
