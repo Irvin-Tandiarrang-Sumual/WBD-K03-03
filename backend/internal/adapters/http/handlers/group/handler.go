@@ -1,7 +1,6 @@
 package group
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -39,13 +38,13 @@ func NewGroupHandler(service ports.GroupService) *GroupHandler {
 func (h *GroupHandler) GetAllGroups(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
-		writeError(c, domain.ErrInvalidPagination)
+		c.Error(domain.ErrInvalidPagination)
 		return
 	}
 
 	groups, totalData, err := h.service.GetAllGroups(c.Request.Context(), params)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -82,13 +81,13 @@ func (h *GroupHandler) GetAllGroups(c *gin.Context) {
 func (h *GroupHandler) GetGroupByID(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	group, err := h.service.GetGroupByID(c.Request.Context(), groupID)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -116,7 +115,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	var request CreateGroupRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(err)
 		return
 	}
 
@@ -127,7 +126,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 
 	group, err := h.service.CreateGroup(c.Request.Context(), input)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -155,14 +154,14 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	var request UpdateGroupRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(err)
 		return
 	}
 
@@ -177,7 +176,7 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 
 	group, err := h.service.UpdateGroup(c.Request.Context(), groupID, input)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -203,40 +202,14 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "groupId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	if err := h.service.DeleteGroup(c.Request.Context(), groupID); err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
 	c.Status(http.StatusNoContent)
-}
-
-
-func writeError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, domain.ErrInvalidInput),
-		errors.Is(err, domain.ErrInvalidPagination),
-		errors.Is(err, domain.ErrInvalidDatabaseAccess),
-		errors.Is(err, domain.ErrInvalidGroupsIDs):
-		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
-
-	case errors.Is(err, domain.ErrGroupNotFound),
-		errors.Is(err, domain.ErrUserNotFound),
-		errors.Is(err, domain.ErrDatabaseNotFound):
-		c.JSON(http.StatusNotFound, response.Error(err.Error()))
-
-	case errors.Is(err, domain.ErrGroupNameTaken),
-		errors.Is(err, domain.ErrMembershipExists),
-		errors.Is(err, domain.ErrMembershipNotFound),
-		errors.Is(err, domain.ErrGroupMustHaveDatabase),
-		errors.Is(err, domain.ErrUserMustHaveGroup):
-		c.JSON(http.StatusConflict, response.Error(err.Error()))
-
-	default:
-		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
-	}
 }
