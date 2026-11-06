@@ -1,11 +1,9 @@
 package auth
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -42,18 +40,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var request LoginRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, response.Error(domain.ErrInvalidInput.Error()))
+		c.Error(err)
 		return
 	}
 
 	user, session, err := h.service.Login(c.Request.Context(), request.Username, request.Password)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidCredentials) {
-			c.JSON(http.StatusUnauthorized, response.Error(err.Error()))
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
+		c.Error(err)
 		return
 	}
 
@@ -81,7 +74,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	if err == nil && opaqueToken != "" {
 		if err := h.service.Logout(c.Request.Context(), opaqueToken); err != nil {
-			c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
+			c.Error(err)
 			return
 		}
 	}
@@ -105,24 +98,13 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, response.Error("authentication required"))
-		return
-	}
-
-	if h.userService == nil {
-		c.JSON(http.StatusOK, response.Success("current user profile", LoginResponse{
-			ID: userID,
-		}))
+		c.Error(err)
 		return
 	}
 
 	user, err := h.userService.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
-		if errors.Is(err, domain.ErrUserNotFound) {
-			c.JSON(http.StatusUnauthorized, response.Error("user not found"))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
+		c.Error(err)
 		return
 	}
 
