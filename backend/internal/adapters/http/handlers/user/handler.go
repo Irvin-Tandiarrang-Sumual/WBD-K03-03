@@ -1,7 +1,6 @@
 package user
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -37,13 +36,13 @@ func NewUserHandler(service ports.UserService) *UserHandler {
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
-		writeError(c, domain.ErrInvalidPagination)
+		c.Error(domain.ErrInvalidPagination)
 		return
 	}
 
 	users, totalData, err := h.service.GetAllUsers(c.Request.Context(), params)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -80,13 +79,13 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 func (h *UserHandler) GetUserByID(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	user, err := h.service.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -114,7 +113,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	var request CreateUserRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(err)
 		return
 	}
 
@@ -126,7 +125,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	createdUser, err := h.service.CreateUser(c.Request.Context(), input)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -154,14 +153,14 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	var request UpdateUserRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(err)
 		return
 	}
 
@@ -172,7 +171,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	updatedUser, err := h.service.UpdateUser(c.Request.Context(), userID, input)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -198,12 +197,12 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	if err := h.service.DeleteUser(c.Request.Context(), userID); err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -230,44 +229,22 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 	userID, err := ginutil.ParseUintParam(c, "userId")
 	if err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(domain.ErrInvalidInput)
 		return
 	}
 
 	var request SetRoleRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		writeError(c, domain.ErrInvalidInput)
+		c.Error(err)
 		return
 	}
 
 	updatedUser, err := h.service.UpdateUserRole(c.Request.Context(), userID, request.Role)
 	if err != nil {
-		writeError(c, err)
+		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, toUserResponse(updatedUser))
-}
-
-func writeError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, domain.ErrInvalidInput),
-		errors.Is(err, domain.ErrInvalidPagination),
-		errors.Is(err, domain.ErrInvalidRole),
-		errors.Is(err, domain.ErrInvalidGroupsIDs):
-		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
-
-	case errors.Is(err, domain.ErrUserNotFound),
-		errors.Is(err, domain.ErrGroupNotFound):
-		c.JSON(http.StatusNotFound, response.Error(err.Error()))
-
-	case errors.Is(err, domain.ErrUsernameTaken),
-		errors.Is(err, domain.ErrUserMustHaveGroup),
-		errors.Is(err, domain.ErrLastAdmin):
-		c.JSON(http.StatusConflict, response.Error(err.Error()))
-
-	default:
-		c.JSON(http.StatusInternalServerError, response.Error("internal server error"))
-	}
 }
