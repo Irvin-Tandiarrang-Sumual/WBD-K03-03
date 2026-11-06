@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	ErrInvalidGroupsIDs             = errors.New("Group ids are not valid")
@@ -11,6 +14,8 @@ var (
 	ErrLastAdmin                    = errors.New("At least one admin is required")
 	ErrDatabaseNotFound             = errors.New("Database is not found")
 	ErrInvalidInput                 = errors.New("Invalid input")
+	ErrPasswordTooLong              = fmt.Errorf("%w: Password must not exceed 72 bytes", ErrInvalidInput)
+	ErrPasswordEmpty                = fmt.Errorf("%w: Password cannot be empty", ErrInvalidInput)
 	ErrGroupNameTaken               = errors.New("Group name already used")
 	ErrInvalidDatabaseAccess        = errors.New("Invalid database access")
 	ErrMembershipExists             = errors.New("User is already a group member")

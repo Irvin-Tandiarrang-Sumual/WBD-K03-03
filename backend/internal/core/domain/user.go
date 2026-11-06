@@ -25,8 +25,11 @@ type UpdateUserInput struct {
 }
 
 func ValidatePassword(password string) error {
-	if password == "" || len([]byte(password)) > MaxPasswordBytes {
-		return ErrInvalidInput
+	if password == "" {
+		return ErrPasswordEmpty
+	}
+	if len([]byte(password)) > MaxPasswordBytes {
+		return ErrPasswordTooLong
 	}
 	return nil
 }
