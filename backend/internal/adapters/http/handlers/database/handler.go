@@ -1,9 +1,7 @@
 package database
 
 import (
-	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -39,13 +37,13 @@ func NewDatabaseHandler(databaseService ports.DatabaseService) *DatabaseHandler 
 func (h *DatabaseHandler) GetDatabaseByID(c *gin.Context) {
 	databaseID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
-		writeDatabaseErrorResponse(c, domain.ErrInvalidDatabaseID)
+		c.Error(domain.ErrInvalidDatabaseID)
 		return
 	}
 
 	database, err := h.databaseService.GetDatabaseByID(c.Request.Context(), databaseID)
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, response.Success("database retrieved successfully", toResponse(database)))
@@ -69,13 +67,13 @@ func (h *DatabaseHandler) GetDatabaseByID(c *gin.Context) {
 func (h *DatabaseHandler) GetAllDatabases(c *gin.Context) {
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
-		writeDatabaseErrorResponse(c, domain.ErrInvalidPagination)
+		c.Error(domain.ErrInvalidPagination)
 		return
 	}
 
 	databases, totalData, err := h.databaseService.GetAllDatabases(c.Request.Context(), params)
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -103,19 +101,19 @@ func (h *DatabaseHandler) GetAllDatabases(c *gin.Context) {
 func (h *DatabaseHandler) GetDatabasesByUserID(c *gin.Context) {
 	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
 	params, err := ginutil.ParsePagination(c)
 	if err != nil {
-		writeDatabaseErrorResponse(c, domain.ErrInvalidPagination)
+		c.Error(domain.ErrInvalidPagination)
 		return
 	}
 
 	databases, totalData, err := h.databaseService.GetDatabasesByUserID(c.Request.Context(), userID, params)
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -144,18 +142,18 @@ func (h *DatabaseHandler) GetDatabasesByUserID(c *gin.Context) {
 func (h *DatabaseHandler) GetDatabaseByIDAndUserID(c *gin.Context) {
 	databaseID, err := ginutil.ParseUintParam(c, "database_id")
 	if err != nil {
-		writeDatabaseErrorResponse(c, domain.ErrInvalidDatabaseID)
+		c.Error(domain.ErrInvalidDatabaseID)
 		return
 	}
 	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 
 	database, err := h.databaseService.GetDatabaseByIDAndUserID(c.Request.Context(), databaseID, userID)
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, response.Success("database retrieved successfully", toResponse(database)))
@@ -180,7 +178,7 @@ func (h *DatabaseHandler) GetDatabaseByIDAndUserID(c *gin.Context) {
 func (h *DatabaseHandler) CreateDatabase(c *gin.Context) {
 	var request CreateDatabaseRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, response.Error(err.Error()))
+		c.Error(err)
 		return
 	}
 
@@ -189,7 +187,7 @@ func (h *DatabaseHandler) CreateDatabase(c *gin.Context) {
 		Password: request.Password, Type: request.Type, Name: request.Name,
 	})
 	if err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusCreated, response.Success("database created successfully", toResponse(database)))
@@ -214,16 +212,15 @@ func (h *DatabaseHandler) CreateDatabase(c *gin.Context) {
 func (h *DatabaseHandler) DeleteDatabase(c *gin.Context) {
 	databaseID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
-		writeDatabaseErrorResponse(c, domain.ErrInvalidDatabaseID)
+		c.Error(domain.ErrInvalidDatabaseID)
 		return
 	}
 	if err := h.databaseService.DeleteDatabase(c.Request.Context(), databaseID); err != nil {
-		writeDatabaseErrorResponse(c, err)
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, response.Success[any]("database deleted successfully", nil))
 }
-
 
 func toResponse(database *domain.Database) DatabaseResponse {
 	return DatabaseResponse{
@@ -235,40 +232,4 @@ func toResponse(database *domain.Database) DatabaseResponse {
 		Name:       database.Name,
 		AccessType: string(database.AccessType),
 	}
-}
-
-func writeDatabaseErrorResponse(c *gin.Context, err error) {
-	status := http.StatusInternalServerError
-	message := "internal server error"
-	if err != nil && err.Error() != "" {
-		message = err.Error()
-	}
-	switch {
-	case errors.Is(err, domain.ErrDatabaseNotFound):
-		status = http.StatusNotFound
-	case errors.Is(err, domain.ErrInvalidDatabaseID),
-		errors.Is(err, domain.ErrInvalidUserID),
-		errors.Is(err, domain.ErrInvalidPagination),
-		errors.Is(err, domain.ErrInvalidDatabaseInput),
-		errors.Is(err, domain.ErrInvalidInput):
-		status = http.StatusBadRequest
-	case errors.Is(err, domain.ErrDatabaseAlreadyExists),
-		errors.Is(err, domain.ErrDatabaseInUse):
-		status = http.StatusConflict
-	case errors.Is(err, domain.ErrCurrentUserUnavailable):
-		status = http.StatusNotImplemented
-	default:
-		if err != nil {
-			errLower := strings.ToLower(err.Error())
-			if strings.Contains(errLower, "connection refused") ||
-				strings.Contains(errLower, "no such host") ||
-				strings.Contains(errLower, "dial tcp") ||
-				strings.Contains(errLower, "failed to connect") ||
-				strings.Contains(errLower, "authentication failed") ||
-				strings.Contains(errLower, "access denied") {
-				status = http.StatusBadRequest
-			}
-		}
-	}
-	c.JSON(status, response.Error(message))
 }
