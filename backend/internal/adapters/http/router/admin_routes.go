@@ -20,21 +20,21 @@ func registerAdminRoutes(api *gin.RouterGroup, dependencies routerDependencies) 
 
 func registerAdminUserRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
 	users := admin.Group("/users")
-	users.GET("", dependencies.userHandler.List)
-	users.GET("/:userId", dependencies.userHandler.Get)
-	users.POST("", dependencies.userHandler.Create)
-	users.PATCH("/:userId", dependencies.userHandler.Update)
-	users.DELETE("/:userId", dependencies.userHandler.Delete)
-	users.PATCH("/:userId/role", dependencies.userHandler.SetRole)
+	users.GET("", dependencies.userHandler.GetAllUsers)
+	users.GET("/:userId", dependencies.userHandler.GetUserByID)
+	users.POST("", dependencies.userHandler.CreateUser)
+	users.PATCH("/:userId", dependencies.userHandler.UpdateUser)
+	users.DELETE("/:userId", dependencies.userHandler.DeleteUser)
+	users.PATCH("/:userId/role", dependencies.userHandler.UpdateUserRole)
 }
 
 func registerAdminGroupRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
 	groups := admin.Group("/groups")
-	groups.GET("", dependencies.groupHandler.List)
-	groups.GET("/:groupId", dependencies.groupHandler.Get)
-	groups.POST("", dependencies.groupHandler.Create)
-	groups.PATCH("/:groupId", dependencies.groupHandler.Update)
-	groups.DELETE("/:groupId", dependencies.groupHandler.Delete)
+	groups.GET("", dependencies.groupHandler.GetAllGroups)
+	groups.GET("/:groupId", dependencies.groupHandler.GetGroupByID)
+	groups.POST("", dependencies.groupHandler.CreateGroup)
+	groups.PATCH("/:groupId", dependencies.groupHandler.UpdateGroup)
+	groups.DELETE("/:groupId", dependencies.groupHandler.DeleteGroup)
 }
 
 func registerAdminUserGroupRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
