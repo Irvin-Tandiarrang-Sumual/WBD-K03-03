@@ -94,7 +94,7 @@ func (r *sessionRepository) Touch(ctx context.Context, id uint, lastActive time.
 	return nil
 }
 
-func (r *sessionRepository) Rotate(ctx context.Context, session domain.Session) error {
+func (r *sessionRepository) Rotate(ctx context.Context, session domain.Session) (bool, error) {
 	var gracePeriodUntil *time.Time
 	if !session.GracePeriodUntil.IsZero() {
 		t := session.GracePeriodUntil
@@ -104,7 +104,7 @@ func (r *sessionRepository) Rotate(ctx context.Context, session domain.Session) 
 	result := r.db.
 		WithContext(ctx).
 		Model(&models.Session{}).
-		Where("id = ?", session.ID).
+		Where("id = ? AND opaque_token = ?", session.ID, session.PreviousOpaqueToken).
 		Updates(map[string]any{
 			"opaque_token":          session.OpaqueToken,
 			"previous_opaque_token": session.PreviousOpaqueToken,
@@ -114,14 +114,14 @@ func (r *sessionRepository) Rotate(ctx context.Context, session domain.Session) 
 		})
 
 	if result.Error != nil {
-		return result.Error
+		return false, result.Error
 	}
 
 	if result.RowsAffected == 0 {
-		return domain.ErrInvalidSession
+		return false, nil
 	}
 
-	return nil
+	return true, nil
 }
 
 func (r *sessionRepository) DeleteByToken(ctx context.Context, opaqueToken string) error {
@@ -131,7 +131,6 @@ func (r *sessionRepository) DeleteByToken(ctx context.Context, opaqueToken strin
 		Delete(&models.Session{}).Error
 }
 
-// DeleteByUserID mencabut seluruh session seorang user.
 func (r *sessionRepository) DeleteByUserID(ctx context.Context, userID uint) error {
 	return r.db.
 		WithContext(ctx).

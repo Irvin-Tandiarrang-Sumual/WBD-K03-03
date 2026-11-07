@@ -101,8 +101,12 @@ func (s *sessionService) rotateSessionToken(ctx context.Context, session domain.
 	}
 
 	rotatedSession := session.Rotate(newToken, now)
-	if err := s.sessions.Rotate(ctx, rotatedSession); err != nil {
+	didRotate, err := s.sessions.Rotate(ctx, rotatedSession)
+	if err != nil {
 		return domain.Session{}, err
+	}
+	if !didRotate {
+		return s.sessions.FindByToken(ctx, session.OpaqueToken)
 	}
 
 	return rotatedSession, nil
