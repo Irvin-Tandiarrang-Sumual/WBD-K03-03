@@ -9,6 +9,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type groupRepository struct {
@@ -195,17 +196,7 @@ func (r *groupRepository) Update(ctx context.Context, group domain.Group) (domai
 
 func (r *groupRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		err := tx.
-			Where("group_id = ?", id).
-			Delete(&models.UserGroup{}).Error
-		if err != nil {
-			return err
-		}
-
-		err = tx.
-			Where("group_id = ?", id).
-			Delete(&models.GroupDatabase{}).Error
-		if err != nil {
+		if err := r.ensureNoOrphanedUsersTx(tx, id); err != nil {
 			return err
 		}
 
@@ -219,6 +210,45 @@ func (r *groupRepository) Delete(ctx context.Context, id uint) error {
 
 		return nil
 	})
+}
+
+func (r *groupRepository) ensureNoOrphanedUsersTx(tx *gorm.DB, groupID uint) error {
+	var userIDs []uint
+	err := tx.
+		Model(&models.User{}).
+		Where("id IN (?) AND role = ?",
+			tx.Model(&models.UserGroup{}).Select("user_id").Where("group_id = ?", groupID),
+			domain.RoleUser,
+		).
+		Order("id ASC").
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Pluck("id", &userIDs).Error
+	if err != nil {
+		return err
+	}
+
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	var orphanedUserIDs []uint
+	err = tx.
+		Model(&models.UserGroup{}).
+		Select("user_id").
+		Where("user_id IN ?", userIDs).
+		Group("user_id").
+		Having("COUNT(*) <= 1").
+		Limit(1).
+		Pluck("user_id", &orphanedUserIDs).Error
+	if err != nil {
+		return err
+	}
+
+	if len(orphanedUserIDs) > 0 {
+		return domain.ErrUserMustHaveGroup
+	}
+
+	return nil
 }
 
 func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.DatabaseAccess) error {
