@@ -3,8 +3,8 @@ package model
 type Group struct {
 	ID        uint       `gorm:"primaryKey"`
 	Name      string     `gorm:"uniqueIndex;not null"`
-	Databases []Database `gorm:"many2many:group_databases;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
-	Users     []User     `gorm:"many2many:user_groups;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Databases []Database `gorm:"many2many:group_databases;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Users     []User     `gorm:"many2many:user_groups;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
 type GroupDatabase struct {
