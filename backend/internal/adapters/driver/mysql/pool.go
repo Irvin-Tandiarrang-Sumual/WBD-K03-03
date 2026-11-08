@@ -5,11 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+)
+
+const (
+	defaultMaxOpenConns    = 10
+	defaultMaxIdleConns    = 5
+	defaultConnMaxLifetime = 30 * time.Minute
+	defaultConnMaxIdleTime = 5 * time.Minute
 )
 
 type PoolManager struct {
@@ -39,6 +47,11 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*gorm.
 	if err != nil {
 		return nil, fmt.Errorf("get MySQL SQL pool: %w", err)
 	}
+	sqlPool.SetMaxOpenConns(defaultMaxOpenConns)
+	sqlPool.SetMaxIdleConns(defaultMaxIdleConns)
+	sqlPool.SetConnMaxLifetime(defaultConnMaxLifetime)
+	sqlPool.SetConnMaxIdleTime(defaultConnMaxIdleTime)
+
 	if err := sqlPool.PingContext(ctx); err != nil {
 		_ = sqlPool.Close()
 		return nil, fmt.Errorf("ping MySQL pool: %w", err)

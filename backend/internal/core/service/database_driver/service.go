@@ -2,12 +2,16 @@ package database_driver
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
+
+const defaultQueryTimeout = 30 * time.Second
 
 type databaseDriverService struct {
 	databaseService    ports.DatabaseService
@@ -53,7 +57,9 @@ func (s *databaseDriverService) ExecuteDatabaseQuery(
 		return nil, err
 	}
 	cleanQuery := stripTrailingSemicolons(query)
-	return s.databaseExecutor.ExecuteQuery(ctx, databaseWithCredential, cleanQuery)
+	return executeWithTimeout(ctx, func(qCtx context.Context) (*ports.DatabaseQueryResult, error) {
+		return s.databaseExecutor.ExecuteQuery(qCtx, databaseWithCredential, cleanQuery)
+	})
 }
 
 func (s *databaseDriverService) ExplainDatabaseQuery(
@@ -66,7 +72,9 @@ func (s *databaseDriverService) ExplainDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	return s.databaseExecutor.Explain(ctx, databaseWithCredential, cleanedQuery)
+	return executeWithTimeout(ctx, func(qCtx context.Context) (*ports.DatabaseQueryResult, error) {
+		return s.databaseExecutor.Explain(qCtx, databaseWithCredential, cleanedQuery)
+	})
 }
 
 func (s *databaseDriverService) ExplainAnalyzeDatabaseQuery(
@@ -79,7 +87,24 @@ func (s *databaseDriverService) ExplainAnalyzeDatabaseQuery(
 	if err != nil {
 		return nil, err
 	}
-	return s.databaseExecutor.ExplainAnalyze(ctx, databaseWithCredential, cleanedQuery)
+	return executeWithTimeout(ctx, func(qCtx context.Context) (*ports.DatabaseQueryResult, error) {
+		return s.databaseExecutor.ExplainAnalyze(qCtx, databaseWithCredential, cleanedQuery)
+	})
+}
+
+func executeWithTimeout[T any](ctx context.Context, fn func(context.Context) (T, error)) (T, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	result, err := fn(queryCtx)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || queryCtx.Err() == context.DeadlineExceeded {
+			var zero T
+			return zero, domain.ErrQueryTimeout
+		}
+		return result, err
+	}
+	return result, nil
 }
 
 func (s *databaseDriverService) prepareExplain(
