@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -17,6 +18,7 @@ type migrationService struct {
 	databaseRepository ports.DatabaseRepository
 	databaseDriver     ports.DatabaseDriver
 	userGroupsService  ports.UserGroupService
+	dbLocks            sync.Map
 }
 
 func NewMigrationService(
@@ -107,6 +109,12 @@ func (s *migrationService) CreateMigration(ctx context.Context, input domain.Cre
 		return nil, err
 	}
 
+	unlock, ok := s.tryLockDatabase(input.DatabaseID)
+	if !ok {
+		return nil, domain.ErrMigrationInProgress
+	}
+	defer unlock()
+
 	dbWithCred, err := s.databaseRepository.FindWithCredentialByID(ctx, input.DatabaseID)
 	if err != nil {
 		return nil, err
@@ -189,6 +197,12 @@ func (s *migrationService) RollbackMigrations(ctx context.Context, input domain.
 	if err := s.userGroupsService.Authorize(ctx, input.UserID, input.DatabaseID, domain.AccessViewEdit); err != nil {
 		return nil, err
 	}
+
+	unlock, ok := s.tryLockDatabase(input.DatabaseID)
+	if !ok {
+		return nil, domain.ErrMigrationInProgress
+	}
+	defer unlock()
 
 	dbWithCred, err := s.databaseRepository.FindWithCredentialByID(ctx, input.DatabaseID)
 	if err != nil {
@@ -399,6 +413,15 @@ func (s *migrationService) resolveNextVersion(latest *domain.Migration) (string,
 		return "", domain.ErrMigrationVersionUnavailable
 	}
 	return strconv.Itoa(latestVersion + 1), nil
+}
+
+func (s *migrationService) tryLockDatabase(databaseID uint) (func(), bool) {
+	val, _ := s.dbLocks.LoadOrStore(databaseID, &sync.Mutex{})
+	mu := val.(*sync.Mutex)
+	if !mu.TryLock() {
+		return nil, false
+	}
+	return mu.Unlock, true
 }
 
 

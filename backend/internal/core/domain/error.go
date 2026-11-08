@@ -41,4 +41,5 @@ var (
 	ErrSQLDownGenerationUnsupported = errors.New("SQL down generation is not supported for this statement")
 	ErrInvalidMigrationComparison   = errors.New("Migration comparison is not valid")
 	ErrMigrationRollbackUnavailable = errors.New("Migration rollback is not available")
+	ErrMigrationInProgress          = errors.New("A migration is currently in progress for this database")
 )
