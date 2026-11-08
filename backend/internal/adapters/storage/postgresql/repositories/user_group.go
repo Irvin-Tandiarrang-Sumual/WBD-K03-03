@@ -8,6 +8,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type userGroupRepository struct {
@@ -42,23 +43,36 @@ func (r *userGroupRepository) AddUser(ctx context.Context, groupID uint, userID 
 }
 
 func (r *userGroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
-	result := r.db.
-		WithContext(ctx).
-		Where(
-			"group_id = ? AND user_id = ?",
-			groupID,
-			userID,
-		).
-		Delete(&models.UserGroup{})
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing models.UserGroup
+		err := tx.Where("group_id = ? AND user_id = ?", groupID, userID).First(&existing).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domain.ErrMembershipNotFound
+			}
+			return err
+		}
 
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return domain.ErrMembershipNotFound
-	}
+		var user models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, userID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domain.ErrUserNotFound
+			}
+			return err
+		}
 
-	return nil
+		if user.Role == domain.RoleUser {
+			var count int64
+			if err := tx.Model(&models.UserGroup{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count <= 1 {
+				return domain.ErrUserMustHaveGroup
+			}
+		}
+
+		return tx.Delete(&existing).Error
+	})
 }
 
 func (r *userGroupRepository) CountByUserID(ctx context.Context, userID uint) (int64, error) {
