@@ -11,6 +11,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const adminMutationLockKey int64 = 0x41444D494E5F4C4B
+
 type userRepository struct {
 	db *gorm.DB
 }
@@ -173,56 +175,48 @@ func (r *userRepository) Update(ctx context.Context, id uint, username *string, 
 
 func (r *userRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.
-			Where("user_id = ?", id).
-			Delete(&models.UserGroup{}).Error; err != nil {
+		currentRole, err := r.getUserRole(tx, id)
+		if err != nil {
 			return err
 		}
 
-		if err := tx.
-			Where("user_id = ?", id).
-			Delete(&models.Session{}).Error; err != nil {
-			return err
+		if currentRole == domain.RoleAdmin {
+			if err := r.ensureNotLastAdminTx(tx); err != nil {
+				return err
+			}
 		}
 
-		result := tx.Delete(&models.User{}, id)
-
-		if result.Error != nil {
-			return result.Error
-		}
-
-		if result.RowsAffected == 0 {
-			return domain.ErrUserNotFound
-		}
-
-		return nil
+		return tx.Delete(&models.User{}, id).Error
 	})
 }
 
 func (r *userRepository) UpdateRole(ctx context.Context, id uint, role string) (domain.User, error) {
-	result := r.db.
-		WithContext(ctx).
-		Model(&models.User{}).
-		Where("id = ?", id).
-		Update("role", role)
+	var updated models.User
 
-	if result.Error != nil {
-		return domain.User{}, result.Error
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		currentRole, err := r.getUserRole(tx, id)
+		if err != nil {
+			return err
+		}
+
+		if currentRole == domain.RoleAdmin && role != domain.RoleAdmin {
+			if err := r.ensureNotLastAdminTx(tx); err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Model(&models.User{}).Where("id = ?", id).Update("role", role).Error; err != nil {
+			return err
+		}
+
+		return tx.Select("id", "username", "role").First(&updated, id).Error
+	})
+
+	if err != nil {
+		return domain.User{}, err
 	}
 
-	if result.RowsAffected == 0 {
-		return domain.User{}, domain.ErrUserNotFound
-	}
-
-	return r.FindByID(ctx, id)
-}
-
-func toDomainUserUser(storedUser models.User) domain.User {
-	return domain.User{
-		ID:       storedUser.ID,
-		Username: storedUser.Username,
-		Role:     storedUser.Role,
-	}
+	return toDomainUserUser(updated), nil
 }
 
 func (r *userRepository) FindByUsernameWithPassword(ctx context.Context, username string) (domain.User, error) {
@@ -247,4 +241,40 @@ func (r *userRepository) FindByUsernameWithPassword(ctx context.Context, usernam
 		Password: storedUser.Password,
 		Role:     storedUser.Role,
 	}, nil
+}
+
+func (r *userRepository) getUserRole(tx *gorm.DB, id uint) (string, error) {
+	var user models.User
+	if err := tx.Select("id", "role").First(&user, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", domain.ErrUserNotFound
+		}
+		return "", err
+	}
+	return user.Role, nil
+}
+
+func (r *userRepository) ensureNotLastAdminTx(tx *gorm.DB) error {
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", adminMutationLockKey).Error; err != nil {
+		return err
+	}
+
+	var adminCount int64
+	if err := tx.Model(&models.User{}).Where("role = ?", domain.RoleAdmin).Count(&adminCount).Error; err != nil {
+		return err
+	}
+
+	if adminCount <= 1 {
+		return domain.ErrLastAdmin
+	}
+
+	return nil
+}
+
+func toDomainUserUser(storedUser models.User) domain.User {
+	return domain.User{
+		ID:       storedUser.ID,
+		Username: storedUser.Username,
+		Role:     storedUser.Role,
+	}
 }
