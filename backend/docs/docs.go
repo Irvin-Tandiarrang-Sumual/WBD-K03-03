@@ -413,7 +413,117 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/groups/{groupId}": {
+        "/admin/groups/{group_id}/users/{user_id}": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Adds an existing user to an existing group. Requires admin privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Groups"
+                ],
+                "summary": "Add user to group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User added to group"
+                    },
+                    "400": {
+                        "description": "Invalid input"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden (not admin)"
+                    },
+                    "404": {
+                        "description": "Group or user not found"
+                    },
+                    "409": {
+                        "description": "Membership already exists"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Removes an existing user from an existing group. Requires admin privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Groups"
+                ],
+                "summary": "Remove user from group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User removed from group"
+                    },
+                    "400": {
+                        "description": "Invalid input"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden (not admin)"
+                    },
+                    "404": {
+                        "description": "Group or user not found"
+                    },
+                    "409": {
+                        "description": "Membership not found / user must remain in a group"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            }
+        },
+        "/admin/groups/{id}": {
             "get": {
                 "security": [
                     {
@@ -432,7 +542,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Group ID",
-                        "name": "groupId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -494,7 +604,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Group ID",
-                        "name": "groupId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -562,7 +672,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Group ID",
-                        "name": "groupId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -609,152 +719,6 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Group name already taken",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/groups/{groupId}/users/{userId}": {
-            "post": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Adds an existing user to an existing group. Requires admin privileges.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Groups"
-                ],
-                "summary": "Add user to group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "groupId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "userId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "User added to group"
-                    },
-                    "400": {
-                        "description": "Invalid input",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (not admin)",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Group or user not found",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Membership already exists",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Removes an existing user from an existing group. Requires admin privileges.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Groups"
-                ],
-                "summary": "Remove user from group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "groupId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "userId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "User removed from group"
-                    },
-                    "400": {
-                        "description": "Invalid input",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (not admin)",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Group or user not found",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Membership not found / user must remain in a group",
                         "schema": {
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
                         }
@@ -904,7 +868,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/users/{userId}": {
+        "/admin/users/{id}": {
             "get": {
                 "security": [
                     {
@@ -923,7 +887,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "User ID",
-                        "name": "userId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -985,7 +949,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "User ID",
-                        "name": "userId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -1053,7 +1017,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "User ID",
-                        "name": "userId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -1113,7 +1077,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/users/{userId}/role": {
+        "/admin/users/{id}/role": {
             "patch": {
                 "security": [
                     {
@@ -1135,7 +1099,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "User ID",
-                        "name": "userId",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -1522,88 +1486,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/me/databases/{database_id}/explain": {
-            "post": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Returns the execution plan for a SQL query. Requires view access. Use ` + "`" + `analyzer=true` + "`" + ` for EXPLAIN ANALYZE.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Me - Databases"
-                ],
-                "summary": "Explain query",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Database ID",
-                        "name": "database_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "SQL query",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_database_executor.DatabaseQueryRequest"
-                        }
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Use EXPLAIN ANALYZE (default: false)",
-                        "name": "analyzer",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Query plan retrieved",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid database ID, query, or analyzer param",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (no view access)",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Database not found",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    }
-                }
-            }
-        },
         "/me/databases/{database_id}/migrations": {
             "get": {
                 "security": [
@@ -1896,82 +1778,6 @@ const docTemplate = `{
                     }
                 }
             }
-        },
-        "/me/databases/{database_id}/query": {
-            "post": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Executes a raw SQL query on the specified database. Requires view access.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Me - Databases"
-                ],
-                "summary": "Execute query",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Database ID",
-                        "name": "database_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "SQL query",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_database_executor.DatabaseQueryRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Query executed successfully",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid database ID or query",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (no view access)",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Database not found",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
@@ -2157,16 +1963,16 @@ const docTemplate = `{
         "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata": {
             "type": "object",
             "properties": {
-                "current_page": {
+                "currentPage": {
                     "type": "integer"
                 },
                 "limit": {
                     "type": "integer"
                 },
-                "total_data": {
+                "totalData": {
                     "type": "integer"
                 },
-                "total_page": {
+                "totalPage": {
                     "type": "integer"
                 }
             }
@@ -2205,7 +2011,6 @@ const docTemplate = `{
             "required": [
                 "host",
                 "name",
-                "password",
                 "port",
                 "type",
                 "user"
@@ -2240,7 +2045,7 @@ const docTemplate = `{
         "internal_adapters_http_handlers_database.DatabaseResponse": {
             "type": "object",
             "properties": {
-                "access_type": {
+                "accessType": {
                     "type": "string"
                 },
                 "host": {
@@ -2259,17 +2064,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_database_executor.DatabaseQueryRequest": {
-            "type": "object",
-            "required": [
-                "query"
-            ],
-            "properties": {
-                "query": {
                     "type": "string"
                 }
             }
@@ -2368,13 +2162,24 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers_migration.ColumnDiffChangeResponse": {
+            "type": "object",
+            "properties": {
+                "after": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
+                },
+                "before": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
+                }
+            }
+        },
         "internal_adapters_http_handlers_migration.CreateMigrationRequest": {
             "type": "object",
             "required": [
-                "sql_up"
+                "sqlUp"
             ],
             "properties": {
-                "sql_up": {
+                "sqlUp": {
                     "type": "string"
                 }
             }
@@ -2382,16 +2187,19 @@ const docTemplate = `{
         "internal_adapters_http_handlers_migration.MigrationComparisonResponse": {
             "type": "object",
             "properties": {
-                "first_migration": {
+                "firstMigration": {
                     "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
                 },
-                "second_migration": {
+                "schemaDiff": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaDiffResultResponse"
+                },
+                "secondMigration": {
                     "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
                 },
-                "sql_down_equal": {
+                "sqlDownEqual": {
                     "type": "boolean"
                 },
-                "sql_up_equal": {
+                "sqlUpEqual": {
                     "type": "boolean"
                 }
             }
@@ -2399,25 +2207,31 @@ const docTemplate = `{
         "internal_adapters_http_handlers_migration.MigrationResponse": {
             "type": "object",
             "properties": {
-                "database_id": {
+                "databaseId": {
                     "type": "integer"
                 },
-                "error_message": {
+                "errorMessage": {
                     "type": "string"
                 },
                 "id": {
                     "type": "integer"
                 },
-                "sql_down": {
+                "snapshot": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "sqlDown": {
                     "type": "string"
                 },
-                "sql_up": {
+                "sqlUp": {
                     "type": "string"
                 },
                 "status": {
                     "type": "string"
                 },
-                "user_id": {
+                "userId": {
                     "type": "integer"
                 },
                 "version": {
@@ -2428,15 +2242,127 @@ const docTemplate = `{
         "internal_adapters_http_handlers_migration.RollbackMigrationRequest": {
             "type": "object",
             "required": [
-                "database_id",
-                "target_migration_id"
+                "databaseId",
+                "targetMigrationId"
             ],
             "properties": {
-                "database_id": {
+                "databaseId": {
                     "type": "integer"
                 },
-                "target_migration_id": {
+                "targetMigrationId": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "nullable": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers_migration.SchemaDiffResultResponse": {
+            "type": "object",
+            "properties": {
+                "candidateSql": {
+                    "type": "string"
+                },
+                "isIdentical": {
+                    "type": "boolean"
+                },
+                "summaryItems": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SnapshotDiffSummaryItemResponse"
+                    }
+                },
+                "tableDiffs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.TableDiffChangeResponse"
+                    }
+                }
+            }
+        },
+        "internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "primary": {
+                    "type": "boolean"
+                },
+                "unique": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_adapters_http_handlers_migration.SnapshotDiffSummaryItemResponse": {
+            "type": "object",
+            "properties": {
+                "badgeText": {
+                    "type": "string"
+                },
+                "detail": {
+                    "type": "string"
+                },
+                "tableName": {
+                    "type": "string"
+                },
+                "targetName": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers_migration.TableDiffChangeResponse": {
+            "type": "object",
+            "properties": {
+                "addedColumns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
+                    }
+                },
+                "addedIndexes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse"
+                    }
+                },
+                "modifiedColumns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.ColumnDiffChangeResponse"
+                    }
+                },
+                "removedColumns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
+                    }
+                },
+                "removedIndexes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tableName": {
+                    "type": "string"
                 }
             }
         },
