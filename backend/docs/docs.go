@@ -1252,7 +1252,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Current user profile",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me"
                         }
                     },
                     "401": {
@@ -1824,6 +1824,20 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers_auth.Me"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
         "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse": {
             "type": "object",
             "properties": {
@@ -1995,6 +2009,26 @@ const docTemplate = `{
         "internal_adapters_http_handlers_auth.LoginResponse": {
             "type": "object",
             "properties": {
+                "csrfToken": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers_auth.Me": {
+            "type": "object",
+            "properties": {
+                "csrfToken": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },

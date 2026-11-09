@@ -28,6 +28,15 @@ definitions:
       success:
         type: boolean
     type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers_auth.Me'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
   ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse
   : properties:
       data:
@@ -139,6 +148,19 @@ definitions:
     type: object
   internal_adapters_http_handlers_auth.LoginResponse:
     properties:
+      csrfToken:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_adapters_http_handlers_auth.Me:
+    properties:
+      csrfToken:
+        type: string
       id:
         type: integer
       role:
@@ -1229,7 +1251,7 @@ paths:
         "200":
           description: Current user profile
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me'
         "401":
           description: Unauthorized
           schema:
