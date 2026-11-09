@@ -28,11 +28,64 @@ type CreateMigrationInput struct {
 	SqlUp      string
 }
 
+type SchemaColumnSnapshot struct {
+	Name     string
+	Type     string
+	Nullable bool
+}
+
+type SchemaIndexSnapshot struct {
+	Name    string
+	Unique  bool
+	Primary bool
+}
+
+type SchemaTableSnapshot struct {
+	Schema  string
+	Columns []SchemaColumnSnapshot
+	Indexes []SchemaIndexSnapshot
+}
+
+type SchemaSnapshot struct {
+	Tables map[string]SchemaTableSnapshot
+}
+
+type SnapshotDiffSummaryItem struct {
+	Type       string
+	TableName  string
+	TargetName string
+	Detail     string
+	BadgeText  string
+}
+
+type ColumnDiffChange struct {
+	Before *SchemaColumnSnapshot
+	After  *SchemaColumnSnapshot
+}
+
+type TableDiffChange struct {
+	TableName       string
+	Status          string
+	AddedColumns    []SchemaColumnSnapshot
+	RemovedColumns  []SchemaColumnSnapshot
+	ModifiedColumns []ColumnDiffChange
+	AddedIndexes    []SchemaIndexSnapshot
+	RemovedIndexes  []SchemaIndexSnapshot
+}
+
+type SchemaDiffResult struct {
+	IsIdentical  bool
+	SummaryItems []SnapshotDiffSummaryItem
+	TableDiffs   []TableDiffChange
+	CandidateSQL string
+}
+
 type MigrationComparison struct {
 	FirstMigration  *Migration
 	SecondMigration *Migration
 	SQLUpEqual      bool
 	SQLDownEqual    bool
+	SchemaDiff      *SchemaDiffResult
 }
 
 func (d *CreateMigrationInput) Validate() error {

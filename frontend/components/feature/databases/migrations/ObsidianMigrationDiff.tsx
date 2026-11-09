@@ -14,6 +14,7 @@ import {
   enrichMigrationsWithSnapshots,
   fetchLiveDatabaseSnapshot,
   type SchemaSnapshot,
+  type SnapshotDiffResult,
 } from "@/lib/schemaSnapshot";
 import styles from "./MigrationDiff.module.css";
 
@@ -132,10 +133,18 @@ export default function MigrationDiff({
     [rightMigration, snapshotsById],
   );
 
-  const snapshotDiff = useMemo(
-    () => diffSchemaSnapshots(leftSnapshot, rightSnapshot),
-    [leftSnapshot, rightSnapshot],
-  );
+  const snapshotDiff = useMemo<SnapshotDiffResult>(() => {
+    const backendDiff = comparison?.schemaDiff || comparison?.schema_diff;
+    if (backendDiff && Array.isArray(backendDiff.summaryItems || backendDiff.summary_items)) {
+      return {
+        isIdentical: backendDiff.isIdentical ?? backendDiff.is_identical ?? false,
+        summaryItems: backendDiff.summaryItems ?? backendDiff.summary_items ?? [],
+        tableDiffs: backendDiff.tableDiffs ?? backendDiff.table_diffs ?? [],
+        candidateSql: backendDiff.candidateSql ?? backendDiff.candidate_sql ?? "",
+      };
+    }
+    return diffSchemaSnapshots(leftSnapshot, rightSnapshot);
+  }, [comparison, leftSnapshot, rightSnapshot]);
 
   const leftJsonText = useMemo(
     () => JSON.stringify(leftSnapshot ?? { tables: {} }, null, 2),
@@ -213,6 +222,15 @@ export default function MigrationDiff({
 
   // Generate candidate SQL from diff and populate to editor
   const handleUseDiffAsCandidate = () => {
+    const backendDiff = comparison?.schemaDiff || comparison?.schema_diff;
+    const backendCandidate = backendDiff?.candidateSql || backendDiff?.candidate_sql;
+    if (backendCandidate && backendCandidate.trim()) {
+      setMigrationQuery(backendCandidate.trim());
+      setPlanAnalysis(null);
+      toast.success("Kandidat SQL migrasi berhasil dibuat dari analisis backend dan disalin ke editor.", "Kandidat SQL Disalin");
+      return;
+    }
+
     if (!rightMigration) return;
 
     const addedLines = sqlDiffLines

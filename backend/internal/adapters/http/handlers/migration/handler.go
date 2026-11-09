@@ -220,6 +220,7 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 		SecondMigration: toResponse(comparison.SecondMigration),
 		SQLUpEqual:      comparison.SQLUpEqual,
 		SQLDownEqual:    comparison.SQLDownEqual,
+		SchemaDiff:      toSchemaDiffResponse(comparison.SchemaDiff),
 	}))
 }
 

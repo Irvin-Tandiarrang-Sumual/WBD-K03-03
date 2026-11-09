@@ -88,6 +88,8 @@ export interface MigrationComparison {
   sql_up_equal: boolean;
   sqlDownEqual?: boolean;
   sql_down_equal: boolean;
+  schemaDiff?: any;
+  schema_diff?: any;
 }
 
 export interface LoginResponse {

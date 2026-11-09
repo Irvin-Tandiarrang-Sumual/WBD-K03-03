@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -65,7 +66,8 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrUserMustHaveGroup),
 		errors.Is(err, domain.ErrLastAdmin),
 		errors.Is(err, domain.ErrMigrationRollbackUnavailable),
-		errors.Is(err, domain.ErrMigrationVersionUnavailable):
+		errors.Is(err, domain.ErrMigrationVersionUnavailable),
+		errors.Is(err, domain.ErrMigrationInProgress):
 		return http.StatusConflict, response.Error(err.Error())
 
 	case errors.Is(err, domain.ErrPasswordTooLong):
@@ -88,6 +90,10 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 
 	case errors.Is(err, domain.ErrInvalidInput):
 		return http.StatusBadRequest, response.Error("invalid input")
+
+	case errors.Is(err, domain.ErrQueryTimeout),
+		errors.Is(err, context.DeadlineExceeded):
+		return http.StatusRequestTimeout, response.Error("query execution timed out")
 
 	default:
 		errLower := strings.ToLower(err.Error())
