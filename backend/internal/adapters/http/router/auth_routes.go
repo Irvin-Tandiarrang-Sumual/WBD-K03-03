@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func registerAuthRoutes(api *gin.RouterGroup, dependencies routerDependencies) {
-	api.POST("/auth/login", dependencies.authHandler.Login)
-	api.POST("/auth/logout", dependencies.authHandler.Logout)
-	api.GET("/auth/me", dependencies.authMiddleware.Authenticate(), dependencies.authHandler.Me)
+func registerAuthRoutes(public *gin.RouterGroup, protected *gin.RouterGroup, dependencies routerDependencies) {
+	public.POST("/auth/login", dependencies.authHandler.Login)
+	protected.POST("/auth/logout", dependencies.authHandler.Logout)
+	protected.GET("/auth/me", dependencies.authHandler.Me)
 }

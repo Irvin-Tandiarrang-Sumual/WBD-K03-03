@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"io"
 	"strings"
 	"time"
@@ -12,7 +13,10 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 )
 
-const sessionTokenBytes = 32
+const (
+	sessionTokenBytes = 32
+	csrfTokenBytes    = 32
+)
 
 type sessionService struct {
 	sessions ports.SessionRepository
@@ -32,7 +36,12 @@ func (s *sessionService) CreateSession(ctx context.Context, userID uint) (domain
 		return domain.Session{}, err
 	}
 
-	session := buildNewSession(userID, opaqueToken, time.Now().UTC())
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		return domain.Session{}, err
+	}
+
+	session := buildNewSession(userID, opaqueToken, csrfToken, time.Now().UTC())
 	return s.sessions.Save(ctx, session)
 }
 
@@ -121,15 +130,24 @@ func (s *sessionService) updateSessionActivity(ctx context.Context, session doma
 	return session, nil
 }
 
-func buildNewSession(userID uint, token string, now time.Time) domain.Session {
+func buildNewSession(userID uint, token string, csrfToken string, now time.Time) domain.Session {
 	return domain.Session{
 		OpaqueToken:        token,
+		CSRFToken:          csrfToken,
 		RotatedAt:          now,
 		IdleTimeout:        domain.DefaultSessionIdleTimeout,
 		LastActive:         now,
 		AbsoluteExpiration: now.Add(domain.DefaultSessionAbsoluteLifetime),
 		UserID:             userID,
 	}
+}
+
+func generateCSRFToken() (string, error) {
+	raw := make([]byte, csrfTokenBytes)
+	if _, err := io.ReadFull(rand.Reader, raw); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw), nil
 }
 
 func generateOpaqueToken() (string, error) {

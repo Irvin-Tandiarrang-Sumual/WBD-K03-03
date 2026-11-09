@@ -18,6 +18,7 @@ type Session struct {
 	IdleTimeout         time.Duration
 	LastActive          time.Time
 	AbsoluteExpiration  time.Time
+	CSRFToken           string
 	UserID              uint
 }
 

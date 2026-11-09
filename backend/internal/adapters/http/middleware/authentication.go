@@ -55,6 +55,7 @@ func (am *AuthMiddleware) Authenticate() gin.HandlerFunc {
 		}
 
 		SetUserContext(c, session.UserID, currentUser.Role)
+		SetSessionContext(c, session)
 
 		c.Next()
 	}

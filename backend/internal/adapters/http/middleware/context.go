@@ -8,11 +8,34 @@ import (
 const (
 	AuthenticatedUserIDKey   = "userID"
 	AuthenticatedUserRoleKey = "userRole"
+	AuthenticatedSessionKey  = "session"
 )
 
 func SetUserContext(c *gin.Context, userID uint, role string) {
 	c.Set(AuthenticatedUserIDKey, userID)
 	c.Set(AuthenticatedUserRoleKey, role)
+}
+
+func SetSessionContext(c *gin.Context, session domain.Session) {
+	c.Set(AuthenticatedSessionKey, session)
+}
+
+func CurrentSession(c *gin.Context) (domain.Session, error) {
+	if val, ok := c.Get(AuthenticatedSessionKey); ok {
+		if session, ok := val.(domain.Session); ok {
+			return session, nil
+		}
+	}
+	return domain.Session{}, domain.ErrInvalidSession
+}
+
+func CurrentCSRFToken(c *gin.Context) string {
+	if val, ok := c.Get(AuthenticatedSessionKey); ok {
+		if session, ok := val.(domain.Session); ok {
+			return session.CSRFToken
+		}
+	}
+	return ""
 }
 
 func SetAuthenticatedUserID(c *gin.Context, userID uint) {

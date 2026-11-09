@@ -5,12 +5,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func registerAdminRoutes(api *gin.RouterGroup, dependencies routerDependencies) {
-	admin := api.Group("/admin")
-	admin.Use(
-		dependencies.authMiddleware.Authenticate(),
-		middleware.RequireAdmin(),
-	)
+func registerAdminRoutes(protected *gin.RouterGroup, dependencies routerDependencies) {
+	admin := protected.Group("/admin", middleware.RequireAdmin())
 
 	registerAdminUserRoutes(admin, dependencies)
 	registerAdminGroupRoutes(admin, dependencies)

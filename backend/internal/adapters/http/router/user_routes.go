@@ -4,9 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func registerAuthenticatedUserRoutes(api *gin.RouterGroup, dependencies routerDependencies) {
-	me := api.Group("/me")
-	me.Use(dependencies.authMiddleware.Authenticate())
+func registerAuthenticatedUserRoutes(protected *gin.RouterGroup, dependencies routerDependencies) {
+	me := protected.Group("/me")
 
 	registerUserDatabaseRoutes(me, dependencies)
 }

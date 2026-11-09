@@ -43,6 +43,7 @@ func (r *sessionRepository) Save(ctx context.Context, session domain.Session) (d
 		IdleTimeout:         session.IdleTimeout,
 		LastActive:          session.LastActive,
 		AbsoluteExpiration:  session.AbsoluteExpiration,
+		CSRFToken:           session.CSRFToken,
 		UserID:              session.UserID,
 	}
 
@@ -153,6 +154,7 @@ func toDomainSession(storedSession models.Session) domain.Session {
 		IdleTimeout:         storedSession.IdleTimeout,
 		LastActive:          storedSession.LastActive,
 		AbsoluteExpiration:  storedSession.AbsoluteExpiration,
+		CSRFToken:           storedSession.CSRFToken,
 		UserID:              storedSession.UserID,
 	}
 }

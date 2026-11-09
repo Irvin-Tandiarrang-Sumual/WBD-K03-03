@@ -7,12 +7,17 @@ import (
 
 type applicationMiddlewares struct {
 	authMiddleware *middleware.AuthMiddleware
+	csrfMiddleware *middleware.CSRFMiddleware
 }
 
-func buildMiddlewares(sessionsServices ports.SessionService,
-	userServices ports.UserService, isSecureCookie bool) *applicationMiddlewares {
+func buildMiddlewares(
+	sessionsServices ports.SessionService,
+	userServices ports.UserService,
+	isSecureCookie bool,
+	frontendOrigin string,
+) *applicationMiddlewares {
 	return &applicationMiddlewares{
-		authMiddleware: middleware.NewAuthMiddleware(sessionsServices,
-			userServices, isSecureCookie),
+		authMiddleware: middleware.NewAuthMiddleware(sessionsServices, userServices, isSecureCookie),
+		csrfMiddleware: middleware.NewCSRFMiddleware(frontendOrigin),
 	}
 }

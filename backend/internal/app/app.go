@@ -67,7 +67,12 @@ func buildApplication() (*application, error) {
 		return nil, err
 	}
 
-	middlewares := buildMiddlewares(services.session, services.user, configuration.Session.CookieSecure)
+	middlewares := buildMiddlewares(
+		services.session,
+		services.user,
+		configuration.Session.CookieSecure,
+		configuration.Server.FrontendOrigin,
+	)
 
 	handlers := buildHandlers(configuration, services, systemDatabase)
 	engine := gin.Default()
@@ -96,6 +101,7 @@ func buildApplication() (*application, error) {
 		handlers.health,
 		services.session,
 		services.user,
+		middlewares.csrfMiddleware,
 	)
 
 	return &application{

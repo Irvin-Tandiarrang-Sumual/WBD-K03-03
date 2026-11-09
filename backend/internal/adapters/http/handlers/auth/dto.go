@@ -6,7 +6,15 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	ID        uint   `json:"id"`
+	Username  string `json:"username"`
+	Role      string `json:"role"`
+	CSRFToken string `json:"csrfToken,omitempty"`
+}
+
+type Me struct {
+	ID        uint   `json:"id"`
+	Username  string `json:"username"`
+	Role      string `json:"role"`
+	CSRFToken string `json:"csrfToken,omitempty"`
 }

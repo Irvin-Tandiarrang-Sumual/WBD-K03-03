@@ -53,9 +53,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	middleware.SetSessionCookie(c, session, h.secureCookie)
 
 	c.JSON(http.StatusOK, response.Success("login successful", LoginResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Role:     user.Role,
+		ID:        user.ID,
+		Username:  user.Username,
+		Role:      user.Role,
+		CSRFToken: session.CSRFToken,
 	}))
 }
 
@@ -70,6 +71,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 //	@Failure		500	{object}	response.BaseResponse[any]	"Internal server error"
 //	@Router			/auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
+	defer middleware.ClearSessionCookie(c, h.secureCookie)
+
 	opaqueToken, err := c.Cookie(middleware.SessionCookieName)
 
 	if err == nil && opaqueToken != "" {
@@ -78,8 +81,6 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 			return
 		}
 	}
-
-	middleware.ClearSessionCookie(c, h.secureCookie)
 
 	c.Status(http.StatusNoContent)
 }
@@ -91,7 +92,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 //	@Tags			Auth
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Success		200	{object}	response.BaseResponse[LoginResponse]	"Current user profile"
+//	@Success		200	{object}	response.BaseResponse[Me]	"Current user profile"
 //	@Failure		401	{object}	response.BaseResponse[any]				"Unauthorized"
 //	@Failure		500	{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/auth/me [get]
@@ -108,9 +109,10 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.Success("current user profile", LoginResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Role:     user.Role,
+	c.JSON(http.StatusOK, response.Success("current user profile", Me{
+		ID:        user.ID,
+		Username:  user.Username,
+		Role:      user.Role,
+		CSRFToken: middleware.CurrentCSRFToken(c),
 	}))
 }

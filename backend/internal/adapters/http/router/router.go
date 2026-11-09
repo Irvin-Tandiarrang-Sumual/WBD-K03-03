@@ -18,6 +18,7 @@ import (
 
 type routerDependencies struct {
 	authMiddleware        *middleware.AuthMiddleware
+	csrfMiddleware        *middleware.CSRFMiddleware
 	authHandler           *authhandler.AuthHandler
 	userHandler           *userhandler.UserHandler
 	groupHandler          *grouphandler.GroupHandler
@@ -41,9 +42,12 @@ func SetupRouter(
 	healthHandler *healthhandler.HealthHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
+	csrfMiddleware *middleware.CSRFMiddleware,
 ) {
+
 	dependencies := routerDependencies{
 		authMiddleware:        authMiddleware,
+		csrfMiddleware:        csrfMiddleware,
 		authHandler:           authHandler,
 		userHandler:           userHandler,
 		groupHandler:          groupHandler,
@@ -58,9 +62,16 @@ func SetupRouter(
 
 	api := engine.Group("/api/v1")
 	registerHealthRoutes(api, dependencies)
-	registerAuthRoutes(api, dependencies)
-	registerAdminRoutes(api, dependencies)
-	registerAuthenticatedUserRoutes(api, dependencies)
+
+	protected := api.Group("")
+	protected.Use(
+		dependencies.authMiddleware.Authenticate(),
+		dependencies.csrfMiddleware.Validate(),
+	)
+
+	registerAuthRoutes(api, protected, dependencies)
+	registerAdminRoutes(protected, dependencies)
+	registerAuthenticatedUserRoutes(protected, dependencies)
 
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }
