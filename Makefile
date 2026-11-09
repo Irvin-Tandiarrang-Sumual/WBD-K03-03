@@ -1,6 +1,12 @@
-.PHONY: test test-unit test-unit-cover test-integration test-integration-cover test-all test-cover-all
+.PHONY: test test-unit test-unit-cover test-integration test-integration-cover test-all test-cover-all migrate seed
 
 UNIT_PKGS := ./config/... ./internal/adapters/app/... ./internal/adapters/driver/... ./internal/adapters/http/... ./internal/adapters/security/... ./internal/core/... ./pkg/...
+
+migrate:
+	cd backend && go run ./cmd/migrate
+
+seed:
+	cd backend && go run ./cmd/seed
 
 test: test-unit
 

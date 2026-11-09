@@ -6,7 +6,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/hasher"
 	"gorm.io/gorm"
 )
 
@@ -124,13 +124,13 @@ func seedTestUsers(tx *gorm.DB, groups map[string]model.Group) error {
 		var user model.User
 		err := tx.Where("username = ?", userSeed.username).First(&user).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			password, hashErr := bcrypt.GenerateFromPassword([]byte(userSeed.password), bcrypt.DefaultCost)
+			password, hashErr := hasher.HashPassword(userSeed.password)
 			if hashErr != nil {
 				return fmt.Errorf("hashing password for %s: %w", userSeed.username, hashErr)
 			}
 			user = model.User{
 				Username: userSeed.username,
-				Password: string(password),
+				Password: password,
 				Role:     userSeed.role,
 				Groups:   []model.Group{{ID: userSeed.group.ID}},
 			}

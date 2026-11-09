@@ -7,7 +7,6 @@ import (
 	driver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
 	storagepostgresql "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/migrations"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"gorm.io/gorm"
 )
@@ -16,32 +15,6 @@ func buildSystemDatabase(configuration *config.Config) (*gorm.DB, func(), error)
 	systemDatabase, err := storagepostgresql.ConnectToSystemDatabase(configuration.Database)
 	if err != nil {
 		return nil, nil, err
-	}
-	if err := migrations.MigrateSystemDatabase(systemDatabase); err != nil {
-		sqlDatabase, closeErr := systemDatabase.DB()
-		if closeErr == nil {
-			_ = sqlDatabase.Close()
-		}
-		return nil, nil, err
-	}
-	if configuration.SeedTestData {
-		credentialCipher, cipherErr := security.NewAESGCMCipher(
-			[]byte(configuration.Security.DatabaseCredentialKey),
-		)
-		if cipherErr != nil {
-			sqlDatabase, closeErr := systemDatabase.DB()
-			if closeErr == nil {
-				_ = sqlDatabase.Close()
-			}
-			return nil, nil, cipherErr
-		}
-		if err := migrations.SeedDevelopmentData(systemDatabase, credentialCipher); err != nil {
-			sqlDatabase, closeErr := systemDatabase.DB()
-			if closeErr == nil {
-				_ = sqlDatabase.Close()
-			}
-			return nil, nil, err
-		}
 	}
 
 	closeSystemDatabase := func() {
