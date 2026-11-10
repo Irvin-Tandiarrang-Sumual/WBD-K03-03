@@ -38,7 +38,7 @@ type schemaIndexSnapshotJSON struct {
 	Primary bool   `json:"primary"`
 }
 
-func toSnapshotJSON(s *domain.SchemaSnapshot) ([]byte, error) {
+func ToSnapshotJSON(s *domain.SchemaSnapshot) ([]byte, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -71,7 +71,7 @@ func toSnapshotJSON(s *domain.SchemaSnapshot) ([]byte, error) {
 	return json.Marshal(dto)
 }
 
-func parseSchemaSnapshot(raw []byte) *domain.SchemaSnapshot {
+func ParseSchemaSnapshot(raw []byte) *domain.SchemaSnapshot {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -106,7 +106,7 @@ func parseSchemaSnapshot(raw []byte) *domain.SchemaSnapshot {
 	return &domain.SchemaSnapshot{Tables: tables}
 }
 
-func captureDatabaseSnapshot(
+func CaptureDatabaseSnapshot(
 	ctx context.Context, inspector ports.SchemaInspectorRepository,
 	database domain.Database,
 ) ([]byte, *domain.SchemaSnapshot, error) {
@@ -120,7 +120,7 @@ func captureDatabaseSnapshot(
 	}
 
 	snapshot := buildSchemaSnapshot(metadata)
-	rawBytes, err := toSnapshotJSON(snapshot)
+	rawBytes, err := ToSnapshotJSON(snapshot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -207,7 +207,7 @@ func hasIndex(indexes []domain.SchemaIndexSnapshot, indexName string) bool {
 	return false
 }
 
-func formatSnapshotAsBaselineSQL(snapshot *domain.SchemaSnapshot) string {
+func FormatSnapshotAsBaselineSQL(snapshot *domain.SchemaSnapshot) string {
 	if snapshot == nil || len(snapshot.Tables) == 0 {
 		return "-- Initial Schema Snapshot (Empty Database)"
 	}

@@ -92,8 +92,8 @@ func (s *migrationService) CompareMigrations(
 		return nil, err
 	}
 
-	firstSnapshot := parseSchemaSnapshot(first.Snapshot)
-	secondSnapshot := parseSchemaSnapshot(second.Snapshot)
+	firstSnapshot := ParseSchemaSnapshot(first.Snapshot)
+	secondSnapshot := ParseSchemaSnapshot(second.Snapshot)
 	schemaDiff := DiffSchemaSnapshots(firstSnapshot, secondSnapshot)
 
 	return &domain.MigrationComparison{
@@ -150,7 +150,7 @@ func (s *migrationService) CreateMigration(ctx context.Context, input domain.Cre
 		return s.failMigration(ctx, migration, err)
 	}
 
-	if snapshotBytes, _, err := captureDatabaseSnapshot(ctx, s.databaseDriver, dbWithCred); err == nil && len(snapshotBytes) > 0 {
+	if snapshotBytes, _, err := CaptureDatabaseSnapshot(ctx, s.databaseDriver, dbWithCred); err == nil && len(snapshotBytes) > 0 {
 		migration.Snapshot = snapshotBytes
 	}
 
@@ -172,7 +172,7 @@ func (s *migrationService) ensureBaseline(ctx context.Context, db domain.Databas
 }
 
 func (s *migrationService) createInitialBaseline(ctx context.Context, db domain.Database, userID uint) (*domain.Migration, error) {
-	baselineBytes, baselineStruct, snapErr := captureDatabaseSnapshot(ctx, s.databaseDriver, db)
+	baselineBytes, baselineStruct, snapErr := CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
 	if snapErr != nil || len(baselineBytes) == 0 {
 		return nil, nil
 	}
@@ -181,7 +181,7 @@ func (s *migrationService) createInitialBaseline(ctx context.Context, db domain.
 		DatabaseID: db.ID,
 		Version:    "1",
 		Status:     domain.MigrationStatusSuccess,
-		SqlUp:      formatSnapshotAsBaselineSQL(baselineStruct),
+		SqlUp:      FormatSnapshotAsBaselineSQL(baselineStruct),
 		SqlDown:    "-- Baseline schema snapshot (initial state)",
 		Snapshot:   baselineBytes,
 		UserID:     userID,
@@ -364,7 +364,7 @@ func (s *migrationService) recordRollbackMigration(
 }
 
 func (s *migrationService) resolveRollbackSnapshot(ctx context.Context, db domain.Database, target *domain.Migration) []byte {
-	snapshotBytes, _, _ := captureDatabaseSnapshot(ctx, s.databaseDriver, db)
+	snapshotBytes, _, _ := CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
 	if len(snapshotBytes) == 0 && len(target.Snapshot) > 0 {
 		return target.Snapshot
 	}
