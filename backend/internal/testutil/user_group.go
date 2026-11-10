@@ -66,3 +66,32 @@ func (f *UserGroupRepository) HasGroupWithOnlyThisDatabase(ctx context.Context, 
 	}
 	return false, nil
 }
+
+type UserGroupService struct {
+	ports.UserGroupService
+	AddUserFunc    func(context.Context, uint, uint) error
+	RemoveUserFunc func(context.Context, uint, uint) error
+	AuthorizeFunc  func(context.Context, uint, uint, domain.AccessType) error
+}
+
+func (f *UserGroupService) AddUser(ctx context.Context, groupID uint, userID uint) error {
+	if f.AddUserFunc != nil {
+		return f.AddUserFunc(ctx, groupID, userID)
+	}
+	return nil
+}
+
+func (f *UserGroupService) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+	if f.RemoveUserFunc != nil {
+		return f.RemoveUserFunc(ctx, groupID, userID)
+	}
+	return nil
+}
+
+func (f *UserGroupService) Authorize(ctx context.Context, userID uint, databaseID uint, requiredAccessType domain.AccessType) error {
+	if f.AuthorizeFunc != nil {
+		return f.AuthorizeFunc(ctx, userID, databaseID, requiredAccessType)
+	}
+	return nil
+}
+

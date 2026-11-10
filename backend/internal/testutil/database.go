@@ -115,3 +115,64 @@ func (f *DatabasePoolInvalidator) Invalidate(databaseID uint) error {
 	}
 	return nil
 }
+
+type DatabaseService struct {
+	ports.DatabaseService
+	GetDatabaseByIDFunc          func(context.Context, uint) (*domain.Database, error)
+	GetAllDatabasesFunc          func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	GetDatabaseHostsFunc         func(context.Context) ([]domain.DatabaseHost, error)
+	CreateDatabaseFunc           func(context.Context, *ports.DatabaseInput) (*domain.Database, error)
+	DeleteDatabaseFunc           func(context.Context, uint) error
+	GetDatabasesByUserIDFunc     func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error)
+	GetDatabaseByIDAndUserIDFunc func(context.Context, uint, uint) (*domain.Database, error)
+}
+
+func (f *DatabaseService) GetDatabaseByID(ctx context.Context, id uint) (*domain.Database, error) {
+	if f.GetDatabaseByIDFunc != nil {
+		return f.GetDatabaseByIDFunc(ctx, id)
+	}
+	return nil, nil
+}
+
+func (f *DatabaseService) GetAllDatabases(ctx context.Context, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
+	if f.GetAllDatabasesFunc != nil {
+		return f.GetAllDatabasesFunc(ctx, params)
+	}
+	return nil, 0, nil
+}
+
+func (f *DatabaseService) GetDatabaseHosts(ctx context.Context) ([]domain.DatabaseHost, error) {
+	if f.GetDatabaseHostsFunc != nil {
+		return f.GetDatabaseHostsFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (f *DatabaseService) CreateDatabase(ctx context.Context, input *ports.DatabaseInput) (*domain.Database, error) {
+	if f.CreateDatabaseFunc != nil {
+		return f.CreateDatabaseFunc(ctx, input)
+	}
+	return nil, nil
+}
+
+func (f *DatabaseService) DeleteDatabase(ctx context.Context, id uint) error {
+	if f.DeleteDatabaseFunc != nil {
+		return f.DeleteDatabaseFunc(ctx, id)
+	}
+	return nil
+}
+
+func (f *DatabaseService) GetDatabasesByUserID(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
+	if f.GetDatabasesByUserIDFunc != nil {
+		return f.GetDatabasesByUserIDFunc(ctx, userID, params)
+	}
+	return nil, 0, nil
+}
+
+func (f *DatabaseService) GetDatabaseByIDAndUserID(ctx context.Context, databaseID uint, userID uint) (*domain.Database, error) {
+	if f.GetDatabaseByIDAndUserIDFunc != nil {
+		return f.GetDatabaseByIDAndUserIDFunc(ctx, databaseID, userID)
+	}
+	return nil, nil
+}
+
