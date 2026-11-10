@@ -17,7 +17,7 @@ var (
 	alterAddColumnRegex = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([a-zA-Z0-9_."]+)\s+ADD\s+(?:COLUMN\s+)?([a-zA-Z0-9_"]+)\s+`)
 	insertRegex         = regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([a-zA-Z0-9_."]+)\s*\(([^)]+)\)\s*VALUES\s*(.+)$`)
 	deleteRegex         = regexp.MustCompile(`(?is)^DELETE\s+FROM\s+([a-zA-Z0-9_."]+)\s+WHERE\s+(.+)$`)
-	updateRegex         = regexp.MustCompile(`(?is)^UPDATE\s+([a-zA-Z0-9_."]+)\s+SET\s+(.+)\s+WHERE\s+(.+)$`)
+	updateRegex         = regexp.MustCompile(`(?is)^UPDATE\s+([a-zA-Z0-9_."]+)\s+SET\s+(.+?)\s+WHERE\s+(.+)$`)
 )
 
 type SQLDialect struct {
