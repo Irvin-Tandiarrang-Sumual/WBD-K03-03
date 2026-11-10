@@ -1,9 +1,10 @@
 package domain
 
 const (
-	RoleUser  = "user"
-	RoleAdmin = "admin"
-	MaxPasswordBytes = 72
+	RoleUser          = "user"
+	RoleAdmin         = "admin"
+	MaxPasswordBytes  = 72
+	MaxUsernameLength = 255
 )
 
 type User struct {

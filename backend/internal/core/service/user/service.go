@@ -43,7 +43,7 @@ func (s *userService) GetUserByID(ctx context.Context, id uint) (domain.User, er
 
 func (s *userService) CreateUser(ctx context.Context, input domain.CreateUserInput) (domain.User, error) {
 	username := strings.TrimSpace(input.Username)
-	if username == "" || len(input.GroupIDs) == 0 {
+	if username == "" || len(username) > domain.MaxUsernameLength || len(input.GroupIDs) == 0 {
 		return domain.User{}, domain.ErrInvalidInput
 	}
 	if err := domain.ValidatePassword(input.Password); err != nil {
@@ -162,14 +162,11 @@ func (s *userService) ensureGroupsExist(ctx context.Context, groupIDs []uint) er
 	return nil
 }
 
-func (s *userService) ensureCanDemoteToUser(ctx context.Context, userID uint, currentRole string) error {
+func (s *userService) ensureCanDemoteToUser(ctx context.Context, userID uint, _ string) error {
 	if err := s.ensureHasGroupMembership(ctx, userID); err != nil {
 		return err
 	}
-	if currentRole == domain.RoleAdmin {
-		return s.ensureNotLastAdmin(ctx)
-	}
-	return nil
+	return s.ensureNotLastAdmin(ctx)
 }
 
 func (s *userService) ensureHasGroupMembership(ctx context.Context, userID uint) error {
@@ -202,7 +199,7 @@ func resolveUpdatedUsername(input *string) (*string, error) {
 		return nil, nil
 	}
 	trimmed := strings.TrimSpace(*input)
-	if trimmed == "" {
+	if trimmed == "" || len(trimmed) > domain.MaxUsernameLength {
 		return nil, domain.ErrInvalidInput
 	}
 	return &trimmed, nil
