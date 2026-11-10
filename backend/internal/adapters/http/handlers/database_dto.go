@@ -1,4 +1,4 @@
-package database
+package handlers
 
 type CreateDatabaseRequest struct {
 	Host     string `json:"host" binding:"required"`

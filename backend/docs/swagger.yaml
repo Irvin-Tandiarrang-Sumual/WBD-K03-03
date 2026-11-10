@@ -8,117 +8,117 @@ definitions:
       success:
         type: boolean
     type: object
-  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_migration_MigrationResponse
-  : properties:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse:
+    properties:
       data:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.MigrationResponse'
         type: array
       message:
         type: string
       success:
         type: boolean
     type: object
-  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse:
     properties:
       data:
-        $ref: '#/definitions/internal_adapters_http_handlers_auth.LoginResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.DatabaseResponse'
       message:
         type: string
       success:
         type: boolean
     type: object
-  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_HealthResponse:
     properties:
       data:
-        $ref: '#/definitions/internal_adapters_http_handlers_auth.Me'
+        $ref: '#/definitions/internal_adapters_http_handlers.HealthResponse'
       message:
         type: string
       success:
         type: boolean
     type: object
-  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse
-  : properties:
-      data:
-        $ref: '#/definitions/internal_adapters_http_handlers_database.DatabaseResponse'
-      message:
-        type: string
-      success:
-        type: boolean
-    type: object
-  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_LoginResponse:
     properties:
       data:
-        $ref: '#/definitions/internal_adapters_http_handlers_health.HealthResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.LoginResponse'
       message:
         type: string
       success:
         type: boolean
     type: object
-  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationComparisonResponse
-  : properties:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_Me:
+    properties:
       data:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationComparisonResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.Me'
       message:
         type: string
       success:
         type: boolean
     type: object
-  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse
+  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationComparisonResponse
   : properties:
       data:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.MigrationComparisonResponse'
       message:
         type: string
       success:
         type: boolean
     type: object
-  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse
-  : properties:
-      code:
-        type: integer
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse:
+    properties:
       data:
-        items:
-          $ref: '#/definitions/internal_adapters_http_handlers_database.DatabaseResponse'
-        type: array
-      paging:
-        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
-      status:
+        $ref: '#/definitions/internal_adapters_http_handlers.MigrationResponse'
+      message:
         type: string
+      success:
+        type: boolean
     type: object
-  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_group_GroupResponse:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DatabaseResponse:
     properties:
       code:
         type: integer
       data:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.DatabaseResponse'
         type: array
       paging:
         $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
       status:
         type: string
     type: object
-  ? github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_migration_MigrationResponse
-  : properties:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_GroupResponse:
+    properties:
       code:
         type: integer
       data:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.GroupResponse'
         type: array
       paging:
         $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
       status:
         type: string
     type: object
-  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_user_UserResponse:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_MigrationResponse:
     properties:
       code:
         type: integer
       data:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.MigrationResponse'
+        type: array
+      paging:
+        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
+      status:
+        type: string
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_UserResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers.UserResponse'
         type: array
       paging:
         $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
@@ -136,39 +136,14 @@ definitions:
       totalPage:
         type: integer
     type: object
-  internal_adapters_http_handlers_auth.LoginRequest:
+  internal_adapters_http_handlers.ColumnDiffChangeResponse:
     properties:
-      password:
-        type: string
-      username:
-        type: string
-    required:
-    - password
-    - username
+      after:
+        $ref: '#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse'
+      before:
+        $ref: '#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse'
     type: object
-  internal_adapters_http_handlers_auth.LoginResponse:
-    properties:
-      csrfToken:
-        type: string
-      id:
-        type: integer
-      role:
-        type: string
-      username:
-        type: string
-    type: object
-  internal_adapters_http_handlers_auth.Me:
-    properties:
-      csrfToken:
-        type: string
-      id:
-        type: integer
-      role:
-        type: string
-      username:
-        type: string
-    type: object
-  internal_adapters_http_handlers_database.CreateDatabaseRequest:
+  internal_adapters_http_handlers.CreateDatabaseRequest:
     properties:
       host:
         type: string
@@ -194,7 +169,58 @@ definitions:
     - type
     - user
     type: object
-  internal_adapters_http_handlers_database.DatabaseResponse:
+  internal_adapters_http_handlers.CreateGroupRequest:
+    properties:
+      databaseAccesses:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest'
+        type: array
+      name:
+        type: string
+    required:
+    - databaseAccesses
+    - name
+    type: object
+  internal_adapters_http_handlers.CreateMigrationRequest:
+    properties:
+      sqlUp:
+        type: string
+    required:
+    - sqlUp
+    type: object
+  internal_adapters_http_handlers.CreateUserRequest:
+    properties:
+      groupIds:
+        items:
+          type: integer
+        type: array
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - groupIds
+    - password
+    - username
+    type: object
+  internal_adapters_http_handlers.DatabaseAccessRequest:
+    properties:
+      accessType:
+        type: string
+      databaseId:
+        type: integer
+    required:
+    - accessType
+    - databaseId
+    type: object
+  internal_adapters_http_handlers.DatabaseAccessResponse:
+    properties:
+      accessType:
+        type: string
+      databaseId:
+        type: integer
+    type: object
+  internal_adapters_http_handlers.DatabaseResponse:
     properties:
       accessType:
         type: string
@@ -211,56 +237,18 @@ definitions:
       user:
         type: string
     type: object
-  internal_adapters_http_handlers_group.CreateGroupRequest:
+  internal_adapters_http_handlers.GroupResponse:
     properties:
       databaseAccesses:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_group.DatabaseAccessRequest'
-        type: array
-      name:
-        type: string
-    required:
-    - databaseAccesses
-    - name
-    type: object
-  internal_adapters_http_handlers_group.DatabaseAccessRequest:
-    properties:
-      accessType:
-        type: string
-      databaseId:
-        type: integer
-    required:
-    - accessType
-    - databaseId
-    type: object
-  internal_adapters_http_handlers_group.DatabaseAccessResponse:
-    properties:
-      accessType:
-        type: string
-      databaseId:
-        type: integer
-    type: object
-  internal_adapters_http_handlers_group.GroupResponse:
-    properties:
-      databaseAccesses:
-        items:
-          $ref: '#/definitions/internal_adapters_http_handlers_group.DatabaseAccessResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.DatabaseAccessResponse'
         type: array
       id:
         type: integer
       name:
         type: string
     type: object
-  internal_adapters_http_handlers_group.UpdateGroupRequest:
-    properties:
-      databaseAccesses:
-        items:
-          $ref: '#/definitions/internal_adapters_http_handlers_group.DatabaseAccessRequest'
-        type: array
-      name:
-        type: string
-    type: object
-  internal_adapters_http_handlers_health.HealthResponse:
+  internal_adapters_http_handlers.HealthResponse:
     properties:
       services:
         additionalProperties:
@@ -273,34 +261,52 @@ definitions:
         example: "2026-10-25T14:45:00Z"
         type: string
     type: object
-  internal_adapters_http_handlers_migration.ColumnDiffChangeResponse:
+  internal_adapters_http_handlers.LoginRequest:
     properties:
-      after:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse'
-      before:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse'
-    type: object
-  internal_adapters_http_handlers_migration.CreateMigrationRequest:
-    properties:
-      sqlUp:
+      password:
+        type: string
+      username:
         type: string
     required:
-    - sqlUp
+    - password
+    - username
     type: object
-  internal_adapters_http_handlers_migration.MigrationComparisonResponse:
+  internal_adapters_http_handlers.LoginResponse:
+    properties:
+      csrfToken:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_adapters_http_handlers.Me:
+    properties:
+      csrfToken:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_adapters_http_handlers.MigrationComparisonResponse:
     properties:
       firstMigration:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.MigrationResponse'
       schemaDiff:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaDiffResultResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.SchemaDiffResultResponse'
       secondMigration:
-        $ref: '#/definitions/internal_adapters_http_handlers_migration.MigrationResponse'
+        $ref: '#/definitions/internal_adapters_http_handlers.MigrationResponse'
       sqlDownEqual:
         type: boolean
       sqlUpEqual:
         type: boolean
     type: object
-  internal_adapters_http_handlers_migration.MigrationResponse:
+  internal_adapters_http_handlers.MigrationResponse:
     properties:
       databaseId:
         type: integer
@@ -323,7 +329,7 @@ definitions:
       version:
         type: string
     type: object
-  internal_adapters_http_handlers_migration.RollbackMigrationRequest:
+  internal_adapters_http_handlers.RollbackMigrationRequest:
     properties:
       databaseId:
         type: integer
@@ -333,7 +339,7 @@ definitions:
     - databaseId
     - targetMigrationId
     type: object
-  internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse:
+  internal_adapters_http_handlers.SchemaColumnSnapshotResponse:
     properties:
       name:
         type: string
@@ -342,7 +348,7 @@ definitions:
       type:
         type: string
     type: object
-  internal_adapters_http_handlers_migration.SchemaDiffResultResponse:
+  internal_adapters_http_handlers.SchemaDiffResultResponse:
     properties:
       candidateSql:
         type: string
@@ -350,14 +356,14 @@ definitions:
         type: boolean
       summaryItems:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.SnapshotDiffSummaryItemResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.SnapshotDiffSummaryItemResponse'
         type: array
       tableDiffs:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.TableDiffChangeResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.TableDiffChangeResponse'
         type: array
     type: object
-  internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse:
+  internal_adapters_http_handlers.SchemaIndexSnapshotResponse:
     properties:
       name:
         type: string
@@ -366,7 +372,14 @@ definitions:
       unique:
         type: boolean
     type: object
-  internal_adapters_http_handlers_migration.SnapshotDiffSummaryItemResponse:
+  internal_adapters_http_handlers.SetRoleRequest:
+    properties:
+      role:
+        type: string
+    required:
+    - role
+    type: object
+  internal_adapters_http_handlers.SnapshotDiffSummaryItemResponse:
     properties:
       badgeText:
         type: string
@@ -379,63 +392,50 @@ definitions:
       type:
         type: string
     type: object
-  internal_adapters_http_handlers_migration.TableDiffChangeResponse:
+  internal_adapters_http_handlers.TableDiffChangeResponse:
     properties:
       addedColumns:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse'
         type: array
       addedIndexes:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.SchemaIndexSnapshotResponse'
         type: array
       modifiedColumns:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.ColumnDiffChangeResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.ColumnDiffChangeResponse'
         type: array
       removedColumns:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse'
         type: array
       removedIndexes:
         items:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse'
+          $ref: '#/definitions/internal_adapters_http_handlers.SchemaIndexSnapshotResponse'
         type: array
       status:
         type: string
       tableName:
         type: string
     type: object
-  internal_adapters_http_handlers_user.CreateUserRequest:
+  internal_adapters_http_handlers.UpdateGroupRequest:
     properties:
-      groupIds:
+      databaseAccesses:
         items:
-          type: integer
+          $ref: '#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest'
         type: array
-      password:
+      name:
         type: string
-      username:
-        type: string
-    required:
-    - groupIds
-    - password
-    - username
     type: object
-  internal_adapters_http_handlers_user.SetRoleRequest:
-    properties:
-      role:
-        type: string
-    required:
-    - role
-    type: object
-  internal_adapters_http_handlers_user.UpdateUserRequest:
+  internal_adapters_http_handlers.UpdateUserRequest:
     properties:
       password:
         type: string
       username:
         type: string
     type: object
-  internal_adapters_http_handlers_user.UserResponse:
+  internal_adapters_http_handlers.UserResponse:
     properties:
       id:
         type: integer
@@ -470,7 +470,7 @@ paths:
         "200":
           description: Databases retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DatabaseResponse'
         "400":
           description: Invalid pagination
           schema:
@@ -502,14 +502,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_database.CreateDatabaseRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.CreateDatabaseRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Database created
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse'
         "400":
           description: Invalid input
           schema:
@@ -594,7 +594,7 @@ paths:
         "200":
           description: Database retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse'
         "400":
           description: Invalid database ID
           schema:
@@ -638,7 +638,7 @@ paths:
         "200":
           description: Groups retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_group_GroupResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_GroupResponse'
         "400":
           description: Invalid pagination
           schema:
@@ -671,14 +671,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_group.CreateGroupRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.CreateGroupRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Group created
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.GroupResponse'
         "400":
           description: Invalid input or invalid database access type
           schema:
@@ -837,7 +837,7 @@ paths:
         "200":
           description: Group found
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.GroupResponse'
         "400":
           description: Invalid group ID
           schema:
@@ -878,14 +878,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_group.UpdateGroupRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.UpdateGroupRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Group updated
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_group.GroupResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.GroupResponse'
         "400":
           description: Invalid input
           schema:
@@ -933,7 +933,7 @@ paths:
         "200":
           description: Users retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_user_UserResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_UserResponse'
         "400":
           description: Invalid pagination
           schema:
@@ -966,14 +966,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_user.CreateUserRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.CreateUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: User created
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.UserResponse'
         "400":
           description: Invalid input
           schema:
@@ -1060,7 +1060,7 @@ paths:
         "200":
           description: User found
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.UserResponse'
         "400":
           description: Invalid user ID
           schema:
@@ -1102,14 +1102,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_user.UpdateUserRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.UpdateUserRequest'
       produces:
       - application/json
       responses:
         "200":
           description: User updated
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.UserResponse'
         "400":
           description: Invalid input
           schema:
@@ -1156,14 +1156,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_user.SetRoleRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.SetRoleRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Role updated
           schema:
-            $ref: '#/definitions/internal_adapters_http_handlers_user.UserResponse'
+            $ref: '#/definitions/internal_adapters_http_handlers.UserResponse'
         "400":
           description: Invalid input or invalid role
           schema:
@@ -1201,14 +1201,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_auth.LoginRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Login successful
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_LoginResponse'
         "400":
           description: Invalid input
           schema:
@@ -1251,7 +1251,7 @@ paths:
         "200":
           description: Current user profile
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_Me'
         "401":
           description: Unauthorized
           schema:
@@ -1274,11 +1274,11 @@ paths:
         "200":
           description: Service is healthy
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_HealthResponse'
         "503":
           description: Service is degraded
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_HealthResponse'
       summary: Health check
       tags:
       - Health
@@ -1301,7 +1301,7 @@ paths:
         "200":
           description: Databases retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DatabaseResponse'
         "400":
           description: Invalid pagination
           schema:
@@ -1335,7 +1335,7 @@ paths:
         "200":
           description: Database retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse'
         "400":
           description: Invalid database ID
           schema:
@@ -1385,7 +1385,7 @@ paths:
         "200":
           description: Migrations retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_migration_MigrationResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_MigrationResponse'
         "400":
           description: Invalid database ID or pagination
           schema:
@@ -1423,14 +1423,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.CreateMigrationRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.CreateMigrationRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Migration created
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse'
         "400":
           description: Invalid database ID or migration input
           schema:
@@ -1477,7 +1477,7 @@ paths:
         "200":
           description: Migration retrieved
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse'
         "400":
           description: Invalid database or migration ID
           schema:
@@ -1529,7 +1529,7 @@ paths:
         "200":
           description: Comparison result
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationComparisonResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationComparisonResponse'
         "400":
           description: Invalid database ID or migration IDs
           schema:
@@ -1567,14 +1567,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers_migration.RollbackMigrationRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.RollbackMigrationRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Migrations rolled back
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_migration_MigrationResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse'
         "400":
           description: Invalid input
           schema:

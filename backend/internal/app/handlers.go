@@ -2,37 +2,30 @@ package app
 
 import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
-	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
-	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
-	databasedriverhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_driver"
-	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
-	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
-	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
-	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
-	usergrouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user_group"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers"
 	"gorm.io/gorm"
 )
 
 type applicationHandlers struct {
-	auth           *authhandler.AuthHandler
-	user           *userhandler.UserHandler
-	group          *grouphandler.GroupHandler
-	userGroup      *usergrouphandler.UserGroupHandler
-	database       *databasehandler.DatabaseHandler
-	databaseDriver *databasedriverhandler.DatabaseDriverHandler
-	migration      *migrationhandler.MigrationHandler
-	health         *healthhandler.HealthHandler
+	auth           *handlers.AuthHandler
+	user           *handlers.UserHandler
+	group          *handlers.GroupHandler
+	userGroup      *handlers.UserGroupHandler
+	database       *handlers.DatabaseHandler
+	databaseDriver *handlers.DatabaseDriverHandler
+	migration      *handlers.MigrationHandler
+	health         *handlers.HealthHandler
 }
 
 func buildHandlers(configuration *config.Config, services *applicationServices, systemDatabase *gorm.DB) *applicationHandlers {
 	return &applicationHandlers{
-		auth:           authhandler.NewAuthHandler(services.auth, configuration.Session.CookieSecure, services.user),
-		user:           userhandler.NewUserHandler(services.user),
-		group:          grouphandler.NewGroupHandler(services.group),
-		userGroup:      usergrouphandler.NewUserGroupHandler(services.userGroup),
-		database:       databasehandler.NewDatabaseHandler(services.database),
-		databaseDriver: databasedriverhandler.NewDatabaseDriverHandler(services.databaseDriver),
-		migration:      migrationhandler.NewMigrationHandler(services.migration),
-		health:         healthhandler.NewHealthHandler(systemDatabase),
+		auth:           handlers.NewAuthHandler(services.auth, configuration.Session.CookieSecure, services.user),
+		user:           handlers.NewUserHandler(services.user),
+		group:          handlers.NewGroupHandler(services.group),
+		userGroup:      handlers.NewUserGroupHandler(services.userGroup),
+		database:       handlers.NewDatabaseHandler(services.database),
+		databaseDriver: handlers.NewDatabaseDriverHandler(services.databaseDriver),
+		migration:      handlers.NewMigrationHandler(services.migration),
+		health:         handlers.NewHealthHandler(systemDatabase),
 	}
 }

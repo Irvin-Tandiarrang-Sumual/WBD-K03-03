@@ -1,4 +1,4 @@
-package usergroup
+package handlers
 
 import (
 	"net/http"

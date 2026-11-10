@@ -1,4 +1,4 @@
-package migration
+package handlers
 
 import (
 	"encoding/json"
@@ -64,7 +64,7 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 
 	data := make([]MigrationResponse, 0, len(migrations))
 	for _, migration := range migrations {
-		data = append(data, toResponse(migration))
+		data = append(data, toMigrationResponse(migration))
 	}
 	c.JSON(http.StatusOK, response.NewPagedResponse(http.StatusOK, "migrations retrieved successfully", data, params, totalData))
 }
@@ -121,7 +121,7 @@ func (h *MigrationHandler) CreateMigration(c *gin.Context) {
 	if migration.Status == "fail" {
 		message = "migration failed and was recorded"
 	}
-	c.JSON(http.StatusCreated, response.Success(message, toResponse(migration)))
+	c.JSON(http.StatusCreated, response.Success(message, toMigrationResponse(migration)))
 }
 
 // GetMigrationByIDAndDatabaseID returns a single migration by ID.
@@ -161,7 +161,7 @@ func (h *MigrationHandler) GetMigrationByIDAndDatabaseID(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, response.Success("migration retrieved successfully", toResponse(migration)))
+	c.JSON(http.StatusOK, response.Success("migration retrieved successfully", toMigrationResponse(migration)))
 }
 
 // CompareMigrations compares two migrations within a database.
@@ -216,8 +216,8 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response.Success("migrations compared successfully", MigrationComparisonResponse{
-		FirstMigration:  toResponse(comparison.FirstMigration),
-		SecondMigration: toResponse(comparison.SecondMigration),
+		FirstMigration:  toMigrationResponse(comparison.FirstMigration),
+		SecondMigration: toMigrationResponse(comparison.SecondMigration),
 		SQLUpEqual:      comparison.SQLUpEqual,
 		SQLDownEqual:    comparison.SQLDownEqual,
 		SchemaDiff:      toSchemaDiffResponse(comparison.SchemaDiff),
@@ -265,12 +265,12 @@ func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
 	}
 	data := make([]MigrationResponse, 0, len(rolledBack))
 	for _, migration := range rolledBack {
-		data = append(data, toResponse(migration))
+		data = append(data, toMigrationResponse(migration))
 	}
 	c.JSON(http.StatusOK, response.Success("migrations rolled back successfully", data))
 }
 
-func toResponse(migration *domain.Migration) MigrationResponse {
+func toMigrationResponse(migration *domain.Migration) MigrationResponse {
 	var snapshot json.RawMessage
 	if len(migration.Snapshot) > 0 && json.Valid(migration.Snapshot) {
 		snapshot = json.RawMessage(migration.Snapshot)

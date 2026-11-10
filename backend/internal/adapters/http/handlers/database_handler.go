@@ -1,4 +1,4 @@
-package database
+package handlers
 
 import (
 	"net/http"
@@ -46,7 +46,7 @@ func (h *DatabaseHandler) GetDatabaseByID(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, response.Success("database retrieved successfully", toResponse(database)))
+	c.JSON(http.StatusOK, response.Success("database retrieved successfully", toDatabaseResponse(database)))
 }
 
 // GetAllDatabases retrieves a paginated list of all databases (admin only).
@@ -79,7 +79,7 @@ func (h *DatabaseHandler) GetAllDatabases(c *gin.Context) {
 
 	data := make([]DatabaseResponse, 0, len(databases))
 	for _, database := range databases {
-		data = append(data, toResponse(database))
+		data = append(data, toDatabaseResponse(database))
 	}
 	c.JSON(http.StatusOK, response.NewPagedResponse(http.StatusOK, "databases retrieved successfully", data, params, totalData))
 }
@@ -119,7 +119,7 @@ func (h *DatabaseHandler) GetDatabasesByUserID(c *gin.Context) {
 
 	data := make([]DatabaseResponse, 0, len(databases))
 	for _, database := range databases {
-		data = append(data, toResponse(database))
+		data = append(data, toDatabaseResponse(database))
 	}
 	c.JSON(http.StatusOK, response.NewPagedResponse(http.StatusOK, "databases retrieved successfully", data, params, totalData))
 }
@@ -156,7 +156,7 @@ func (h *DatabaseHandler) GetDatabaseByIDAndUserID(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, response.Success("database retrieved successfully", toResponse(database)))
+	c.JSON(http.StatusOK, response.Success("database retrieved successfully", toDatabaseResponse(database)))
 }
 
 // CreateDatabase registers a new database connection (admin only).
@@ -190,7 +190,7 @@ func (h *DatabaseHandler) CreateDatabase(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusCreated, response.Success("database created successfully", toResponse(database)))
+	c.JSON(http.StatusCreated, response.Success("database created successfully", toDatabaseResponse(database)))
 }
 
 // DeleteDatabase deletes a database by ID (admin only).
@@ -222,7 +222,7 @@ func (h *DatabaseHandler) DeleteDatabase(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success[any]("database deleted successfully", nil))
 }
 
-func toResponse(database *domain.Database) DatabaseResponse {
+func toDatabaseResponse(database *domain.Database) DatabaseResponse {
 	return DatabaseResponse{
 		ID:         database.ID,
 		Port:       database.Port,

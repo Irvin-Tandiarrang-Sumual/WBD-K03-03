@@ -1,4 +1,4 @@
-package auth
+package handlers
 
 type LoginRequest struct {
 	Username string `json:"username" binding:"required"`

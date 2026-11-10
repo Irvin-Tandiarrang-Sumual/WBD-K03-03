@@ -48,7 +48,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Databases retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DatabaseResponse"
                         }
                     },
                     "400": {
@@ -101,7 +101,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_database.CreateDatabaseRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateDatabaseRequest"
                         }
                     }
                 ],
@@ -109,7 +109,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Database created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse"
                         }
                     },
                     "400": {
@@ -173,7 +173,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Database retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse"
                         }
                     },
                     "400": {
@@ -310,7 +310,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Groups retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_group_GroupResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_GroupResponse"
                         }
                     },
                     "400": {
@@ -363,7 +363,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_group.CreateGroupRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateGroupRequest"
                         }
                     }
                 ],
@@ -371,7 +371,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Group created",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_group.GroupResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.GroupResponse"
                         }
                     },
                     "400": {
@@ -551,7 +551,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Group found",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_group.GroupResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.GroupResponse"
                         }
                     },
                     "400": {
@@ -682,7 +682,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_group.UpdateGroupRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.UpdateGroupRequest"
                         }
                     }
                 ],
@@ -690,7 +690,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Group updated",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_group.GroupResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.GroupResponse"
                         }
                     },
                     "400": {
@@ -765,7 +765,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Users retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_user_UserResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_UserResponse"
                         }
                     },
                     "400": {
@@ -818,7 +818,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.CreateUserRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateUserRequest"
                         }
                     }
                 ],
@@ -826,7 +826,7 @@ const docTemplate = `{
                     "201": {
                         "description": "User created",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.UserResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.UserResponse"
                         }
                     },
                     "400": {
@@ -896,7 +896,7 @@ const docTemplate = `{
                     "200": {
                         "description": "User found",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.UserResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.UserResponse"
                         }
                     },
                     "400": {
@@ -1027,7 +1027,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.UpdateUserRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.UpdateUserRequest"
                         }
                     }
                 ],
@@ -1035,7 +1035,7 @@ const docTemplate = `{
                     "200": {
                         "description": "User updated",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.UserResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.UserResponse"
                         }
                     },
                     "400": {
@@ -1109,7 +1109,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.SetRoleRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.SetRoleRequest"
                         }
                     }
                 ],
@@ -1117,7 +1117,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Role updated",
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_user.UserResponse"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.UserResponse"
                         }
                     },
                     "400": {
@@ -1173,7 +1173,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_auth.LoginRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.LoginRequest"
                         }
                     }
                 ],
@@ -1181,7 +1181,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Login successful",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_LoginResponse"
                         }
                     },
                     "400": {
@@ -1252,7 +1252,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Current user profile",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_Me"
                         }
                     },
                     "401": {
@@ -1284,13 +1284,13 @@ const docTemplate = `{
                     "200": {
                         "description": "Service is healthy",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_HealthResponse"
                         }
                     },
                     "503": {
                         "description": "Service is degraded",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_HealthResponse"
                         }
                     }
                 }
@@ -1329,7 +1329,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Databases retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DatabaseResponse"
                         }
                     },
                     "400": {
@@ -1378,7 +1378,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_migration.RollbackMigrationRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.RollbackMigrationRequest"
                         }
                     }
                 ],
@@ -1386,7 +1386,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Migrations rolled back",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_migration_MigrationResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse"
                         }
                     },
                     "400": {
@@ -1450,7 +1450,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Database retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse"
                         }
                     },
                     "400": {
@@ -1526,7 +1526,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Migrations retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_migration_MigrationResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_MigrationResponse"
                         }
                     },
                     "400": {
@@ -1586,7 +1586,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers_migration.CreateMigrationRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateMigrationRequest"
                         }
                     }
                 ],
@@ -1594,7 +1594,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Migration created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse"
                         }
                     },
                     "400": {
@@ -1672,7 +1672,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Comparison result",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationComparisonResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationComparisonResponse"
                         }
                     },
                     "400": {
@@ -1743,7 +1743,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Migration retrieved",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse"
                         }
                     },
                     "400": {
@@ -1793,13 +1793,13 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_migration_MigrationResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
                     }
                 },
                 "message": {
@@ -1810,11 +1810,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_LoginResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_auth.LoginResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1824,11 +1824,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_auth_Me": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_HealthResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_auth.Me"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.HealthResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1838,11 +1838,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_database_DatabaseResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_LoginResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_database.DatabaseResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.LoginResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1852,11 +1852,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_health_HealthResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_Me": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_health.HealthResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.Me"
                 },
                 "message": {
                     "type": "string"
@@ -1866,11 +1866,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationComparisonResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationComparisonResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationComparisonResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.MigrationComparisonResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1880,11 +1880,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_migration_MigrationResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1894,7 +1894,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_database_DatabaseResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DatabaseResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1903,27 +1903,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_database.DatabaseResponse"
-                    }
-                },
-                "paging": {
-                    "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_group_GroupResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_group.GroupResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseResponse"
                     }
                 },
                 "paging": {
@@ -1934,7 +1914,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_migration_MigrationResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_GroupResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1943,7 +1923,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.GroupResponse"
                     }
                 },
                 "paging": {
@@ -1954,7 +1934,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_user_UserResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_MigrationResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1963,7 +1943,27 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_user.UserResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
+                    }
+                },
+                "paging": {
+                    "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_UserResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers.UserResponse"
                     }
                 },
                 "paging": {
@@ -1991,56 +1991,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_auth.LoginRequest": {
+        "internal_adapters_http_handlers.ColumnDiffChangeResponse": {
             "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
             "properties": {
-                "password": {
-                    "type": "string"
+                "after": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse"
                 },
-                "username": {
-                    "type": "string"
+                "before": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse"
                 }
             }
         },
-        "internal_adapters_http_handlers_auth.LoginResponse": {
-            "type": "object",
-            "properties": {
-                "csrfToken": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_auth.Me": {
-            "type": "object",
-            "properties": {
-                "csrfToken": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_database.CreateDatabaseRequest": {
+        "internal_adapters_http_handlers.CreateDatabaseRequest": {
             "type": "object",
             "required": [
                 "host",
@@ -2076,7 +2038,84 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_database.DatabaseResponse": {
+        "internal_adapters_http_handlers.CreateGroupRequest": {
+            "type": "object",
+            "required": [
+                "databaseAccesses",
+                "name"
+            ],
+            "properties": {
+                "databaseAccesses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.CreateMigrationRequest": {
+            "type": "object",
+            "required": [
+                "sqlUp"
+            ],
+            "properties": {
+                "sqlUp": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.CreateUserRequest": {
+            "type": "object",
+            "required": [
+                "groupIds",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "groupIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.DatabaseAccessRequest": {
+            "type": "object",
+            "required": [
+                "accessType",
+                "databaseId"
+            ],
+            "properties": {
+                "accessType": {
+                    "type": "string"
+                },
+                "databaseId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.DatabaseAccessResponse": {
+            "type": "object",
+            "properties": {
+                "accessType": {
+                    "type": "string"
+                },
+                "databaseId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.DatabaseResponse": {
             "type": "object",
             "properties": {
                 "accessType": {
@@ -2102,57 +2141,13 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_group.CreateGroupRequest": {
-            "type": "object",
-            "required": [
-                "databaseAccesses",
-                "name"
-            ],
-            "properties": {
-                "databaseAccesses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_group.DatabaseAccessRequest"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_group.DatabaseAccessRequest": {
-            "type": "object",
-            "required": [
-                "accessType",
-                "databaseId"
-            ],
-            "properties": {
-                "accessType": {
-                    "type": "string"
-                },
-                "databaseId": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_group.DatabaseAccessResponse": {
-            "type": "object",
-            "properties": {
-                "accessType": {
-                    "type": "string"
-                },
-                "databaseId": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_group.GroupResponse": {
+        "internal_adapters_http_handlers.GroupResponse": {
             "type": "object",
             "properties": {
                 "databaseAccesses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_group.DatabaseAccessResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessResponse"
                     }
                 },
                 "id": {
@@ -2163,21 +2158,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_group.UpdateGroupRequest": {
-            "type": "object",
-            "properties": {
-                "databaseAccesses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_group.DatabaseAccessRequest"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_health.HealthResponse": {
+        "internal_adapters_http_handlers.HealthResponse": {
             "type": "object",
             "properties": {
                 "services": {
@@ -2196,39 +2177,66 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.ColumnDiffChangeResponse": {
-            "type": "object",
-            "properties": {
-                "after": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
-                },
-                "before": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_migration.CreateMigrationRequest": {
+        "internal_adapters_http_handlers.LoginRequest": {
             "type": "object",
             "required": [
-                "sqlUp"
+                "password",
+                "username"
             ],
             "properties": {
-                "sqlUp": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.MigrationComparisonResponse": {
+        "internal_adapters_http_handlers.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "csrfToken": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.Me": {
+            "type": "object",
+            "properties": {
+                "csrfToken": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.MigrationComparisonResponse": {
             "type": "object",
             "properties": {
                 "firstMigration": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
                 },
                 "schemaDiff": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaDiffResultResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.SchemaDiffResultResponse"
                 },
                 "secondMigration": {
-                    "$ref": "#/definitions/internal_adapters_http_handlers_migration.MigrationResponse"
+                    "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
                 },
                 "sqlDownEqual": {
                     "type": "boolean"
@@ -2238,7 +2246,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.MigrationResponse": {
+        "internal_adapters_http_handlers.MigrationResponse": {
             "type": "object",
             "properties": {
                 "databaseId": {
@@ -2273,7 +2281,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.RollbackMigrationRequest": {
+        "internal_adapters_http_handlers.RollbackMigrationRequest": {
             "type": "object",
             "required": [
                 "databaseId",
@@ -2288,7 +2296,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse": {
+        "internal_adapters_http_handlers.SchemaColumnSnapshotResponse": {
             "type": "object",
             "properties": {
                 "name": {
@@ -2302,7 +2310,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.SchemaDiffResultResponse": {
+        "internal_adapters_http_handlers.SchemaDiffResultResponse": {
             "type": "object",
             "properties": {
                 "candidateSql": {
@@ -2314,18 +2322,18 @@ const docTemplate = `{
                 "summaryItems": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SnapshotDiffSummaryItemResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.SnapshotDiffSummaryItemResponse"
                     }
                 },
                 "tableDiffs": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.TableDiffChangeResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.TableDiffChangeResponse"
                     }
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse": {
+        "internal_adapters_http_handlers.SchemaIndexSnapshotResponse": {
             "type": "object",
             "properties": {
                 "name": {
@@ -2339,7 +2347,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.SnapshotDiffSummaryItemResponse": {
+        "internal_adapters_http_handlers.SetRoleRequest": {
+            "type": "object",
+            "required": [
+                "role"
+            ],
+            "properties": {
+                "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.SnapshotDiffSummaryItemResponse": {
             "type": "object",
             "properties": {
                 "badgeText": {
@@ -2359,37 +2378,37 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_migration.TableDiffChangeResponse": {
+        "internal_adapters_http_handlers.TableDiffChangeResponse": {
             "type": "object",
             "properties": {
                 "addedColumns": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse"
                     }
                 },
                 "addedIndexes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.SchemaIndexSnapshotResponse"
                     }
                 },
                 "modifiedColumns": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.ColumnDiffChangeResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.ColumnDiffChangeResponse"
                     }
                 },
                 "removedColumns": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaColumnSnapshotResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.SchemaColumnSnapshotResponse"
                     }
                 },
                 "removedIndexes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers_migration.SchemaIndexSnapshotResponse"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.SchemaIndexSnapshotResponse"
                     }
                 },
                 "status": {
@@ -2400,40 +2419,21 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_user.CreateUserRequest": {
+        "internal_adapters_http_handlers.UpdateGroupRequest": {
             "type": "object",
-            "required": [
-                "groupIds",
-                "password",
-                "username"
-            ],
             "properties": {
-                "groupIds": {
+                "databaseAccesses": {
                     "type": "array",
                     "items": {
-                        "type": "integer"
+                        "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest"
                     }
                 },
-                "password": {
-                    "type": "string"
-                },
-                "username": {
+                "name": {
                     "type": "string"
                 }
             }
         },
-        "internal_adapters_http_handlers_user.SetRoleRequest": {
-            "type": "object",
-            "required": [
-                "role"
-            ],
-            "properties": {
-                "role": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers_user.UpdateUserRequest": {
+        "internal_adapters_http_handlers.UpdateUserRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -2444,7 +2444,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_adapters_http_handlers_user.UserResponse": {
+        "internal_adapters_http_handlers.UserResponse": {
             "type": "object",
             "properties": {
                 "id": {
