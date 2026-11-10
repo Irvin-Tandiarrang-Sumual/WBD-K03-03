@@ -46,7 +46,7 @@ func (s *groupService) GetGroupByID(ctx context.Context, id uint) (domain.Group,
 
 func (s *groupService) CreateGroup(ctx context.Context, input domain.CreateGroupInput) (domain.Group, error) {
 	name := strings.TrimSpace(input.Name)
-	if name == "" {
+	if name == "" || len(name) > domain.MaxGroupNameLength {
 		return domain.Group{}, domain.ErrInvalidInput
 	}
 
@@ -73,7 +73,7 @@ func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.Up
 
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)
-		if name == "" {
+		if name == "" || len(name) > domain.MaxGroupNameLength {
 			return domain.Group{}, domain.ErrInvalidInput
 		}
 		current.Name = name
@@ -107,12 +107,16 @@ func (s *groupService) DeleteGroup(ctx context.Context, id uint) error {
 		return err
 	}
 
-	userIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, id)
+	hasOrphan, err := s.userGroups.HasUserWithOnlyThisGroup(ctx, id)
 	if err != nil {
 		return err
 	}
+	if hasOrphan {
+		return domain.ErrUserMustHaveGroup
+	}
 
-	if err := s.ensureNoOrphanedUsers(ctx, userIDs); err != nil {
+	userIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, id)
+	if err != nil {
 		return err
 	}
 
@@ -130,25 +134,6 @@ func (s *groupService) ensureDatabasesExist(ctx context.Context, accesses []doma
 	}
 	if !exists {
 		return domain.ErrDatabaseNotFound
-	}
-	return nil
-}
-
-func (s *groupService) ensureNoOrphanedUsers(ctx context.Context, userIDs []uint) error {
-	for _, userID := range userIDs {
-		user, err := s.users.FindByID(ctx, userID)
-		if err != nil {
-			return err
-		}
-
-		groupCount, err := s.userGroups.CountByUserID(ctx, userID)
-		if err != nil {
-			return err
-		}
-
-		if user.Role == domain.RoleUser && groupCount <= 1 {
-			return domain.ErrUserMustHaveGroup
-		}
 	}
 	return nil
 }

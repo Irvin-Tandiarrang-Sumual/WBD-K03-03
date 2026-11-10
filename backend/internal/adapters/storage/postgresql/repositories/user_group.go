@@ -168,3 +168,25 @@ func (r *userGroupRepository) HasGroupWithOnlyThisDatabase(ctx context.Context, 
 
 	return exists, err
 }
+
+func (r *userGroupRepository) HasUserWithOnlyThisGroup(ctx context.Context, groupID uint) (bool, error) {
+	var exists bool
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT EXISTS (
+			SELECT 1
+			FROM user_groups AS ug
+			JOIN users AS u ON u.id = ug.user_id
+			WHERE ug.group_id = ?
+			  AND u.role = 'user'
+			  AND NOT EXISTS (
+				  SELECT 1
+				  FROM user_groups AS other
+				  WHERE other.user_id = ug.user_id
+				    AND other.group_id <> ug.group_id
+			  )
+		)
+	`, groupID).Scan(&exists).Error
+
+	return exists, err
+}

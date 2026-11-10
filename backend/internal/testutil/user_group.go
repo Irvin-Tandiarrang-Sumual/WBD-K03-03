@@ -16,6 +16,7 @@ type UserGroupRepository struct {
 	FindAllAccessTypesFunc           func(context.Context, uint, uint) ([]domain.AccessType, error)
 	FindAllUserIDsByDatabaseIDFunc   func(context.Context, uint) ([]uint, error)
 	HasGroupWithOnlyThisDatabaseFunc func(context.Context, uint) (bool, error)
+	HasUserWithOnlyThisGroupFunc     func(context.Context, uint) (bool, error)
 }
 
 func (f *UserGroupRepository) AddUser(ctx context.Context, groupID uint, userID uint) error {
@@ -63,6 +64,13 @@ func (f *UserGroupRepository) FindAllUserIDsByDatabaseID(ctx context.Context, da
 func (f *UserGroupRepository) HasGroupWithOnlyThisDatabase(ctx context.Context, databaseID uint) (bool, error) {
 	if f.HasGroupWithOnlyThisDatabaseFunc != nil {
 		return f.HasGroupWithOnlyThisDatabaseFunc(ctx, databaseID)
+	}
+	return false, nil
+}
+
+func (f *UserGroupRepository) HasUserWithOnlyThisGroup(ctx context.Context, groupID uint) (bool, error) {
+	if f.HasUserWithOnlyThisGroupFunc != nil {
+		return f.HasUserWithOnlyThisGroupFunc(ctx, groupID)
 	}
 	return false, nil
 }

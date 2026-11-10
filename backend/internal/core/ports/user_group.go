@@ -20,4 +20,5 @@ type UserGroupRepository interface {
 	FindAllAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error)
 	FindAllUserIDsByDatabaseID(ctx context.Context, databaseID uint) ([]uint, error)
 	HasGroupWithOnlyThisDatabase(ctx context.Context, databaseID uint) (bool, error)
+	HasUserWithOnlyThisGroup(ctx context.Context, groupID uint) (bool, error)
 }
