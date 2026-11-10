@@ -81,7 +81,16 @@ func (s *databaseService) CreateDatabase(ctx context.Context, databaseInput *por
 		}
 	}
 
-	return s.databaseRepository.Save(ctx, &database)
+	created, err := s.databaseRepository.Save(ctx, &database)
+	if err != nil {
+		return nil, err
+	}
+
+	if created != nil {
+		created.Password = ""
+	}
+
+	return created, nil
 }
 
 func (s *databaseService) DeleteDatabase(ctx context.Context, databaseID uint) error {
@@ -138,9 +147,7 @@ func (s *databaseService) GetDatabaseByIDAndUserID(ctx context.Context, database
 		return nil, err
 	}
 
-	if db != nil {
-		s.populateAccessType(ctx, userID, db)
-	}
+	s.populateAccessType(ctx, userID, db)
 
 	return db, nil
 }
@@ -170,7 +177,7 @@ func (s *databaseService) enrichMissingCredential(ctx context.Context, database 
 }
 
 func (s *databaseService) populateAccessType(ctx context.Context, userID uint, db *domain.Database) {
-	if s.userGroupsRepository == nil || db == nil {
+	if db == nil || s.userGroupsRepository == nil {
 		return
 	}
 	accessTypes, err := s.userGroupsRepository.FindAllAccessTypes(ctx, userID, db.ID)

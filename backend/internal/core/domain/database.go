@@ -4,6 +4,9 @@ const (
 	DatabaseTypePostgreSQL = "postgresql"
 	DatabaseTypeMySQL      = "mysql"
 	MaxPortNumber          = 65535
+	MaxDatabaseHostLength  = 255
+	MaxDatabaseNameLength  = 63
+	MaxDatabaseUserLength  = 63
 )
 
 type Database struct {
@@ -38,6 +41,9 @@ func (d Database) Validate() error {
 		return ErrInvalidInput
 	}
 	if d.Host == "" || d.User == "" || d.Name == "" {
+		return ErrInvalidInput
+	}
+	if len(d.Host) > MaxDatabaseHostLength || len(d.Name) > MaxDatabaseNameLength || len(d.User) > MaxDatabaseUserLength {
 		return ErrInvalidInput
 	}
 	if !IsValidDatabaseType(d.Type) {
