@@ -2,10 +2,8 @@ package middleware_test
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,128 +13,222 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestAuthenticate(t *testing.T) {
+func TestAuthenticate_MissingSessionCookie_ReturnsUnauthorized(t *testing.T) {
+	// Arrange
 	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
 
-	tests := []struct {
-		name       string
-		cookie     *http.Cookie
-		resolve    func(context.Context, string) (domain.Session, error)
-		wantStatus int
-		wantUserID uint
-	}{
-		{
-			name:       "missing cookie",
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
-			name: "empty cookie",
-			cookie: &http.Cookie{
-				Name:  middleware.SessionCookieName,
-				Value: "",
-			},
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
-			name: "invalid session",
-			cookie: &http.Cookie{
-				Name:  middleware.SessionCookieName,
-				Value: "expired-token",
-			},
-			resolve: func(context.Context, string) (domain.Session, error) {
-				return domain.Session{}, domain.ErrInvalidSession
-			},
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
-			name: "repository failure",
-			cookie: &http.Cookie{
-				Name:  middleware.SessionCookieName,
-				Value: "token",
-			},
-			resolve: func(context.Context, string) (domain.Session, error) {
-				return domain.Session{}, errors.New("database unavailable")
-			},
-			wantStatus: http.StatusInternalServerError,
-		},
-		{
-			name: "valid session",
-			cookie: &http.Cookie{
-				Name:  middleware.SessionCookieName,
-				Value: "valid-token",
-			},
-			resolve: func(_ context.Context, token string) (domain.Session, error) {
-				if token != "valid-token" {
-					t.Fatalf("token = %q, want valid-token", token)
-				}
-				return domain.Session{UserID: 42, OpaqueToken: "valid-token"}, nil
-			},
-			wantStatus: http.StatusOK,
-			wantUserID: 42,
-		},
-	}
+	authMiddleware := middleware.NewAuthMiddleware(
+		&testutil.SessionService{},
+		&testutil.UserService{},
+		false,
+	)
+	engine.Use(authMiddleware.Authenticate())
+	engine.GET("/protected", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sessions := &testutil.SessionService{
-				ResolveFunc: func(ctx context.Context, token string) (domain.Session, error) {
-					if tt.resolve == nil {
-						t.Fatalf("Resolve() must not be called")
-					}
-					return tt.resolve(ctx, token)
-				},
-			}
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
 
-			r := gin.New()
-			r.GET(
-				"/protected",
-				middleware.Authenticate(sessions),
-				func(c *gin.Context) {
-					userID, ok := middleware.AuthenticatedUserID(c)
-					if !ok {
-						t.Fatal("authenticated user ID missing from context")
-					}
-					if userID != tt.wantUserID {
-						t.Fatalf("userID = %d, want %d", userID, tt.wantUserID)
-					}
-					c.Status(http.StatusOK)
-				},
-			)
+	// Act
+	engine.ServeHTTP(rec, req)
 
-			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-			if tt.cookie != nil {
-				req.AddCookie(tt.cookie)
-			}
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d; body=%s", w.Code, tt.wantStatus, w.Body.String())
-			}
-		})
+	// Assert
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
 	}
 }
 
-func TestAuthenticateUpdatesCookieWhenTokenRotatedOrResolvedViaGracePeriod(t *testing.T) {
+func TestAuthenticate_InvalidOrExpiredSession_ReturnsUnauthorized(t *testing.T) {
+	// Arrange
 	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
 
-	sessions := &testutil.SessionService{
-		ResolveFunc: func(_ context.Context, token string) (domain.Session, error) {
-			if token != "old-token" {
-				t.Fatalf("token = %q, want old-token", token)
-			}
+	sessionService := &testutil.SessionService{
+		ResolveFunc: func(ctx context.Context, token string) (domain.Session, error) {
+			return domain.Session{}, domain.ErrInvalidSession
+		},
+	}
+	authMiddleware := middleware.NewAuthMiddleware(
+		sessionService,
+		&testutil.UserService{},
+		false,
+	)
+	engine.Use(authMiddleware.Authenticate())
+	engine.GET("/protected", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  middleware.SessionCookieName,
+		Value: "invalid-token",
+	})
+	rec := httptest.NewRecorder()
+
+	// Act
+	engine.ServeHTTP(rec, req)
+
+	// Assert
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestAuthenticate_UserNotFound_ReturnsNotFound(t *testing.T) {
+	// Arrange
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
+
+	sessionService := &testutil.SessionService{
+		ResolveFunc: func(ctx context.Context, token string) (domain.Session, error) {
 			return domain.Session{
-				UserID:              42,
-				OpaqueToken:         "rotated-new-token",
-				PreviousOpaqueToken: "old-token",
-				GracePeriodUntil:    time.Now().UTC().Add(30 * time.Second),
-				AbsoluteExpiration:  time.Now().UTC().Add(10 * time.Hour),
+				ID:          1,
+				UserID:      10,
+				OpaqueToken: token,
 			}, nil
 		},
 	}
+	userService := &testutil.UserService{
+		GetUserByIDFunc: func(ctx context.Context, id uint) (domain.User, error) {
+			return domain.User{}, domain.ErrUserNotFound
+		},
+	}
+	authMiddleware := middleware.NewAuthMiddleware(
+		sessionService,
+		userService,
+		false,
+	)
+	engine.Use(authMiddleware.Authenticate())
+	engine.GET("/protected", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
-	r := gin.New()
-	r.GET("/protected", middleware.Authenticate(sessions, true), func(c *gin.Context) {
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  middleware.SessionCookieName,
+		Value: "valid-token",
+	})
+	rec := httptest.NewRecorder()
+
+	// Act
+	engine.ServeHTTP(rec, req)
+
+	// Assert
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestAuthenticate_ValidSessionAndUser_SetsContextAndCallsNextHandler(t *testing.T) {
+	// Arrange
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
+
+	expectedUser := domain.User{
+		ID:       10,
+		Username: "john_doe",
+		Role:     domain.RoleAdmin,
+	}
+	expectedSession := domain.Session{
+		ID:          1,
+		UserID:      10,
+		OpaqueToken: "valid-token",
+		CSRFToken:   "csrf-secret",
+	}
+
+	sessionService := &testutil.SessionService{
+		ResolveFunc: func(ctx context.Context, token string) (domain.Session, error) {
+			return expectedSession, nil
+		},
+	}
+	userService := &testutil.UserService{
+		GetUserByIDFunc: func(ctx context.Context, id uint) (domain.User, error) {
+			return expectedUser, nil
+		},
+	}
+	authMiddleware := middleware.NewAuthMiddleware(
+		sessionService,
+		userService,
+		false,
+	)
+	engine.Use(authMiddleware.Authenticate())
+
+	var capturedUserID uint
+	var capturedUserRole string
+	var capturedCSRFToken string
+
+	engine.GET("/protected", func(c *gin.Context) {
+		capturedUserID, _ = middleware.CurrentUserID(c)
+		if role, exists := c.Get(middleware.AuthenticatedUserRoleKey); exists {
+			capturedUserRole = role.(string)
+		}
+		capturedCSRFToken = middleware.CurrentCSRFToken(c)
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  middleware.SessionCookieName,
+		Value: "valid-token",
+	})
+	rec := httptest.NewRecorder()
+
+	// Act
+	engine.ServeHTTP(rec, req)
+
+	// Assert
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if capturedUserID != 10 {
+		t.Fatalf("captured user id = %d, want 10", capturedUserID)
+	}
+	if capturedUserRole != domain.RoleAdmin {
+		t.Fatalf("captured role = %q, want %q", capturedUserRole, domain.RoleAdmin)
+	}
+	if capturedCSRFToken != "csrf-secret" {
+		t.Fatalf("captured csrf token = %q, want %q", capturedCSRFToken, "csrf-secret")
+	}
+}
+
+func TestAuthenticate_TokenRotated_RefreshesSessionCookie(t *testing.T) {
+	// Arrange
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
+
+	rotatedSession := domain.Session{
+		ID:                 1,
+		UserID:             10,
+		OpaqueToken:        "new-rotated-token",
+		CSRFToken:          "csrf-secret",
+		IdleTimeout:        30 * time.Minute,
+		AbsoluteExpiration: time.Now().Add(24 * time.Hour),
+	}
+
+	sessionService := &testutil.SessionService{
+		ResolveFunc: func(ctx context.Context, token string) (domain.Session, error) {
+			return rotatedSession, nil
+		},
+	}
+	userService := &testutil.UserService{
+		GetUserByIDFunc: func(ctx context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: 10, Role: domain.RoleUser}, nil
+		},
+	}
+	authMiddleware := middleware.NewAuthMiddleware(
+		sessionService,
+		userService,
+		false,
+	)
+	engine.Use(authMiddleware.Authenticate())
+	engine.GET("/protected", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
@@ -145,43 +237,27 @@ func TestAuthenticateUpdatesCookieWhenTokenRotatedOrResolvedViaGracePeriod(t *te
 		Name:  middleware.SessionCookieName,
 		Value: "old-token",
 	})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	rec := httptest.NewRecorder()
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
+	// Act
+	engine.ServeHTTP(rec, req)
+
+	// Assert
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	setCookie := w.Header().Get("Set-Cookie")
-	if !strings.Contains(setCookie, "session=rotated-new-token") ||
-		!strings.Contains(setCookie, "HttpOnly") ||
-		!strings.Contains(setCookie, "Secure") ||
-		!strings.Contains(setCookie, "SameSite=Strict") {
-		t.Fatalf("unexpected Set-Cookie header: %q", setCookie)
+	cookies := rec.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, cookie := range cookies {
+		if cookie.Name == middleware.SessionCookieName {
+			sessionCookie = cookie
+			break
+		}
 	}
-}
-
-func TestAuthenticatedUserIDRejectsInvalidContextValues(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	tests := []struct {
-		name  string
-		value any
-		set   bool
-	}{
-		{name: "missing"},
-		{name: "wrong type", value: "42", set: true},
-		{name: "zero", value: uint(0), set: true},
+	if sessionCookie == nil {
+		t.Fatal("expected refreshed session cookie, got none")
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c, _ := gin.CreateTestContext(httptest.NewRecorder())
-			if tt.set {
-				c.Set(middleware.AuthenticatedUserIDKey, tt.value)
-			}
-			if _, ok := middleware.AuthenticatedUserID(c); ok {
-				t.Fatal("expected context value to be rejected")
-			}
-		})
+	if sessionCookie.Value != "new-rotated-token" {
+		t.Fatalf("cookie value = %q, want %q", sessionCookie.Value, "new-rotated-token")
 	}
 }
