@@ -19,7 +19,7 @@ var _ ports.UserGroupService = (*userGroupService)(nil)
 func NewUserGroupService(
 	userGroups ports.UserGroupRepository, groups ports.GroupRepository,
 	users ports.UserRepository, sessions ports.SessionService,
-) *userGroupService {
+) ports.UserGroupService {
 	return &userGroupService{
 		userGroups: userGroups,
 		groups:     groups,
