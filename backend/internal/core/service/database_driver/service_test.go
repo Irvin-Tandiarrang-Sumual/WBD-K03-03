@@ -1,4 +1,4 @@
-package database_driver
+package database_driver_test
 
 import (
 	"context"
@@ -7,324 +7,679 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	databasedriverservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_driver"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
 )
 
-type databaseServiceFake struct {
-	ports.DatabaseService
-	database *domain.Database
-	err      error
-}
-
-func (f *databaseServiceFake) GetDatabaseByIDAndUserID(context.Context, uint, uint) (*domain.Database, error) {
-	return f.database, f.err
-}
-
-type executorFake struct {
-	ports.DatabaseExecutor
-	queryResult *ports.DatabaseQueryResult
-	queryErr    error
-	explainErr  error
-	explained   bool
-	query       string
-	database    domain.Database
-	analyze     bool
-}
-
-func (f *executorFake) ExecuteQuery(_ context.Context, database domain.Database, query string, _ ...any) (*ports.DatabaseQueryResult, error) {
-	f.database = database
-	f.query = query
-	return f.queryResult, f.queryErr
-}
-
-func (f *executorFake) ExplainQuery(_ context.Context, database domain.Database, query string, analyze bool, _ ...any) (*ports.DatabaseQueryResult, error) {
-	f.database = database
-	f.query = query
-	f.analyze = analyze
-	f.explained = true
-	return f.queryResult, f.explainErr
-}
-
-func TestExecuteDatabaseQueryChecksAccessAndDelegates(t *testing.T) {
-	executor := &executorFake{queryResult: &ports.DatabaseQueryResult{Columns: []string{"id"}}}
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{
-			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
-				return &domain.Database{ID: 5, Password: "secret"}, nil
+func newTestDriverService(
+	dbService *testutil.DatabaseService,
+	dbRepo *testutil.DatabaseRepository,
+	executor *testutil.DatabaseExecutorRepository,
+	groupService *testutil.UserGroupService,
+) ports.DatabaseDriverService {
+	if dbService == nil {
+		dbService = &testutil.DatabaseService{
+			GetDatabaseByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+				return &domain.Database{ID: 5, Name: "appdb"}, nil
 			},
-		},
-		executor,
-		&testutil.GroupService{
-			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-				return domain.AccessViewOnly, nil
+		}
+	}
+	if dbRepo == nil {
+		dbRepo = &testutil.DatabaseRepository{
+			FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+				return domain.Database{ID: 5, Name: "appdb", Password: "secret"}, nil
 			},
-		},
-	)
+		}
+	}
+	if groupService == nil {
+		groupService = &testutil.UserGroupService{
+			AuthorizeFunc: func(context.Context, uint, uint, domain.AccessType) error {
+				return nil
+			},
+		}
+	}
+	if executor == nil {
+		executor = &testutil.DatabaseExecutorRepository{
+			ExecuteQueryFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+				return &ports.DatabaseQueryResult{}, nil
+			},
+		}
+	}
+	return databasedriverservice.NewDatabaseDriverService(dbService, dbRepo, executor, groupService)
+}
 
-	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+func TestExecuteDatabaseQuery_ValidReadOnlyQuery_ReturnsQueryResult(t *testing.T) {
+	// Arrange
+	expectedResult := &ports.DatabaseQueryResult{
+		Columns: []string{"id", "username"},
+		Rows: []map[string]any{
+			{"id": int64(1), "username": "admin"},
+		},
+	}
+	executor := &testutil.DatabaseExecutorRepository{
+		ExecuteQueryFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return expectedResult, nil
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT id, username FROM users")
+
+	// Assert
 	if err != nil {
-		t.Fatalf("ExecuteDatabaseQuery() error = %v", err)
+		t.Fatalf("unexpected ExecuteDatabaseQuery() error: %v", err)
 	}
-	if result != executor.queryResult || executor.query != "SELECT 1" || executor.database.Password != "secret" {
-		t.Fatalf("unexpected delegation: result=%v query=%q database=%+v", result, executor.query, executor.database)
+	if result != expectedResult {
+		t.Fatalf("expected result %+v, got: %+v", expectedResult, result)
 	}
 }
 
-func TestExecuteDatabaseQueryRejectsViewOnlyMismatch(t *testing.T) {
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{},
-		&executorFake{},
-		&testutil.GroupService{
-			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-				return domain.AccessType(""), nil
-			},
+func TestExecuteDatabaseQuery_TrailingSemicolons_StripsSemicolonsBeforeExecution(t *testing.T) {
+	// Arrange
+	var executedQuery string
+	executor := &testutil.DatabaseExecutorRepository{
+		ExecuteQueryFunc: func(_ context.Context, _ domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+			executedQuery = query
+			return &ports.DatabaseQueryResult{}, nil
 		},
-	)
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
 
+	// Act
+	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1;;;   ")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if executedQuery != "SELECT 1" {
+		t.Fatalf("expected trailing semicolons to be stripped, got: %q", executedQuery)
+	}
+}
+
+func TestExecuteDatabaseQuery_ValidQuery_PassesDecryptedCredentialToExecutor(t *testing.T) {
+	// Arrange
+	dbRepo := &testutil.DatabaseRepository{
+		FindWithCredentialByIDFunc: func(_ context.Context, databaseID uint) (domain.Database, error) {
+			return domain.Database{ID: databaseID, Password: "decrypted-pass-123"}, nil
+		},
+	}
+	var executedDatabase domain.Database
+	executor := &testutil.DatabaseExecutorRepository{
+		ExecuteQueryFunc: func(_ context.Context, db domain.Database, _ string) (*ports.DatabaseQueryResult, error) {
+			executedDatabase = db
+			return &ports.DatabaseQueryResult{}, nil
+		},
+	}
+	service := newTestDriverService(nil, dbRepo, executor, nil)
+
+	// Act
 	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
-	if !errors.Is(err, domain.ErrDatabaseAccessDenied) {
-		t.Fatalf("error = %v, want access denied", err)
-	}
-}
 
-func TestExplainDatabaseQueryPassesAnalyzeFlag(t *testing.T) {
-	executor := &executorFake{queryResult: &ports.DatabaseQueryResult{}}
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{
-			FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
-				return &domain.Database{ID: 5}, nil
-			},
-		},
-		executor,
-		&testutil.GroupService{
-			EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-				return domain.AccessViewEdit, nil
-			},
-		},
-	)
-
-	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "WITH x AS (SELECT 1) SELECT * FROM x", true)
+	// Assert
 	if err != nil {
-		t.Fatalf("ExplainDatabaseQuery() error = %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !executor.explained || !executor.analyze {
-		t.Fatalf("explain delegation lost analyze flag: %+v", executor)
+	if executedDatabase.Password != "decrypted-pass-123" {
+		t.Fatalf("expected decrypted password passed to executor, got: %q", executedDatabase.Password)
 	}
 }
 
-func TestValidateSelectQuery(t *testing.T) {
-	tests := []struct {
-		name    string
-		query   string
-		wantErr bool
+func TestExecuteDatabaseQuery_ValidQuery_VerifiesViewOnlyAccessWithUserGroupService(t *testing.T) {
+	// Arrange
+	var capturedUserID, capturedDBID uint
+	var capturedAccess domain.AccessType
+	groupService := &testutil.UserGroupService{
+		AuthorizeFunc: func(_ context.Context, userID uint, databaseID uint, access domain.AccessType) error {
+			capturedUserID = userID
+			capturedDBID = databaseID
+			capturedAccess = access
+			return nil
+		},
+	}
+	service := newTestDriverService(nil, nil, nil, groupService)
+
+	// Act
+	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedUserID != 9 || capturedDBID != 5 || capturedAccess != domain.AccessViewOnly {
+		t.Fatalf("expected Authorize(userID=9, dbID=5, access=view_only), got: userID=%d dbID=%d access=%v",
+			capturedUserID, capturedDBID, capturedAccess)
+	}
+}
+
+func TestExecuteDatabaseQuery_InvalidDatabaseIDZero_ReturnsErrInvalidDatabaseID(t *testing.T) {
+	// Arrange
+	service := databasedriverservice.NewDatabaseDriverService(nil, nil, nil, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 0, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDatabaseID) {
+		t.Fatalf("expected ErrInvalidDatabaseID, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExecuteDatabaseQuery_InvalidUserIDZero_ReturnsErrCurrentUserUnavailable(t *testing.T) {
+	// Arrange
+	service := databasedriverservice.NewDatabaseDriverService(nil, nil, nil, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 0, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, domain.ErrCurrentUserUnavailable) {
+		t.Fatalf("expected ErrCurrentUserUnavailable, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExecuteDatabaseQuery_DatabaseNotFoundOrNoAccess_PropagatesError(t *testing.T) {
+	// Arrange
+	notFoundErr := domain.ErrDatabaseNotFound
+	databaseService := &testutil.DatabaseService{
+		GetDatabaseByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+			return nil, notFoundErr
+		},
+	}
+	service := databasedriverservice.NewDatabaseDriverService(databaseService, nil, nil, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, notFoundErr) {
+		t.Fatalf("expected error %v, got: %v", notFoundErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExecuteDatabaseQuery_AuthorizationFails_ReturnsError(t *testing.T) {
+	// Arrange
+	accessErr := domain.ErrDatabaseAccessDenied
+	userGroupService := &testutil.UserGroupService{
+		AuthorizeFunc: func(context.Context, uint, uint, domain.AccessType) error {
+			return accessErr
+		},
+	}
+	service := newTestDriverService(nil, nil, nil, userGroupService)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, accessErr) {
+		t.Fatalf("expected error %v, got: %v", accessErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExecuteDatabaseQuery_EmptyOrWhitespaceQuery_ReturnsErrInvalidDatabaseQuery(t *testing.T) {
+	// Arrange
+	service := newTestDriverService(nil, nil, nil, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "   ; ;   ")
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+		t.Fatalf("expected ErrInvalidDatabaseQuery for empty/whitespace query, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExecuteDatabaseQuery_WriteOrMutationQuery_ReturnsErrInvalidDatabaseQuery(t *testing.T) {
+	// Arrange
+	cases := []struct {
+		name  string
+		query string
 	}{
-		{name: "select query", query: "SELECT * FROM users", wantErr: false},
-		{name: "with query", query: "WITH users AS (SELECT 1) SELECT * FROM users", wantErr: false},
-		{name: "case insensitive", query: "  select id from users", wantErr: false},
-		{name: "empty query", query: "   ", wantErr: true},
-		{name: "mutation query", query: "UPDATE users SET active = true", wantErr: true},
-		{name: "multiple statements", query: "SELECT 1; SELECT 2", wantErr: true},
-		{name: "select without separator", query: "selection", wantErr: true},
+		{name: "insert query", query: "INSERT INTO users (id, name) VALUES (1, 'alice')"},
+		{name: "update query", query: "UPDATE users SET name = 'bob' WHERE id = 1"},
+		{name: "delete query", query: "DELETE FROM users WHERE id = 1"},
+		{name: "drop table query", query: "DROP TABLE users"},
+		{name: "alter table query", query: "ALTER TABLE users ADD COLUMN age INT"},
+		{name: "truncate table query", query: "TRUNCATE TABLE users"},
+		{name: "multi statement injection", query: "SELECT 1; DROP TABLE users;"},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateSelectQuery(test.query)
-			if test.wantErr && err != domain.ErrInvalidDatabaseQuery {
-				t.Fatalf("got error %v, want %v", err, domain.ErrInvalidDatabaseQuery)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			executorCalled := false
+			executor := &testutil.DatabaseExecutorRepository{
+				ExecuteQueryFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+					executorCalled = true
+					return nil, nil
+				},
 			}
-			if !test.wantErr && err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			service := newTestDriverService(nil, nil, executor, nil)
+
+			// Act
+			result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, tc.query)
+
+			// Assert
+			if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+				t.Fatalf("expected ErrInvalidDatabaseQuery for %s, got: %v", tc.name, err)
+			}
+			if executorCalled {
+				t.Fatal("executor must not be called when query is non-read-only")
+			}
+			if result != nil {
+				t.Fatalf("expected nil result, got: %+v", result)
 			}
 		})
 	}
 }
 
-func TestExecuteDatabaseQueryPropagatesAccessibleDatabaseError(t *testing.T) {
-	wantErr := domain.ErrDatabaseNotFound
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{err: wantErr},
-		&testutil.DatabaseRepository{},
-		&executorFake{},
-		&testutil.GroupService{},
-	)
-	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error=%v want=%v", err, wantErr)
+func TestExecuteDatabaseQuery_FindWithCredentialFails_PropagatesError(t *testing.T) {
+	// Arrange
+	credErr := errors.New("cipher decryption failed")
+	databaseRepo := &testutil.DatabaseRepository{
+		FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+			return domain.Database{}, credErr
+		},
+	}
+	service := newTestDriverService(nil, databaseRepo, nil, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, credErr) {
+		t.Fatalf("expected credential error %v, got: %v", credErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
 	}
 }
 
-func TestExecuteDatabaseQueryPropagatesAccessLookupError(t *testing.T) {
-	wantErr := errors.New("access lookup failed")
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{},
-		&executorFake{},
-		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-			return "", wantErr
-		}},
-	)
-	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error=%v want=%v", err, wantErr)
+func TestExecuteDatabaseQuery_ExecutorReturnsError_PropagatesError(t *testing.T) {
+	// Arrange
+	execErr := errors.New("syntax error in SQL query")
+	executor := &testutil.DatabaseExecutorRepository{
+		ExecuteQueryFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return nil, execErr
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, execErr) {
+		t.Fatalf("expected executor error %v, got: %v", execErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
 	}
 }
 
-func TestExecuteDatabaseQueryRejectsInvalidQueryBeforeCredentialLookup(t *testing.T) {
-	credentialLookup := false
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-			credentialLookup = true
-			return domain.Database{}, nil
-		}},
-		&executorFake{},
-		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-			return domain.AccessViewOnly, nil
-		}},
-	)
-	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "DELETE FROM users")
-	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
-		t.Fatalf("error=%v", err)
+func TestExecuteDatabaseQuery_QueryTimeout_ReturnsErrQueryTimeout(t *testing.T) {
+	// Arrange
+	executor := &testutil.DatabaseExecutorRepository{
+		ExecuteQueryFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return nil, context.DeadlineExceeded
+		},
 	}
-	if credentialLookup {
-		t.Fatal("credential lookup must not run for invalid query")
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, domain.ErrQueryTimeout) {
+		t.Fatalf("expected ErrQueryTimeout, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
 	}
 }
 
-func TestExecuteDatabaseQueryPropagatesCredentialAndExecutorErrors(t *testing.T) {
-	credentialErr := errors.New("decrypt failed")
-	service := NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-			return domain.Database{}, credentialErr
-		}},
-		&executorFake{},
-		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-			return domain.AccessViewOnly, nil
-		}},
-	)
-	_, err := service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
-	if !errors.Is(err, credentialErr) {
-		t.Fatalf("error=%v", err)
+func TestExplainDatabaseQuery_ValidQuery_ReturnsExplainResult(t *testing.T) {
+	// Arrange
+	expectedResult := &ports.DatabaseQueryResult{
+		Columns: []string{"QUERY PLAN"},
+		Rows:    []map[string]any{{"QUERY PLAN": "Seq Scan on users"}},
 	}
-
-	executorErr := errors.New("query failed")
-	service = NewDatabaseExecutorService(
-		&databaseServiceFake{database: &domain.Database{ID: 5}},
-		&testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-			return domain.Database{ID: 5, Password: "pw"}, nil
-		}},
-		&executorFake{queryErr: executorErr},
-		&testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-			return domain.AccessViewOnly, nil
-		}},
-	)
-	_, err = service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
-	if !errors.Is(err, executorErr) {
-		t.Fatalf("error=%v", err)
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return expectedResult, nil
+		},
 	}
-}
+	service := newTestDriverService(nil, nil, executor, nil)
 
-func TestExplainDatabaseQueryRejectsInvalidQueryAndPropagatesExecutorError(t *testing.T) {
-	groups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-		return domain.AccessViewOnly, nil
-	}}
-	repository := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-		return domain.Database{ID: 5}, nil
-	}}
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT * FROM users")
 
-	service := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, &executorFake{}, groups)
-	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "UPDATE users SET x=1", false)
-	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
-		t.Fatalf("error=%v", err)
-	}
-
-	wantErr := errors.New("explain failed")
-	service = NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, &executorFake{explainErr: wantErr}, groups)
-	_, err = service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1", true)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error=%v want=%v", err, wantErr)
-	}
-}
-
-func TestExplainAndExecuteAcceptTrailingSemicolon(t *testing.T) {
-	groups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-		return domain.AccessViewOnly, nil
-	}}
-	repository := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-		return domain.Database{ID: 5}, nil
-	}}
-	executor := &executorFake{
-		queryResult: &ports.DatabaseQueryResult{Columns: []string{"QUERY PLAN"}},
-	}
-
-	service := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, executor, groups)
-
-	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT * FROM customers;", false)
-	if err != nil {
-		t.Fatalf("expected SELECT * FROM customers; to succeed in ExplainDatabaseQuery, got %v", err)
-	}
-	if executor.query != "SELECT * FROM customers" {
-		t.Fatalf("expected trailing semicolon stripped, got %q", executor.query)
-	}
-
-	_, err = service.ExecuteDatabaseQuery(context.Background(), 5, 9, "SELECT * FROM customers;")
-	if err != nil {
-		t.Fatalf("expected SELECT * FROM customers; to succeed in ExecuteDatabaseQuery, got %v", err)
-	}
-	if executor.query != "SELECT * FROM customers" {
-		t.Fatalf("expected trailing semicolon stripped, got %q", executor.query)
-	}
-
-	viewEditGroups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-		return domain.AccessViewEdit, nil
-	}}
-	viewEditService := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, executor, viewEditGroups)
-	_, err = viewEditService.ExecuteDatabaseQuery(context.Background(), 5, 9, "UPDATE customers SET name = 'Budi' WHERE id = 1;")
-	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
-		t.Fatalf("expected non-SELECT query on ExecuteDatabaseQuery to be rejected even for view_edit, got %v", err)
-	}
-}
-
-func TestExplainDatabaseQueryHandlesLeadingExplainAnalyzeAndCredentialError(t *testing.T) {
-	groups := &testutil.GroupService{EffectiveDatabaseAccessFunc: func(context.Context, uint, uint) (domain.AccessType, error) {
-		return domain.AccessViewOnly, nil
-	}}
-	repository := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-		return domain.Database{ID: 5}, nil
-	}}
-	executor := &executorFake{
-		queryResult: &ports.DatabaseQueryResult{Columns: []string{"QUERY PLAN"}},
-	}
-	service := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repository, executor, groups)
-
-	// Explain Analyze stripped
-	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "EXPLAIN ANALYZE SELECT id FROM users;", false)
+	// Assert
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if executor.query != "SELECT id FROM users" {
-		t.Fatalf("expected stripped query 'SELECT id FROM users', got %q", executor.query)
+	if result != expectedResult {
+		t.Fatalf("expected result %+v, got: %+v", expectedResult, result)
 	}
+}
 
-	// Just keyword "select" without space or target is rejected
-	_, err = service.ExplainDatabaseQuery(context.Background(), 5, 9, "select", false)
+func TestExplainDatabaseQuery_LeadingExplainPrefix_StripsPrefixBeforeExecution(t *testing.T) {
+	// Arrange
+	var receivedQuery string
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainFunc: func(_ context.Context, _ domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+			receivedQuery = query
+			return &ports.DatabaseQueryResult{}, nil
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "EXPLAIN SELECT * FROM users;;")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedQuery != "SELECT * FROM users" {
+		t.Fatalf("expected 'EXPLAIN' prefix stripped, got: %q", receivedQuery)
+	}
+}
+
+func TestExplainDatabaseQuery_LeadingExplainAnalyzePrefix_StripsPrefixBeforeExecution(t *testing.T) {
+	// Arrange
+	var receivedQuery string
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainFunc: func(_ context.Context, _ domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+			receivedQuery = query
+			return &ports.DatabaseQueryResult{}, nil
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	_, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "EXPLAIN ANALYZE SELECT * FROM users")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedQuery != "SELECT * FROM users" {
+		t.Fatalf("expected 'EXPLAIN ANALYZE' prefix stripped, got: %q", receivedQuery)
+	}
+}
+
+func TestExplainDatabaseQuery_WriteQuery_ReturnsErrInvalidDatabaseQuery(t *testing.T) {
+	// Arrange
+	service := newTestDriverService(nil, nil, nil, nil)
+
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "EXPLAIN DELETE FROM users")
+
+	// Assert
 	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
-		t.Fatalf("expected ErrInvalidDatabaseQuery, got %v", err)
+		t.Fatalf("expected ErrInvalidDatabaseQuery for explain of write query, got: %v", err)
 	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
 
-	// FindWithCredentialByID error propagation
-	credErr := errors.New("cred lookup failure")
-	repoCredErr := &testutil.DatabaseRepository{FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
-		return domain.Database{}, credErr
-	}}
-	serviceCredErr := NewDatabaseExecutorService(&databaseServiceFake{database: &domain.Database{ID: 5}}, repoCredErr, executor, groups)
-	_, err = serviceCredErr.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1", false)
+func TestExplainDatabaseQuery_ExecutorReturnsError_PropagatesError(t *testing.T) {
+	// Arrange
+	wantErr := errors.New("explain failed")
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return nil, wantErr
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected error %v, got: %v", wantErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExplainDatabaseQuery_QueryTimeout_ReturnsErrQueryTimeout(t *testing.T) {
+	// Arrange
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return nil, context.DeadlineExceeded
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, domain.ErrQueryTimeout) {
+		t.Fatalf("expected ErrQueryTimeout, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExplainAnalyzeDatabaseQuery_ValidQuery_ReturnsExplainAnalyzeResult(t *testing.T) {
+	// Arrange
+	expectedResult := &ports.DatabaseQueryResult{
+		Columns: []string{"QUERY PLAN"},
+		Rows:    []map[string]any{{"QUERY PLAN": "Index Scan on users (cost=0.15..8.17 rows=1)"}},
+	}
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainAnalyzeFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return expectedResult, nil
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExplainAnalyzeDatabaseQuery(context.Background(), 5, 9, "SELECT * FROM users")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != expectedResult {
+		t.Fatalf("expected result %+v, got: %+v", expectedResult, result)
+	}
+}
+
+func TestExplainAnalyzeDatabaseQuery_LeadingExplainAnalyzePrefix_StripsPrefixBeforeExecution(t *testing.T) {
+	// Arrange
+	var receivedQuery string
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainAnalyzeFunc: func(_ context.Context, _ domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+			receivedQuery = query
+			return &ports.DatabaseQueryResult{}, nil
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	_, err := service.ExplainAnalyzeDatabaseQuery(context.Background(), 5, 9, "EXPLAIN ANALYZE SELECT * FROM users;;")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedQuery != "SELECT * FROM users" {
+		t.Fatalf("expected 'EXPLAIN ANALYZE' prefix stripped, got: %q", receivedQuery)
+	}
+}
+
+func TestExplainAnalyzeDatabaseQuery_LeadingExplainPrefix_StripsPrefixBeforeExecution(t *testing.T) {
+	// Arrange
+	var receivedQuery string
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainAnalyzeFunc: func(_ context.Context, _ domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+			receivedQuery = query
+			return &ports.DatabaseQueryResult{}, nil
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	_, err := service.ExplainAnalyzeDatabaseQuery(context.Background(), 5, 9, "EXPLAIN SELECT * FROM users")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedQuery != "SELECT * FROM users" {
+		t.Fatalf("expected 'EXPLAIN' prefix stripped, got: %q", receivedQuery)
+	}
+}
+
+func TestExplainAnalyzeDatabaseQuery_WriteQuery_ReturnsErrInvalidDatabaseQuery(t *testing.T) {
+	// Arrange
+	service := newTestDriverService(nil, nil, nil, nil)
+
+	// Act
+	result, err := service.ExplainAnalyzeDatabaseQuery(context.Background(), 5, 9, "EXPLAIN ANALYZE UPDATE users SET name = 'foo'")
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDatabaseQuery) {
+		t.Fatalf("expected ErrInvalidDatabaseQuery, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExplainAnalyzeDatabaseQuery_ExecutorReturnsError_PropagatesError(t *testing.T) {
+	// Arrange
+	wantErr := errors.New("explain analyze execution error")
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainAnalyzeFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return nil, wantErr
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExplainAnalyzeDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected error %v, got: %v", wantErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExplainAnalyzeDatabaseQuery_QueryTimeout_ReturnsErrQueryTimeout(t *testing.T) {
+	// Arrange
+	executor := &testutil.DatabaseExecutorRepository{
+		ExplainAnalyzeFunc: func(context.Context, domain.Database, string) (*ports.DatabaseQueryResult, error) {
+			return nil, context.DeadlineExceeded
+		},
+	}
+	service := newTestDriverService(nil, nil, executor, nil)
+
+	// Act
+	result, err := service.ExplainAnalyzeDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, domain.ErrQueryTimeout) {
+		t.Fatalf("expected ErrQueryTimeout, got: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+// ----------------------------------------------------------------------------
+// PrepareExplain Edge Cases
+// ----------------------------------------------------------------------------
+
+func TestExplainDatabaseQuery_DatabaseLookupFails_PropagatesError(t *testing.T) {
+	// Arrange
+	lookupErr := domain.ErrDatabaseNotFound
+	databaseService := &testutil.DatabaseService{
+		GetDatabaseByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+			return nil, lookupErr
+		},
+	}
+	service := databasedriverservice.NewDatabaseDriverService(databaseService, nil, nil, nil)
+
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, lookupErr) {
+		t.Fatalf("expected lookup error %v, got: %v", lookupErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExplainDatabaseQuery_AuthorizationFails_ReturnsError(t *testing.T) {
+	// Arrange
+	accessErr := domain.ErrDatabaseAccessDenied
+	userGroupService := &testutil.UserGroupService{
+		AuthorizeFunc: func(context.Context, uint, uint, domain.AccessType) error {
+			return accessErr
+		},
+	}
+	service := newTestDriverService(nil, nil, nil, userGroupService)
+
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
+	if !errors.Is(err, accessErr) {
+		t.Fatalf("expected access error %v, got: %v", accessErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
+	}
+}
+
+func TestExplainDatabaseQuery_CredentialLookupFails_PropagatesError(t *testing.T) {
+	// Arrange
+	credErr := errors.New("decryption error")
+	databaseRepo := &testutil.DatabaseRepository{
+		FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+			return domain.Database{}, credErr
+		},
+	}
+	service := newTestDriverService(nil, databaseRepo, nil, nil)
+
+	// Act
+	result, err := service.ExplainDatabaseQuery(context.Background(), 5, 9, "SELECT 1")
+
+	// Assert
 	if !errors.Is(err, credErr) {
-		t.Fatalf("expected credErr, got %v", err)
+		t.Fatalf("expected cred error %v, got: %v", credErr, err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
 	}
 }
