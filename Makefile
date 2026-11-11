@@ -1,6 +1,6 @@
 .PHONY: test test-unit test-unit-cover test-integration test-integration-cover test-all test-cover-all migrate seed swagger
 
-UNIT_PKGS := ./config/... ./internal/adapters/driver/... ./internal/adapters/http/... ./internal/adapters/security/... ./internal/core/... ./pkg/...
+UNIT_PKGS := ./config/... ./internal/adapters/driver/mysql/... ./internal/adapters/driver/postgresql/... ./internal/adapters/http/middleware/... ./internal/adapters/security/... ./internal/core/domain/... ./internal/core/service/... ./pkg/...
 
 migrate:
 	cd backend && go run ./cmd/migrate
