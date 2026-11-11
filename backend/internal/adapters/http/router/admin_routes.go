@@ -36,8 +36,8 @@ func registerAdminGroupRoutes(admin *gin.RouterGroup, dependencies routerDepende
 func registerAdminUserGroupRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
 	groups := admin.Group("/groups")
 	if dependencies.userGroupHandler != nil {
-		groups.POST("/:group_id/users/:user_id", dependencies.userGroupHandler.AddUser)
-		groups.DELETE("/:group_id/users/:user_id", dependencies.userGroupHandler.RemoveUser)
+		groups.POST("/:id/users/:user_id", dependencies.userGroupHandler.AddUser)
+		groups.DELETE("/:id/users/:user_id", dependencies.userGroupHandler.RemoveUser)
 	}
 }
 

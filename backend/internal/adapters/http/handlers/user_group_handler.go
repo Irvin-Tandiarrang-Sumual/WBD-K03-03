@@ -26,7 +26,7 @@ func NewUserGroupHandler(service ports.UserGroupService) *UserGroupHandler {
 //	@Tags			Admin - Groups
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			group_id	path	int	true	"Group ID"
+//	@Param			id	path	int	true	"Group ID"
 //	@Param			user_id	path	int	true	"User ID"
 //	@Success		204		"User added to group"
 //	@Failure		400		"Invalid input"
@@ -35,9 +35,9 @@ func NewUserGroupHandler(service ports.UserGroupService) *UserGroupHandler {
 //	@Failure		404		"Group or user not found"
 //	@Failure		409		"Membership already exists"
 //	@Failure		500		"Internal server error"
-//	@Router			/admin/groups/{group_id}/users/{user_id} [post]
+//	@Router			/admin/groups/{id}/users/{user_id} [post]
 func (h *UserGroupHandler) AddUser(c *gin.Context) {
-	groupID, err := ginutil.ParseUintParam(c, "group_id")
+	groupID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return
@@ -66,7 +66,7 @@ func (h *UserGroupHandler) AddUser(c *gin.Context) {
 //	@Tags			Admin - Groups
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			group_id	path	int	true	"Group ID"
+//	@Param			id	path	int	true	"Group ID"
 //	@Param			user_id	path	int	true	"User ID"
 //	@Success		204		"User removed from group"
 //	@Failure		400		"Invalid input"
@@ -75,9 +75,9 @@ func (h *UserGroupHandler) AddUser(c *gin.Context) {
 //	@Failure		404		"Group or user not found"
 //	@Failure		409		"Membership not found / user must remain in a group"
 //	@Failure		500		"Internal server error"
-//	@Router			/admin/groups/{group_id}/users/{user_id} [delete]
+//	@Router			/admin/groups/{id}/users/{user_id} [delete]
 func (h *UserGroupHandler) RemoveUser(c *gin.Context) {
-	groupID, err := ginutil.ParseUintParam(c, "group_id")
+	groupID, err := ginutil.ParseUintParam(c, "id")
 	if err != nil {
 		c.Error(domain.ErrInvalidInput)
 		return

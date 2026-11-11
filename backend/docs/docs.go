@@ -413,116 +413,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/groups/{group_id}/users/{user_id}": {
-            "post": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Adds an existing user to an existing group. Requires admin privileges.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Groups"
-                ],
-                "summary": "Add user to group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "group_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "User added to group"
-                    },
-                    "400": {
-                        "description": "Invalid input"
-                    },
-                    "401": {
-                        "description": "Unauthorized"
-                    },
-                    "403": {
-                        "description": "Forbidden (not admin)"
-                    },
-                    "404": {
-                        "description": "Group or user not found"
-                    },
-                    "409": {
-                        "description": "Membership already exists"
-                    },
-                    "500": {
-                        "description": "Internal server error"
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Removes an existing user from an existing group. Requires admin privileges.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Groups"
-                ],
-                "summary": "Remove user from group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "group_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "User removed from group"
-                    },
-                    "400": {
-                        "description": "Invalid input"
-                    },
-                    "401": {
-                        "description": "Unauthorized"
-                    },
-                    "403": {
-                        "description": "Forbidden (not admin)"
-                    },
-                    "404": {
-                        "description": "Group or user not found"
-                    },
-                    "409": {
-                        "description": "Membership not found / user must remain in a group"
-                    },
-                    "500": {
-                        "description": "Internal server error"
-                    }
-                }
-            }
-        },
         "/admin/groups/{id}": {
             "get": {
                 "security": [
@@ -728,6 +618,116 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
                         }
+                    }
+                }
+            }
+        },
+        "/admin/groups/{id}/users/{user_id}": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Adds an existing user to an existing group. Requires admin privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Groups"
+                ],
+                "summary": "Add user to group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User added to group"
+                    },
+                    "400": {
+                        "description": "Invalid input"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden (not admin)"
+                    },
+                    "404": {
+                        "description": "Group or user not found"
+                    },
+                    "409": {
+                        "description": "Membership already exists"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Removes an existing user from an existing group. Requires admin privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Groups"
+                ],
+                "summary": "Remove user from group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User removed from group"
+                    },
+                    "400": {
+                        "description": "Invalid input"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden (not admin)"
+                    },
+                    "404": {
+                        "description": "Group or user not found"
+                    },
+                    "409": {
+                        "description": "Membership not found / user must remain in a group"
+                    },
+                    "500": {
+                        "description": "Internal server error"
                     }
                 }
             }
