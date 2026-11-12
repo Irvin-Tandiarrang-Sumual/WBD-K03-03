@@ -6,11 +6,10 @@ import (
 )
 
 type Config struct {
-	Database     DBConfig
-	Server       ServerConfig
-	Security     SecurityConfig
-	Session      SessionConfig
-	SeedTestData bool
+	Database DBConfig
+	Server   ServerConfig
+	Security SecurityConfig
+	Session  SessionConfig
 }
 
 type ServerConfig struct {
@@ -61,8 +60,6 @@ func LoadConfig() (*Config, error) {
 		Session: SessionConfig{
 			CookieSecure: getEnvAsBoolValue("SESSION_COOKIE_SECURE", true),
 		},
-
-		SeedTestData: getEnvAsBoolValue("SEED_TEST_DATA", false),
 	}
 
 	return config, nil

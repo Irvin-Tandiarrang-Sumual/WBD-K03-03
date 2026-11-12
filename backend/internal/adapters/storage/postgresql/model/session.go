@@ -12,6 +12,7 @@ type Session struct {
 	IdleTimeout         time.Duration `gorm:"not null"`
 	LastActive          time.Time     `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	AbsoluteExpiration  time.Time     `gorm:"not null"`
+	CSRFToken           string        `gorm:"type:varchar(64);not null;default:''"`
 	UserID              uint          `gorm:"not null;index"`
 
 	User User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`

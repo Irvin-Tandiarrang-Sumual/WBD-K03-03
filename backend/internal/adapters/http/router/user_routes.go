@@ -1,13 +1,11 @@
 package router
 
 import (
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/gin-gonic/gin"
 )
 
-func registerAuthenticatedUserRoutes(api *gin.RouterGroup, dependencies routerDependencies) {
-	me := api.Group("/me")
-	me.Use(middleware.Authenticate(dependencies.sessionService))
+func registerAuthenticatedUserRoutes(protected *gin.RouterGroup, dependencies routerDependencies) {
+	me := protected.Group("/me")
 
 	registerUserDatabaseRoutes(me, dependencies)
 }
@@ -17,37 +15,34 @@ func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependen
 	databases.GET("", dependencies.databaseHandler.GetDatabasesByUserID)
 	databases.GET(
 		"/:database_id",
-		middleware.RequireDatabaseView(dependencies.groupService),
 		dependencies.databaseHandler.GetDatabaseByIDAndUserID,
 	)
 	databases.POST(
 		"/:database_id/query",
-		middleware.RequireDatabaseView(dependencies.groupService),
-		dependencies.databaseExecutorHandler.ExecuteDatabaseQuery,
+		dependencies.databaseDriverHandler.ExecuteDatabaseQuery,
 	)
 	databases.POST(
 		"/:database_id/explain",
-		middleware.RequireDatabaseView(dependencies.groupService),
-		dependencies.databaseExecutorHandler.ExplainDatabaseQuery,
+		dependencies.databaseDriverHandler.ExplainDatabaseQuery,
+	)
+	databases.POST(
+		"/:database_id/explain-analyze",
+		dependencies.databaseDriverHandler.ExplainAnalyzeDatabaseQuery,
 	)
 	databases.GET(
 		"/:database_id/migrations",
-		middleware.RequireDatabaseView(dependencies.groupService),
 		dependencies.migrationHandler.GetMigrationsByDatabaseID,
 	)
 	databases.POST(
 		"/:database_id/migrations",
-		middleware.RequireDatabaseEdit(dependencies.groupService),
 		dependencies.migrationHandler.CreateMigration,
 	)
 	databases.GET(
 		"/:database_id/migrations/compare",
-		middleware.RequireDatabaseView(dependencies.groupService),
 		dependencies.migrationHandler.CompareMigrations,
 	)
 	databases.GET(
 		"/:database_id/migrations/:migration_id",
-		middleware.RequireDatabaseView(dependencies.groupService),
 		dependencies.migrationHandler.GetMigrationByIDAndDatabaseID,
 	)
 	databases.POST(

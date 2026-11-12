@@ -1,33 +1,62 @@
-package pagination
+package pagination_test
 
-import "testing"
+import (
+	"testing"
 
-func TestNewPaginationParamsSanitizesValues(t *testing.T) {
-	tests := []struct {
-		name       string
-		page       int
-		limit      int
-		wantPage   int
-		wantLimit  int
-		wantOffset int
-	}{
-		{name: "defaults invalid values", page: 0, limit: 0, wantPage: 1, wantLimit: 10, wantOffset: 0},
-		{name: "keeps valid values", page: 3, limit: 25, wantPage: 3, wantLimit: 25, wantOffset: 50},
-		{name: "caps maximum limit", page: 2, limit: 101, wantPage: 2, wantLimit: 100, wantOffset: 100},
-		{name: "normalizes negative values", page: -1, limit: -5, wantPage: 1, wantLimit: 10, wantOffset: 0},
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
+)
+
+func TestNewPaginationParams_ZeroOrNegativeInputs_DefaultsToPageOneAndLimitTen(t *testing.T) {
+	// Arrange
+	zeroPage, zeroLimit := 0, 0
+	negPage, negLimit := -5, -10
+
+	// Act
+	paramsZero := pagination.NewPaginationParams(zeroPage, zeroLimit)
+	paramsNeg := pagination.NewPaginationParams(negPage, negLimit)
+
+	// Assert
+	if paramsZero.Page != 1 || paramsZero.Limit != 10 || paramsZero.Offset() != 0 {
+		t.Fatalf("unexpected defaults for zero values: %+v, offset=%d", paramsZero, paramsZero.Offset())
 	}
+	if paramsNeg.Page != 1 || paramsNeg.Limit != 10 || paramsNeg.Offset() != 0 {
+		t.Fatalf("unexpected defaults for negative values: %+v, offset=%d", paramsNeg, paramsNeg.Offset())
+	}
+}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			params := NewPaginationParams(test.page, test.limit)
+func TestNewPaginationParams_ValidInputs_PreservesValuesAndCalculatesOffset(t *testing.T) {
+	// Arrange
+	page := 3
+	limit := 25
+	expectedOffset := 50 // (3 - 1) * 25
 
-			if params.Page != test.wantPage || params.Limit != test.wantLimit {
-				t.Fatalf("got page=%d limit=%d, want page=%d limit=%d",
-					params.Page, params.Limit, test.wantPage, test.wantLimit)
-			}
-			if params.Offset() != test.wantOffset {
-				t.Fatalf("got offset=%d, want %d", params.Offset(), test.wantOffset)
-			}
-		})
+	// Act
+	params := pagination.NewPaginationParams(page, limit)
+
+	// Assert
+	if params.Page != 3 || params.Limit != 25 {
+		t.Fatalf("expected page=3, limit=25, got page=%d, limit=%d", params.Page, params.Limit)
+	}
+	if params.Offset() != expectedOffset {
+		t.Fatalf("expected offset=%d, got %d", expectedOffset, params.Offset())
+	}
+}
+
+func TestNewPaginationParams_LimitExceedsMaximum_CapsLimitToOneHundred(t *testing.T) {
+	// Arrange
+	page := 2
+	exorbitantLimit := 500
+	expectedLimit := 100
+	expectedOffset := 100 // (2 - 1) * 100
+
+	// Act
+	params := pagination.NewPaginationParams(page, exorbitantLimit)
+
+	// Assert
+	if params.Limit != expectedLimit {
+		t.Fatalf("expected limit capped at %d, got %d", expectedLimit, params.Limit)
+	}
+	if params.Offset() != expectedOffset {
+		t.Fatalf("expected offset=%d, got %d", expectedOffset, params.Offset())
 	}
 }

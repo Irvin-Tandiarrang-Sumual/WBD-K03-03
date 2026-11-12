@@ -1,5 +1,14 @@
 package domain
 
+const (
+	DatabaseTypePostgreSQL = "postgresql"
+	DatabaseTypeMySQL      = "mysql"
+	MaxPortNumber          = 65535
+	MaxDatabaseHostLength  = 255
+	MaxDatabaseNameLength  = 63
+	MaxDatabaseUserLength  = 63
+)
+
 type Database struct {
 	ID         uint
 	Port       uint
@@ -27,3 +36,22 @@ type DatabaseHost struct {
 	Type string `json:"type"`
 }
 
+func (d Database) Validate() error {
+	if d.Port == 0 || d.Port > MaxPortNumber {
+		return ErrInvalidInput
+	}
+	if d.Host == "" || d.User == "" || d.Name == "" {
+		return ErrInvalidInput
+	}
+	if len(d.Host) > MaxDatabaseHostLength || len(d.Name) > MaxDatabaseNameLength || len(d.User) > MaxDatabaseUserLength {
+		return ErrInvalidInput
+	}
+	if !IsValidDatabaseType(d.Type) {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+func IsValidDatabaseType(dbType string) bool {
+	return dbType == DatabaseTypePostgreSQL || dbType == DatabaseTypeMySQL
+}

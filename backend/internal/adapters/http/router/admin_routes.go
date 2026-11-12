@@ -5,37 +5,40 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func registerAdminRoutes(api *gin.RouterGroup, dependencies routerDependencies) {
-	admin := api.Group("/admin")
-	admin.Use(
-		middleware.Authenticate(dependencies.sessionService),
-		middleware.RequireAdmin(dependencies.userService),
-	)
+func registerAdminRoutes(protected *gin.RouterGroup, dependencies routerDependencies) {
+	admin := protected.Group("/admin", middleware.RequireAdmin())
 
 	registerAdminUserRoutes(admin, dependencies)
 	registerAdminGroupRoutes(admin, dependencies)
+	registerAdminUserGroupRoutes(admin, dependencies)
 	registerAdminDatabaseRoutes(admin, dependencies)
 }
 
 func registerAdminUserRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
 	users := admin.Group("/users")
-	users.GET("", dependencies.userHandler.List)
-	users.GET("/:userId", dependencies.userHandler.Get)
-	users.POST("", dependencies.userHandler.Create)
-	users.PATCH("/:userId", dependencies.userHandler.Update)
-	users.DELETE("/:userId", dependencies.userHandler.Delete)
-	users.PATCH("/:userId/role", dependencies.userHandler.SetRole)
+	users.GET("", dependencies.userHandler.GetAllUsers)
+	users.GET("/:id", dependencies.userHandler.GetUserByID)
+	users.POST("", dependencies.userHandler.CreateUser)
+	users.PATCH("/:id", dependencies.userHandler.UpdateUser)
+	users.DELETE("/:id", dependencies.userHandler.DeleteUser)
+	users.PATCH("/:id/role", dependencies.userHandler.UpdateUserRole)
 }
 
 func registerAdminGroupRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
 	groups := admin.Group("/groups")
-	groups.GET("", dependencies.groupHandler.List)
-	groups.GET("/:groupId", dependencies.groupHandler.Get)
-	groups.POST("", dependencies.groupHandler.Create)
-	groups.PATCH("/:groupId", dependencies.groupHandler.Update)
-	groups.DELETE("/:groupId", dependencies.groupHandler.Delete)
-	groups.POST("/:groupId/users/:userId", dependencies.groupHandler.AddUser)
-	groups.DELETE("/:groupId/users/:userId", dependencies.groupHandler.RemoveUser)
+	groups.GET("", dependencies.groupHandler.GetAllGroups)
+	groups.GET("/:id", dependencies.groupHandler.GetGroupByID)
+	groups.POST("", dependencies.groupHandler.CreateGroup)
+	groups.PATCH("/:id", dependencies.groupHandler.UpdateGroup)
+	groups.DELETE("/:id", dependencies.groupHandler.DeleteGroup)
+}
+
+func registerAdminUserGroupRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {
+	groups := admin.Group("/groups")
+	if dependencies.userGroupHandler != nil {
+		groups.POST("/:id/users/:user_id", dependencies.userGroupHandler.AddUser)
+		groups.DELETE("/:id/users/:user_id", dependencies.userGroupHandler.RemoveUser)
+	}
 }
 
 func registerAdminDatabaseRoutes(admin *gin.RouterGroup, dependencies routerDependencies) {

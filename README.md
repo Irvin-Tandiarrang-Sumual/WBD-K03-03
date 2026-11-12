@@ -59,13 +59,28 @@ Sistem secara otomatis menginisialisasi akun awal untuk pengujian:
 > - PostgreSQL Demo: `demo_postgres:5432` (User: `demo_user`, Password: `demo_password`, Database: `db1_pg`).
 > - MySQL Demo: `demo_mysql:3306` (User: `demo_user`, Password: `demo_password`, Database: `db2_mysql`).
 
-### 5. Rebuild
+### 5. Database Migration & Data Seeding
+Tersedia skrip mandiri untuk menjalankan migrasi dan seeding data tanpa bergantung pada startup server API:
+- **Migrasi Skema Database Internal:**
+  ```bash
+  make migrate
+  # atau dari folder backend:
+  cd backend && go run ./cmd/migrate
+  ```
+- **Seeding Data Demo / Pengujian:**
+  ```bash
+  make seed
+  # atau dari folder backend:
+  cd backend && go run ./cmd/seed
+  ```
+
+### 6. Rebuild
 Jika ada pembaruan kode pada backend atau frontend:
 ```bash
 docker compose build --no-cache app frontend && docker compose up -d
 ```
 
-### 6. Menghentikan Service
+### 7. Menghentikan Service
 Untuk menghentikan kontainer:
 ```bash
 docker compose down
@@ -175,7 +190,8 @@ swag init -g cmd/api/main.go -o docs/ --parseDependency --parseInternal
 | `GET` | `/api/v1/me/databases` | Mengambil daftar database yang dapat diakses pengguna | — |
 | `GET` | `/api/v1/me/databases/:database_id` | Mengambil detail database | `view_only` |
 | `POST` | `/api/v1/me/databases/:database_id/query` | Menjalankan query SQL kustom | `view_only` |
-| `POST` | `/api/v1/me/databases/:database_id/explain` | Menganalisis rencana eksekusi query (`EXPLAIN` / `EXPLAIN ANALYZE`) | `view_only` |
+| `POST` | `/api/v1/me/databases/:database_id/explain` | Menganalisis rencana eksekusi query (`EXPLAIN`) | `view_only` |
+| `POST` | `/api/v1/me/databases/:database_id/explain-analyze` | Menganalisis rencana eksekusi query dengan eksekusi nyata (`EXPLAIN ANALYZE`) | `view_only` |
 | `GET` | `/api/v1/me/databases/:database_id/migrations` | Mengambil daftar riwayat versi migrasi skema | `view_only` |
 | `POST` | `/api/v1/me/databases/:database_id/migrations` | Mengeksekusi migrasi skema baru | `view_edit` |
 | `GET` | `/api/v1/me/databases/:database_id/migrations/compare` | Membandingkan dua versi migrasi (Schema Diff) | `view_only` |

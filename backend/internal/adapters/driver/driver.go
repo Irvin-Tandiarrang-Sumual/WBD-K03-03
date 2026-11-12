@@ -63,58 +63,105 @@ func (m *DatabasePoolManager) CloseAll() error {
 	)
 }
 
-type DatabaseExecutor struct {
-	postgresqlExecutor *postgresqldriver.DatabaseExecutor
-	mysqlExecutor      *mysqldriver.DatabaseExecutor
+type DatabaseDriver struct {
+	postgresqlExecutor *postgresqldriver.ExecutorRepository
+	postgresqlDialect  *postgresqldriver.SQLDialect
+
+	mysqlExecutor *mysqldriver.ExecutorRepository
+	mysqlDialect  *mysqldriver.SQLDialect
 }
 
-var _ ports.DatabaseExecutor = (*DatabaseExecutor)(nil)
+var _ ports.DatabaseDriver = (*DatabaseDriver)(nil)
 
-func NewDatabaseExecutor(poolManager *DatabasePoolManager) *DatabaseExecutor {
-	return &DatabaseExecutor{
-		postgresqlExecutor: postgresqldriver.NewDatabaseExecutor(poolManager.postgresqlPoolManager),
-		mysqlExecutor:      mysqldriver.NewDatabaseExecutor(poolManager.mysqlPoolManager),
+func NewDatabaseDriver(poolManager *DatabasePoolManager) *DatabaseDriver {
+	pgExecutor := postgresqldriver.NewExecutorRepository(poolManager.postgresqlPoolManager)
+	myExecutor := mysqldriver.NewExecutorRepository(poolManager.mysqlPoolManager)
+
+	return &DatabaseDriver{
+		postgresqlExecutor: pgExecutor,
+		postgresqlDialect:  postgresqldriver.NewSQLDialect(pgExecutor),
+
+		mysqlExecutor: myExecutor,
+		mysqlDialect:  mysqldriver.NewSQLDialect(myExecutor),
 	}
 }
 
-func (e *DatabaseExecutor) ExecuteQuery(ctx context.Context, database domain.Database, query string, args ...any) (*ports.DatabaseQueryResult, error) {
-	executor, err := databaseExecutorForType(e, database.Type)
+func (d *DatabaseDriver) ExecuteQuery(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+	executor, err := d.executorForType(database.Type)
 	if err != nil {
 		return nil, err
 	}
-	return executor.ExecuteQuery(ctx, database, query, args...)
+	return executor.ExecuteQuery(ctx, database, query)
 }
 
-func (e *DatabaseExecutor) ExecuteCommand(ctx context.Context, database domain.Database, command string, args ...any) (*ports.DatabaseCommandResult, error) {
-	executor, err := databaseExecutorForType(e, database.Type)
+func (d *DatabaseDriver) ExecuteCommand(ctx context.Context, database domain.Database, command string) (*ports.DatabaseCommandResult, error) {
+	executor, err := d.executorForType(database.Type)
 	if err != nil {
 		return nil, err
 	}
-	return executor.ExecuteCommand(ctx, database, command, args...)
+	return executor.ExecuteCommand(ctx, database, command)
 }
 
-func (e *DatabaseExecutor) ExplainQuery(ctx context.Context, database domain.Database, query string, analyze bool, args ...any) (*ports.DatabaseQueryResult, error) {
-	executor, err := databaseExecutorForType(e, database.Type)
+func (d *DatabaseDriver) Explain(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+	executor, err := d.executorForType(database.Type)
 	if err != nil {
 		return nil, err
 	}
-	return executor.ExplainQuery(ctx, database, query, analyze, args...)
+	return executor.Explain(ctx, database, query)
 }
 
-func (e *DatabaseExecutor) GetDatabaseMetadata(ctx context.Context, database domain.Database) (*ports.DatabaseMetadata, error) {
-	executor, err := databaseExecutorForType(e, database.Type)
+func (d *DatabaseDriver) ExplainAnalyze(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+	executor, err := d.executorForType(database.Type)
 	if err != nil {
 		return nil, err
 	}
-	return executor.GetDatabaseMetadata(ctx, database)
+	return executor.ExplainAnalyze(ctx, database, query)
 }
 
-func databaseExecutorForType(executor *DatabaseExecutor, databaseType string) (ports.DatabaseExecutor, error) {
+func (d *DatabaseDriver) GetDatabaseMetadata(ctx context.Context, database domain.Database) (*ports.DatabaseMetadata, error) {
+	inspector, err := d.inspectorForType(database.Type)
+	if err != nil {
+		return nil, err
+	}
+	return inspector.GetDatabaseMetadata(ctx, database)
+}
+
+func (d *DatabaseDriver) GenerateSQLDown(ctx context.Context, database domain.Database, sqlUp string) (string, error) {
+	dialect, err := d.dialectForType(database.Type)
+	if err != nil {
+		return "", err
+	}
+	return dialect.GenerateSQLDown(ctx, database, sqlUp)
+}
+
+func (d *DatabaseDriver) executorForType(databaseType string) (ports.DatabaseExecutorRepository, error) {
 	switch databaseType {
 	case "mysql":
-		return executor.mysqlExecutor, nil
+		return d.mysqlExecutor, nil
 	case "postgresql":
-		return executor.postgresqlExecutor, nil
+		return d.postgresqlExecutor, nil
+	default:
+		return nil, errors.New("unsupported database type")
+	}
+}
+
+func (d *DatabaseDriver) inspectorForType(databaseType string) (ports.SchemaInspectorRepository, error) {
+	switch databaseType {
+	case "mysql":
+		return d.mysqlExecutor, nil
+	case "postgresql":
+		return d.postgresqlExecutor, nil
+	default:
+		return nil, errors.New("unsupported database type")
+	}
+}
+
+func (d *DatabaseDriver) dialectForType(databaseType string) (ports.SQLDialect, error) {
+	switch databaseType {
+	case "mysql":
+		return d.mysqlDialect, nil
+	case "postgresql":
+		return d.postgresqlDialect, nil
 	default:
 		return nil, errors.New("unsupported database type")
 	}

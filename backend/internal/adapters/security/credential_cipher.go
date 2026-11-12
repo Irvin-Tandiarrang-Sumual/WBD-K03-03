@@ -19,7 +19,6 @@ type AESGCMCipher struct {
 var _ ports.DatabaseCredentialCipher = (*AESGCMCipher)(nil)
 
 func NewAESGCMCipher(key []byte) (*AESGCMCipher, error) {
-
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("create AES cipher: %w", err)
@@ -34,7 +33,6 @@ func NewAESGCMCipher(key []byte) (*AESGCMCipher, error) {
 }
 
 func (c *AESGCMCipher) Encrypt(plaintext string) (string, error) {
-
 	nonce := make([]byte, c.aead.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("generate encryption nonce: %w", err)
@@ -50,7 +48,6 @@ func (c *AESGCMCipher) Encrypt(plaintext string) (string, error) {
 }
 
 func (c *AESGCMCipher) Decrypt(ciphertext string) (string, error) {
-
 	payload, err := base64.RawStdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", fmt.Errorf("decode credential ciphertext: %w", err)

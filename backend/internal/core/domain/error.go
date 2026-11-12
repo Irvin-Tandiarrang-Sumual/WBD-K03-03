@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	ErrInvalidGroupsIDs             = errors.New("Group ids are not valid")
@@ -11,11 +14,14 @@ var (
 	ErrLastAdmin                    = errors.New("At least one admin is required")
 	ErrDatabaseNotFound             = errors.New("Database is not found")
 	ErrInvalidInput                 = errors.New("Invalid input")
+	ErrPasswordTooLong              = fmt.Errorf("%w: Password must not exceed 72 bytes", ErrInvalidInput)
+	ErrPasswordEmpty                = fmt.Errorf("%w: Password cannot be empty", ErrInvalidInput)
 	ErrGroupNameTaken               = errors.New("Group name already used")
 	ErrInvalidDatabaseAccess        = errors.New("Invalid database access")
 	ErrMembershipExists             = errors.New("User is already a group member")
 	ErrMembershipNotFound           = errors.New("User is not a group member")
 	ErrDatabaseAccessDenied         = errors.New("Database access denied")
+	ErrAccessDenied                 = errors.New("Access denied")
 	ErrDatabaseAlreadyExists        = errors.New("Database already registered")
 	ErrDatabaseInUse                = errors.New("Database cannot be removed because a group would have no database")
 	ErrUsernameTaken                = errors.New("Username is already used")
@@ -35,4 +41,7 @@ var (
 	ErrSQLDownGenerationUnsupported = errors.New("SQL down generation is not supported for this statement")
 	ErrInvalidMigrationComparison   = errors.New("Migration comparison is not valid")
 	ErrMigrationRollbackUnavailable = errors.New("Migration rollback is not available")
+	ErrMigrationInProgress          = errors.New("A migration is currently in progress for this database")
+	ErrQueryTimeout                 = errors.New("Query execution timed out")
+	ErrInvalidCSRFToken             = errors.New("Invalid or missing CSRF token")
 )

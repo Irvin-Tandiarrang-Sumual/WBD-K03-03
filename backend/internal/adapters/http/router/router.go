@@ -1,13 +1,8 @@
 package router
 
 import (
-	authhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/auth"
-	databasehandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database"
-	databaseexecutorhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/database_executor"
-	grouphandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/group"
-	healthhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/health"
-	migrationhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/migration"
-	userhandler "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers/user"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -15,50 +10,61 @@ import (
 )
 
 type routerDependencies struct {
-	authHandler             *authhandler.AuthHandler
-	userHandler             *userhandler.UserHandler
-	groupHandler            *grouphandler.GroupHandler
-	databaseHandler         *databasehandler.DatabaseHandler
-	databaseExecutorHandler *databaseexecutorhandler.DatabaseExecutorHandler
-	migrationHandler        *migrationhandler.MigrationHandler
-	healthHandler           *healthhandler.HealthHandler
-	sessionService          ports.SessionService
-	userService             ports.UserService
-	groupService            ports.GroupService
+	authMiddleware        *middleware.AuthMiddleware
+	csrfMiddleware        *middleware.CSRFMiddleware
+	authHandler           *handlers.AuthHandler
+	userHandler           *handlers.UserHandler
+	groupHandler          *handlers.GroupHandler
+	userGroupHandler      *handlers.UserGroupHandler
+	databaseHandler       *handlers.DatabaseHandler
+	databaseDriverHandler *handlers.DatabaseDriverHandler
+	migrationHandler      *handlers.MigrationHandler
+	healthHandler         *handlers.HealthHandler
 }
 
 func SetupRouter(
 	engine *gin.Engine,
-	authHandler *authhandler.AuthHandler,
-	userHandler *userhandler.UserHandler,
-	groupHandler *grouphandler.GroupHandler,
-	databaseHandler *databasehandler.DatabaseHandler,
-	databaseExecutorHandler *databaseexecutorhandler.DatabaseExecutorHandler,
-	migrationHandler *migrationhandler.MigrationHandler,
-	healthHandler *healthhandler.HealthHandler,
+	authMiddleware *middleware.AuthMiddleware,
+	authHandler *handlers.AuthHandler,
+	userHandler *handlers.UserHandler,
+	groupHandler *handlers.GroupHandler,
+	userGroupHandler *handlers.UserGroupHandler,
+	databaseHandler *handlers.DatabaseHandler,
+	databaseDriverHandler *handlers.DatabaseDriverHandler,
+	migrationHandler *handlers.MigrationHandler,
+	healthHandler *handlers.HealthHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
-	groupService ports.GroupService,
+	csrfMiddleware *middleware.CSRFMiddleware,
 ) {
+
 	dependencies := routerDependencies{
-		authHandler:             authHandler,
-		userHandler:             userHandler,
-		groupHandler:            groupHandler,
-		databaseHandler:         databaseHandler,
-		databaseExecutorHandler: databaseExecutorHandler,
-		migrationHandler:        migrationHandler,
-		healthHandler:           healthHandler,
-		sessionService:          sessionService,
-		userService:             userService,
-		groupService:            groupService,
+		authMiddleware:        authMiddleware,
+		csrfMiddleware:        csrfMiddleware,
+		authHandler:           authHandler,
+		userHandler:           userHandler,
+		groupHandler:          groupHandler,
+		userGroupHandler:      userGroupHandler,
+		databaseHandler:       databaseHandler,
+		databaseDriverHandler: databaseDriverHandler,
+		migrationHandler:      migrationHandler,
+		healthHandler:         healthHandler,
 	}
+
+	engine.Use(middleware.ErrorHandler())
 
 	api := engine.Group("/api/v1")
 	registerHealthRoutes(api, dependencies)
-	registerAuthRoutes(api, dependencies)
-	registerAdminRoutes(api, dependencies)
-	registerAuthenticatedUserRoutes(api, dependencies)
 
-	// Swagger UI — accessible at /swagger/index.html
+	protected := api.Group("")
+	protected.Use(
+		dependencies.authMiddleware.Authenticate(),
+		dependencies.csrfMiddleware.Validate(),
+	)
+
+	registerAuthRoutes(api, protected, dependencies)
+	registerAdminRoutes(protected, dependencies)
+	registerAuthenticatedUserRoutes(protected, dependencies)
+
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }

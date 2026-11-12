@@ -31,18 +31,4 @@ type DatabaseRepository interface {
 	FindCredentialByHostAndPort(ctx context.Context, host string, port uint, user string) (string, error)
 	GetDistinctHosts(ctx context.Context) ([]domain.DatabaseHost, error)
 	ExistsAll(ctx context.Context, databaseIDs []uint) (bool, error)
-	CreateDatabase(ctx context.Context, database *domain.Database) (*domain.Database, error)
-}
-
-type DatabaseCredentialCipher interface {
-	Encrypt(plaintext string) (string, error)
-	Decrypt(ciphertext string) (string, error)
-}
-
-type DatabaseConnectionTester interface {
-	Test(ctx context.Context, database domain.Database) error
-}
-
-type DatabasePoolInvalidator interface {
-	Invalidate(databaseID uint) error
 }

@@ -1,0 +1,48 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-unit-test:
+    name: be unit test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'backend/go.mod'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Unit Tests with Coverage
+        run: |
+          cd backend
+          UNIT_PKGS=$(go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./...)
+          go test $UNIT_PKGS -v -count=1 -coverprofile=coverage.unit.out
+          go tool cover -func coverage.unit.out
+
+  backend-integration-test:
+    name: be integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'backend/go.mod'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Integration Tests
+        run: |
+          cd backend
+          go test -tags=integration -v ./test/integration/... -count=1

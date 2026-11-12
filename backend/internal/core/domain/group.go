@@ -1,5 +1,9 @@
 package domain
 
+const (
+	MaxGroupNameLength = 255
+)
+
 type AccessType string
 
 const (

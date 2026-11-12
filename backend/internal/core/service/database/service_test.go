@@ -12,569 +12,957 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
-func TestCreateValidatesTestsConnectionThenPersists(t *testing.T) {
-	var tested domain.Database
-
+func TestDatabaseService_CreateDatabase_ValidInput_NormalizesFieldsTestsConnectionAndPersists(t *testing.T) {
+	// Arrange
+	var testedDatabase domain.Database
 	tester := &testutil.DatabaseConnectionTester{
-		TestFunc: func(
-			_ context.Context,
-			database domain.Database,
-		) error {
-			tested = database
+		TestFunc: func(_ context.Context, db domain.Database) error {
+			testedDatabase = db
 			return nil
 		},
 	}
 
-	var persisted domain.Database
-
-	databases := &testutil.DatabaseRepository{
-		CreateFunc: func(
-			_ context.Context,
-			database domain.Database,
-		) (domain.Database, error) {
-			persisted = database
-			database.ID = 11
-			database.Password = ""
-
-			return database, nil
+	var savedDatabase domain.Database
+	repo := &testutil.DatabaseRepository{
+		SaveFunc: func(_ context.Context, db *domain.Database) (*domain.Database, error) {
+			savedDatabase = *db
+			persisted := *db
+			persisted.ID = 11
+			persisted.Password = ""
+			return &persisted, nil
 		},
 	}
 
 	service := databaseservice.NewDatabaseService(
-		databases,
+		repo,
 		tester,
-		&testutil.GroupRepository{},
+		&testutil.UserGroupRepository{},
 		&testutil.SessionService{},
 		&testutil.DatabasePoolInvalidator{},
 	)
 
-	created, err := service.CreateDatabase(
-		context.Background(),
-		&domain.CreateDatabaseInput{
-			Port:     5432,
-			Host:     " localhost ",
-			User:     " postgres ",
-			Password: "secret",
-			Name:     " appdb ",
-		},
-	)
+	input := &domain.CreateDatabaseInput{
+		Port:     5432,
+		Host:     " localhost ",
+		User:     " postgres ",
+		Password: "secret",
+		Name:     " appdb ",
+	}
 
+	// Act
+	created, err := service.CreateDatabase(context.Background(), input)
+
+	// Assert
 	if err != nil {
-		t.Fatalf("Create() error = %v", err)
+		t.Fatalf("unexpected CreateDatabase() error: %v", err)
 	}
-
-	if tested.Type != "postgresql" ||
-		persisted.Type != "postgresql" {
-		t.Fatalf(
-			"default type not applied: tested=%+v persisted=%+v",
-			tested,
-			persisted,
-		)
+	if testedDatabase.Type != domain.DatabaseTypePostgreSQL || savedDatabase.Type != domain.DatabaseTypePostgreSQL {
+		t.Fatalf("expected default type %q, got tested=%q saved=%q", domain.DatabaseTypePostgreSQL, testedDatabase.Type, savedDatabase.Type)
 	}
-
-	if persisted.Host != "localhost" ||
-		persisted.User != "postgres" ||
-		persisted.Name != "appdb" {
-		t.Fatalf(
-			"input was not normalized: %+v",
-			persisted,
-		)
+	if savedDatabase.Host != "localhost" || savedDatabase.User != "postgres" || savedDatabase.Name != "appdb" {
+		t.Fatalf("expected fields to be trimmed, got %+v", savedDatabase)
 	}
-
 	if created.ID != 11 {
-		t.Fatalf(
-			"ID = %d, want 11",
-			created.ID,
-		)
+		t.Fatalf("expected created database ID 11, got: %d", created.ID)
+	}
+	if created.Password != "" {
+		t.Fatalf("expected password to be cleared on return value, got: %q", created.Password)
 	}
 }
 
-func TestCreateStopsWhenConnectionTestFails(t *testing.T) {
-	wantErr := errors.New("cannot connect")
-
+func TestDatabaseService_CreateDatabase_EmptyType_DefaultsToPostgresql(t *testing.T) {
+	// Arrange
+	var savedType string
+	repo := &testutil.DatabaseRepository{
+		SaveFunc: func(_ context.Context, db *domain.Database) (*domain.Database, error) {
+			savedType = db.Type
+			return db, nil
+		},
+	}
 	tester := &testutil.DatabaseConnectionTester{
-		TestFunc: func(
-			context.Context,
-			domain.Database,
-		) error {
-			return wantErr
-		},
+		TestFunc: func(context.Context, domain.Database) error { return nil },
+	}
+	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
+
+	input := &domain.CreateDatabaseInput{
+		Port: 5432,
+		Host: "localhost",
+		User: "postgres",
+		Name: "testdb",
+		Type: "",
 	}
 
-	createCalled := false
+	// Act
+	_, err := service.CreateDatabase(context.Background(), input)
 
-	databases := &testutil.DatabaseRepository{
-		CreateFunc: func(
-			context.Context,
-			domain.Database,
-		) (domain.Database, error) {
-			createCalled = true
-			return domain.Database{}, nil
-		},
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	service := databaseservice.NewDatabaseService(
-		databases,
-		tester,
-		&testutil.GroupRepository{},
-		&testutil.SessionService{},
-		&testutil.DatabasePoolInvalidator{},
-	)
-
-	_, err := service.CreateDatabase(
-		context.Background(),
-		&domain.CreateDatabaseInput{
-			Port: 5432,
-			Host: "localhost",
-			User: "postgres",
-			Name: "db",
-		},
-	)
-
-	if !errors.Is(err, wantErr) {
-		t.Fatalf(
-			"error = %v, want %v",
-			err,
-			wantErr,
-		)
-	}
-
-	if createCalled {
-		t.Fatal(
-			"repository Create() must not run after failed connection test",
-		)
+	if savedType != domain.DatabaseTypePostgreSQL {
+		t.Fatalf("expected default type %q, got: %q", domain.DatabaseTypePostgreSQL, savedType)
 	}
 }
 
-func TestCreateRejectsInvalidInputBeforeConnectionTest(t *testing.T) {
-	testCalled := false
-
-	tester := &testutil.DatabaseConnectionTester{
-		TestFunc: func(
-			context.Context,
-			domain.Database,
-		) error {
-			testCalled = true
-			return nil
+func TestDatabaseService_CreateDatabase_ExplicitTypeUppercase_NormalizesToLowercase(t *testing.T) {
+	// Arrange
+	var savedType string
+	repo := &testutil.DatabaseRepository{
+		SaveFunc: func(_ context.Context, db *domain.Database) (*domain.Database, error) {
+			savedType = db.Type
+			return db, nil
 		},
 	}
+	tester := &testutil.DatabaseConnectionTester{
+		TestFunc: func(context.Context, domain.Database) error { return nil },
+	}
+	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
 
-	service := databaseservice.NewDatabaseService(
-		&testutil.DatabaseRepository{},
-		tester,
-		&testutil.GroupRepository{},
-		&testutil.SessionService{},
-		&testutil.DatabasePoolInvalidator{},
-	)
+	input := &domain.CreateDatabaseInput{
+		Port: 3306,
+		Host: "localhost",
+		User: "root",
+		Name: "testdb",
+		Type: " MySQL ",
+	}
 
-	_, err := service.CreateDatabase(
-		context.Background(),
-		&domain.CreateDatabaseInput{
-			Port: 0,
-			Host: "localhost",
-			User: "postgres",
-			Name: "db",
-		},
-	)
+	// Act
+	_, err := service.CreateDatabase(context.Background(), input)
 
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if savedType != domain.DatabaseTypeMySQL {
+		t.Fatalf("expected normalized type %q, got: %q", domain.DatabaseTypeMySQL, savedType)
+	}
+}
+
+func TestDatabaseService_CreateDatabase_NilInput_ReturnsErrInvalidDatabaseInput(t *testing.T) {
+	// Arrange
+	service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, nil, nil, nil, nil)
+
+	// Act
+	created, err := service.CreateDatabase(context.Background(), nil)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDatabaseInput) {
+		t.Fatalf("expected ErrInvalidDatabaseInput, got: %v", err)
+	}
+	if created != nil {
+		t.Fatalf("expected nil created database, got: %+v", created)
+	}
+}
+
+func TestDatabaseService_CreateDatabase_InvalidPortZeroOrTooLarge_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	cases := []struct {
+		name string
+		port uint
+	}{
+		{name: "port zero", port: 0},
+		{name: "port exceeding 65535", port: domain.MaxPortNumber + 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, nil, nil, nil, nil)
+			input := &domain.CreateDatabaseInput{
+				Port: tc.port,
+				Host: "localhost",
+				User: "postgres",
+				Name: "testdb",
+			}
+
+			// Act
+			created, err := service.CreateDatabase(context.Background(), input)
+
+			// Assert
+			if !errors.Is(err, domain.ErrInvalidInput) {
+				t.Fatalf("expected ErrInvalidInput for %s, got: %v", tc.name, err)
+			}
+			if created != nil {
+				t.Fatalf("expected nil result, got: %+v", created)
+			}
+		})
+	}
+}
+
+func TestDatabaseService_CreateDatabase_MissingRequiredFields_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	cases := []struct {
+		name  string
+		input domain.CreateDatabaseInput
+	}{
+		{name: "empty host", input: domain.CreateDatabaseInput{Port: 5432, Host: "   ", User: "postgres", Name: "appdb"}},
+		{name: "empty user", input: domain.CreateDatabaseInput{Port: 5432, Host: "localhost", User: "   ", Name: "appdb"}},
+		{name: "empty name", input: domain.CreateDatabaseInput{Port: 5432, Host: "localhost", User: "postgres", Name: "   "}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			testerCalled := false
+			tester := &testutil.DatabaseConnectionTester{
+				TestFunc: func(context.Context, domain.Database) error {
+					testerCalled = true
+					return nil
+				},
+			}
+			service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, tester, nil, nil, nil)
+
+			// Act
+			created, err := service.CreateDatabase(context.Background(), &tc.input)
+
+			// Assert
+			if !errors.Is(err, domain.ErrInvalidInput) {
+				t.Fatalf("expected ErrInvalidInput, got: %v", err)
+			}
+			if testerCalled {
+				t.Fatal("connection tester must not be called when validation fails")
+			}
+			if created != nil {
+				t.Fatalf("expected nil result, got: %+v", created)
+			}
+		})
+	}
+}
+
+func TestDatabaseService_CreateDatabase_UnsupportedDatabaseType_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, nil, nil, nil, nil)
+	input := &domain.CreateDatabaseInput{
+		Port: 5432,
+		Host: "localhost",
+		User: "postgres",
+		Name: "appdb",
+		Type: "sqlite",
+	}
+
+	// Act
+	created, err := service.CreateDatabase(context.Background(), input)
+
+	// Assert
 	if !errors.Is(err, domain.ErrInvalidInput) {
-		t.Fatalf(
-			"error = %v, want ErrInvalidInput",
-			err,
-		)
+		t.Fatalf("expected ErrInvalidInput for unsupported database type, got: %v", err)
 	}
-
-	if testCalled {
-		t.Fatal(
-			"connection tester must not run for invalid input",
-		)
+	if created != nil {
+		t.Fatalf("expected nil result, got: %+v", created)
 	}
 }
 
-func TestDeleteRejectsDatabaseThatWouldLeaveGroupEmpty(t *testing.T) {
-	databases := &testutil.DatabaseRepository{
-		FindByIDFunc: func(
-			context.Context,
-			uint,
-		) (domain.Database, error) {
-			return domain.Database{
-				ID: 9,
-			}, nil
+func TestDatabaseService_CreateDatabase_FieldExceedsMaxLength_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	cases := []struct {
+		name  string
+		input domain.CreateDatabaseInput
+	}{
+		{
+			name: "host exceeds 255 chars",
+			input: domain.CreateDatabaseInput{
+				Port: 5432, Host: string(make([]byte, domain.MaxDatabaseHostLength+1)), User: "postgres", Name: "appdb",
+			},
+		},
+		{
+			name: "name exceeds 63 chars",
+			input: domain.CreateDatabaseInput{
+				Port: 5432, Host: "localhost", User: "postgres", Name: string(make([]byte, domain.MaxDatabaseNameLength+1)),
+			},
+		},
+		{
+			name: "user exceeds 63 chars",
+			input: domain.CreateDatabaseInput{
+				Port: 5432, Host: "localhost", User: string(make([]byte, domain.MaxDatabaseUserLength+1)), Name: "appdb",
+			},
 		},
 	}
 
-	groups := &testutil.GroupRepository{
-		HasGroupWithOnlyDatabaseFunc: func(
-			context.Context,
-			uint,
-		) (bool, error) {
-			return true, nil
-		},
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, nil, nil, nil, nil)
 
-	service := databaseservice.NewDatabaseService(
-		databases,
-		&testutil.DatabaseConnectionTester{},
-		groups,
-		&testutil.SessionService{},
-		&testutil.DatabasePoolInvalidator{},
-	)
+			// Act
+			created, err := service.CreateDatabase(context.Background(), &tc.input)
 
-	err := service.DeleteDatabase(
-		context.Background(),
-		9,
-	)
-
-	if !errors.Is(err, domain.ErrDatabaseInUse) {
-		t.Fatalf(
-			"error = %v, want ErrDatabaseInUse",
-			err,
-		)
+			// Assert
+			if !errors.Is(err, domain.ErrInvalidInput) {
+				t.Fatalf("expected ErrInvalidInput for %s, got: %v", tc.name, err)
+			}
+			if created != nil {
+				t.Fatalf("expected nil result, got: %+v", created)
+			}
+		})
 	}
 }
 
-func TestDeleteInvalidatesPoolDeletesAndRevokesAffectedUsers(t *testing.T) {
-	var steps []string
-
-	databases := &testutil.DatabaseRepository{
-		FindByIDFunc: func(
-			context.Context,
-			uint,
-		) (domain.Database, error) {
-			return domain.Database{
-				ID: 9,
-			}, nil
+func TestDatabaseService_CreateDatabase_EmptyPasswordWithExistingCredential_AutoEnrichesPasswordBeforeTesting(t *testing.T) {
+	// Arrange
+	var testedPassword, savedPassword string
+	tester := &testutil.DatabaseConnectionTester{
+		TestFunc: func(_ context.Context, db domain.Database) error {
+			testedPassword = db.Password
+			return nil
 		},
+	}
+	repo := &testutil.DatabaseRepository{
+		FindCredentialByHostAndPortFunc: func(_ context.Context, host string, port uint, user string) (string, error) {
+			if host == "db.internal" && port == 5432 && user == "appuser" {
+				return "reused-secret-password", nil
+			}
+			return "", nil
+		},
+		SaveFunc: func(_ context.Context, db *domain.Database) (*domain.Database, error) {
+			savedPassword = db.Password
+			return db, nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
 
-		DeleteFunc: func(
-			context.Context,
-			uint,
-		) error {
-			steps = append(
-				steps,
-				"delete",
-			)
+	input := &domain.CreateDatabaseInput{
+		Host:     "db.internal",
+		Port:     5432,
+		User:     "appuser",
+		Password: "", // empty to trigger auto-enrichment
+		Name:     "customer_db",
+	}
 
+	// Act
+	_, err := service.CreateDatabase(context.Background(), input)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected CreateDatabase() error: %v", err)
+	}
+	if testedPassword != "reused-secret-password" {
+		t.Fatalf("connection tester received %q, want 'reused-secret-password'", testedPassword)
+	}
+	if savedPassword != "reused-secret-password" {
+		t.Fatalf("saved database received %q, want 'reused-secret-password'", savedPassword)
+	}
+}
+
+func TestDatabaseService_CreateDatabase_EmptyPasswordWithoutExistingCredential_ProceedsWithEmptyPassword(t *testing.T) {
+	// Arrange
+	var testedPassword string
+	tester := &testutil.DatabaseConnectionTester{
+		TestFunc: func(_ context.Context, db domain.Database) error {
+			testedPassword = db.Password
+			return nil
+		},
+	}
+	repo := &testutil.DatabaseRepository{
+		FindCredentialByHostAndPortFunc: func(context.Context, string, uint, string) (string, error) {
+			return "", nil // no existing credentials found
+		},
+		SaveFunc: func(_ context.Context, db *domain.Database) (*domain.Database, error) {
+			return db, nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
+
+	input := &domain.CreateDatabaseInput{
+		Host:     "localhost",
+		Port:     5432,
+		User:     "postgres",
+		Password: "",
+		Name:     "local_db",
+	}
+
+	// Act
+	_, err := service.CreateDatabase(context.Background(), input)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if testedPassword != "" {
+		t.Fatalf("expected empty password for tester, got: %q", testedPassword)
+	}
+}
+
+func TestDatabaseService_CreateDatabase_ConnectionTesterFails_PropagatesErrorAndDoesNotPersist(t *testing.T) {
+	// Arrange
+	connErr := errors.New("connection refused by host")
+	tester := &testutil.DatabaseConnectionTester{
+		TestFunc: func(context.Context, domain.Database) error {
+			return connErr
+		},
+	}
+	saveCalled := false
+	repo := &testutil.DatabaseRepository{
+		SaveFunc: func(context.Context, *domain.Database) (*domain.Database, error) {
+			saveCalled = true
+			return nil, nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
+
+	input := &domain.CreateDatabaseInput{
+		Port: 5432,
+		Host: "localhost",
+		User: "postgres",
+		Name: "appdb",
+	}
+
+	// Act
+	created, err := service.CreateDatabase(context.Background(), input)
+
+	// Assert
+	if !errors.Is(err, connErr) {
+		t.Fatalf("expected connection error %v, got: %v", connErr, err)
+	}
+	if saveCalled {
+		t.Fatal("repository Save must not be called when connection test fails")
+	}
+	if created != nil {
+		t.Fatalf("expected nil created database, got: %+v", created)
+	}
+}
+
+func TestDatabaseService_CreateDatabase_RepositorySaveFails_PropagatesError(t *testing.T) {
+	// Arrange
+	saveErr := errors.New("database duplicate key error")
+	tester := &testutil.DatabaseConnectionTester{
+		TestFunc: func(context.Context, domain.Database) error { return nil },
+	}
+	repo := &testutil.DatabaseRepository{
+		SaveFunc: func(context.Context, *domain.Database) (*domain.Database, error) {
+			return nil, saveErr
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
+
+	input := &domain.CreateDatabaseInput{
+		Port: 5432,
+		Host: "localhost",
+		User: "postgres",
+		Name: "appdb",
+	}
+
+	// Act
+	created, err := service.CreateDatabase(context.Background(), input)
+
+	// Assert
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected save error %v, got: %v", saveErr, err)
+	}
+	if created != nil {
+		t.Fatalf("expected nil result on save failure, got: %+v", created)
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_ValidIDAndNotInUse_InvalidatesPoolDeletesAndRevokesAffectedUsers(t *testing.T) {
+	// Arrange
+	var executionOrder []string
+
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(_ context.Context, id uint) (*domain.Database, error) {
+			if id != 9 {
+				t.Fatalf("expected id 9, got: %d", id)
+			}
+			return &domain.Database{ID: 9, Name: "to-delete"}, nil
+		},
+		DeleteFunc: func(_ context.Context, id uint) error {
+			executionOrder = append(executionOrder, "delete")
 			return nil
 		},
 	}
 
-	groups := &testutil.GroupRepository{
-		HasGroupWithOnlyDatabaseFunc: func(
-			context.Context,
-			uint,
-		) (bool, error) {
-			return false, nil
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) {
+			return false, nil // not in use as sole database
 		},
-
-		ListUserIDsByDatabaseFunc: func(
-			context.Context,
-			uint,
-		) ([]uint, error) {
-			return []uint{2, 3}, nil
+		FindAllUserIDsByDatabaseIDFunc: func(context.Context, uint) ([]uint, error) {
+			return []uint{101, 102}, nil
 		},
 	}
 
 	pools := &testutil.DatabasePoolInvalidator{
-		InvalidateFunc: func(
-			uint,
-		) error {
-			steps = append(
-				steps,
-				"invalidate",
-			)
-
+		InvalidateFunc: func(id uint) error {
+			executionOrder = append(executionOrder, "invalidate")
 			return nil
 		},
 	}
 
+	var revokedUserIDs []uint
 	sessions := &testutil.SessionService{
-		RevokeUserFunc: func(
-			_ context.Context,
-			userID uint,
-		) error {
-			steps = append(
-				steps,
-				"revoke",
-			)
-
+		RevokeUsersFunc: func(_ context.Context, userIDs []uint) error {
+			executionOrder = append(executionOrder, "revoke")
+			revokedUserIDs = userIDs
 			return nil
 		},
 	}
 
-	service := databaseservice.NewDatabaseService(
-		databases,
-		&testutil.DatabaseConnectionTester{},
-		groups,
-		sessions,
-		pools,
-	)
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, sessions, pools)
 
-	if err := service.DeleteDatabase(
-		context.Background(),
-		9,
-	); err != nil {
-		t.Fatalf(
-			"Delete() error = %v",
-			err,
-		)
+	// Act
+	err := service.DeleteDatabase(context.Background(), 9)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected DeleteDatabase() error: %v", err)
 	}
-
-	want := []string{
-		"invalidate",
-		"delete",
-		"revoke",
-		"revoke",
+	wantOrder := []string{"invalidate", "delete", "revoke"}
+	if !reflect.DeepEqual(executionOrder, wantOrder) {
+		t.Fatalf("execution order = %v, want %v", executionOrder, wantOrder)
 	}
-
-	if !reflect.DeepEqual(steps, want) {
-		t.Fatalf(
-			"steps = %v, want %v",
-			steps,
-			want,
-		)
+	if !reflect.DeepEqual(revokedUserIDs, []uint{101, 102}) {
+		t.Fatalf("revoked user IDs = %v, want [101 102]", revokedUserIDs)
 	}
 }
-func TestDatabaseReadMethodsDelegateToRepository(t *testing.T) {
-	params := pagination.NewPaginationParams(2, 5)
-	database := &domain.Database{ID: 7, Name: "target"}
-	repository := &testutil.DatabaseRepository{
+
+func TestDatabaseService_DeleteDatabase_NoAffectedUsers_DeletesDatabaseWithoutCallingRevokeUsers(t *testing.T) {
+	// Arrange
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 5}, nil
+		},
+		DeleteFunc: func(context.Context, uint) error { return nil },
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) { return false, nil },
+		FindAllUserIDsByDatabaseIDFunc: func(context.Context, uint) ([]uint, error) {
+			return []uint{}, nil // no affected users
+		},
+	}
+	pools := &testutil.DatabasePoolInvalidator{
+		InvalidateFunc: func(uint) error { return nil },
+	}
+	revokeCalled := false
+	sessions := &testutil.SessionService{
+		RevokeUsersFunc: func(context.Context, []uint) error {
+			revokeCalled = true
+			return nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, sessions, pools)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 5)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected DeleteDatabase() error: %v", err)
+	}
+	if revokeCalled {
+		t.Fatal("sessionService.RevokeUsers must not be called when affected user IDs list is empty")
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_NilUserGroupsRepository_ProceedsWithoutInUseCheck(t *testing.T) {
+	// Arrange
+	deleted := false
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 5}, nil
+		},
+		DeleteFunc: func(context.Context, uint) error {
+			deleted = true
+			return nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 5)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected DeleteDatabase() error: %v", err)
+	}
+	if !deleted {
+		t.Fatal("expected database to be deleted when user groups repo is nil")
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_DatabaseNotFound_ReturnsErrorWithoutAttemptingDelete(t *testing.T) {
+	// Arrange
+	notFoundErr := domain.ErrDatabaseNotFound
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return nil, notFoundErr
+		},
+		DeleteFunc: func(context.Context, uint) error {
+			t.Fatal("repository Delete must not be called when database does not exist")
+			return nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 999)
+
+	// Assert
+	if !errors.Is(err, notFoundErr) {
+		t.Fatalf("expected ErrDatabaseNotFound, got: %v", err)
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_DatabaseInUseByGroup_ReturnsErrDatabaseInUse(t *testing.T) {
+	// Arrange
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 3}, nil
+		},
+		DeleteFunc: func(context.Context, uint) error {
+			t.Fatal("repository Delete must not be called when database is in use")
+			return nil
+		},
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) {
+			return true, nil // leaves a group without any database!
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, nil, nil)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 3)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDatabaseInUse) {
+		t.Fatalf("expected ErrDatabaseInUse, got: %v", err)
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_GroupRepositoryFailsInUseCheck_PropagatesError(t *testing.T) {
+	// Arrange
+	groupErr := errors.New("group query failed")
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 3}, nil
+		},
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) {
+			return false, groupErr
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, nil, nil)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 3)
+
+	// Assert
+	if !errors.Is(err, groupErr) {
+		t.Fatalf("expected group error %v, got: %v", groupErr, err)
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_UserGroupRepositoryFailsUserLookup_PropagatesError(t *testing.T) {
+	// Arrange
+	lookupErr := errors.New("user lookup failed")
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 3}, nil
+		},
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) { return false, nil },
+		FindAllUserIDsByDatabaseIDFunc: func(context.Context, uint) ([]uint, error) {
+			return nil, lookupErr
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, nil, nil)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 3)
+
+	// Assert
+	if !errors.Is(err, lookupErr) {
+		t.Fatalf("expected lookup error %v, got: %v", lookupErr, err)
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_PoolInvalidatorFails_PropagatesErrorAndDoesNotDelete(t *testing.T) {
+	// Arrange
+	poolErr := errors.New("connection pool drain timeout")
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 4}, nil
+		},
+		DeleteFunc: func(context.Context, uint) error {
+			t.Fatal("repository Delete must not be called when pool invalidation fails")
+			return nil
+		},
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) { return false, nil },
+		FindAllUserIDsByDatabaseIDFunc:   func(context.Context, uint) ([]uint, error) { return []uint{1}, nil },
+	}
+	pools := &testutil.DatabasePoolInvalidator{
+		InvalidateFunc: func(uint) error { return poolErr },
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, nil, pools)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 4)
+
+	// Assert
+	if !errors.Is(err, poolErr) {
+		t.Fatalf("expected pool error %v, got: %v", poolErr, err)
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_RepositoryDeleteFails_PropagatesErrorAndDoesNotRevokeUsers(t *testing.T) {
+	// Arrange
+	deleteErr := errors.New("foreign key constraint violation on delete")
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 4}, nil
+		},
+		DeleteFunc: func(context.Context, uint) error { return deleteErr },
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) { return false, nil },
+		FindAllUserIDsByDatabaseIDFunc:   func(context.Context, uint) ([]uint, error) { return []uint{1}, nil },
+	}
+	pools := &testutil.DatabasePoolInvalidator{
+		InvalidateFunc: func(uint) error { return nil },
+	}
+	revokeCalled := false
+	sessions := &testutil.SessionService{
+		RevokeUsersFunc: func(context.Context, []uint) error {
+			revokeCalled = true
+			return nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, sessions, pools)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 4)
+
+	// Assert
+	if !errors.Is(err, deleteErr) {
+		t.Fatalf("expected delete error %v, got: %v", deleteErr, err)
+	}
+	if revokeCalled {
+		t.Fatal("RevokeUsers must not be called when repository Delete fails")
+	}
+}
+
+func TestDatabaseService_DeleteDatabase_SessionServiceRevokeUsersFails_PropagatesError(t *testing.T) {
+	// Arrange
+	revokeErr := errors.New("session revocation store timeout")
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 4}, nil
+		},
+		DeleteFunc: func(context.Context, uint) error { return nil },
+	}
+	userGroups := &testutil.UserGroupRepository{
+		HasGroupWithOnlyThisDatabaseFunc: func(context.Context, uint) (bool, error) { return false, nil },
+		FindAllUserIDsByDatabaseIDFunc:   func(context.Context, uint) ([]uint, error) { return []uint{1}, nil },
+	}
+	pools := &testutil.DatabasePoolInvalidator{
+		InvalidateFunc: func(uint) error { return nil },
+	}
+	sessions := &testutil.SessionService{
+		RevokeUsersFunc: func(context.Context, []uint) error { return revokeErr },
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, sessions, pools)
+
+	// Act
+	err := service.DeleteDatabase(context.Background(), 4)
+
+	// Assert
+	if !errors.Is(err, revokeErr) {
+		t.Fatalf("expected revoke error %v, got: %v", revokeErr, err)
+	}
+}
+
+func TestDatabaseService_GetDatabaseByID_ExistingID_ReturnsDatabase(t *testing.T) {
+	// Arrange
+	expectedDB := &domain.Database{ID: 7, Name: "prod_db", Port: 5432, Host: "db.prod"}
+	repo := &testutil.DatabaseRepository{
 		FindByIdFunc: func(_ context.Context, id uint) (*domain.Database, error) {
 			if id != 7 {
-				t.Fatalf("FindById id=%d", id)
+				t.Fatalf("expected id 7, got: %d", id)
 			}
-			return database, nil
-		},
-		FindAllFunc: func(_ context.Context, got pagination.PaginationParams) ([]*domain.Database, int64, error) {
-			if got != params {
-				t.Fatalf("FindAll params=%+v want=%+v", got, params)
-			}
-			return []*domain.Database{database}, 1, nil
-		},
-		FindAllByUserIDFunc: func(_ context.Context, userID uint, got pagination.PaginationParams) ([]*domain.Database, int64, error) {
-			if userID != 3 || got != params {
-				t.Fatalf("FindAllByUserID userID=%d params=%+v", userID, got)
-			}
-			return []*domain.Database{database}, 1, nil
-		},
-		FindByIDAndUserIDFunc: func(_ context.Context, databaseID uint, userID uint) (*domain.Database, error) {
-			if databaseID != 7 || userID != 3 {
-				t.Fatalf("FindByIDAndUserID databaseID=%d userID=%d", databaseID, userID)
-			}
-			return database, nil
+			return expectedDB, nil
 		},
 	}
-	service := databaseservice.NewDatabaseService(repository, nil, nil, nil, nil)
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
 
-	if got, err := service.GetDatabaseByID(context.Background(), 7); err != nil || got != database {
-		t.Fatalf("GetDatabaseByID got=%v err=%v", got, err)
-	}
-	if got, total, err := service.GetAllDatabases(context.Background(), params); err != nil || total != 1 || len(got) != 1 {
-		t.Fatalf("GetAllDatabases got=%v total=%d err=%v", got, total, err)
-	}
-	if got, total, err := service.GetDatabasesByUserID(context.Background(), 3, params); err != nil || total != 1 || len(got) != 1 {
-		t.Fatalf("GetDatabasesByUserID got=%v total=%d err=%v", got, total, err)
-	}
-	if got, err := service.GetDatabaseByIDAndUserID(context.Background(), 7, 3); err != nil || got != database {
-		t.Fatalf("GetDatabaseByIDAndUserID got=%v err=%v", got, err)
-	}
-}
+	// Act
+	db, err := service.GetDatabaseByID(context.Background(), 7)
 
-func TestCreateRejectsNilInput(t *testing.T) {
-	service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, nil, nil, nil, nil)
-	_, err := service.CreateDatabase(context.Background(), nil)
-	if !errors.Is(err, domain.ErrInvalidDatabaseInput) {
-		t.Fatalf("error=%v, want ErrInvalidDatabaseInput", err)
-	}
-}
-
-func TestCreateNormalizesExplicitDatabaseType(t *testing.T) {
-	var saved domain.Database
-	repository := &testutil.DatabaseRepository{
-		CreateDatabaseFunc: func(_ context.Context, database *domain.Database) (*domain.Database, error) {
-			saved = *database
-			result := *database
-			result.ID = 20
-			return &result, nil
-		},
-	}
-	service := databaseservice.NewDatabaseService(repository, nil, nil, nil, nil)
-
-	created, err := service.CreateDatabase(context.Background(), &domain.CreateDatabaseInput{
-		Port: 3306, Host: " db.local ", User: " root ", Password: "pw", Type: " MySQL ", Name: " store ",
-	})
+	// Assert
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if saved.Type != "mysql" || saved.Host != "db.local" || saved.User != "root" || saved.Name != "store" || created.ID != 20 {
-		t.Fatalf("saved=%+v created=%+v", saved, created)
-	}
-}
-
-func TestCreateRejectsInvalidDatabaseFields(t *testing.T) {
-	tests := []struct {
-		name  string
-		input domain.CreateDatabaseInput
-	}{
-		{name: "port zero", input: domain.CreateDatabaseInput{Host: "h", User: "u", Name: "n"}},
-		{name: "port too large", input: domain.CreateDatabaseInput{Port: 65536, Host: "h", User: "u", Name: "n"}},
-		{name: "host empty", input: domain.CreateDatabaseInput{Port: 5432, User: "u", Name: "n"}},
-		{name: "user empty", input: domain.CreateDatabaseInput{Port: 5432, Host: "h", Name: "n"}},
-		{name: "name empty", input: domain.CreateDatabaseInput{Port: 5432, Host: "h", User: "u"}},
-		{name: "unsupported type", input: domain.CreateDatabaseInput{Port: 5432, Host: "h", User: "u", Name: "n", Type: "sqlite"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := databaseservice.NewDatabaseService(&testutil.DatabaseRepository{}, nil, nil, nil, nil)
-			_, err := service.CreateDatabase(context.Background(), &tt.input)
-			if !errors.Is(err, domain.ErrInvalidInput) {
-				t.Fatalf("error=%v, want ErrInvalidInput", err)
-			}
-		})
+	if db != expectedDB {
+		t.Fatalf("expected database %+v, got: %+v", expectedDB, db)
 	}
 }
 
-func TestCreatePropagatesRepositoryError(t *testing.T) {
-	wantErr := errors.New("insert failed")
-	repository := &testutil.DatabaseRepository{
-		CreateDatabaseFunc: func(context.Context, *domain.Database) (*domain.Database, error) {
-			return nil, wantErr
+func TestDatabaseService_GetDatabaseByID_NonExistentID_PropagatesError(t *testing.T) {
+	// Arrange
+	notFoundErr := domain.ErrDatabaseNotFound
+	repo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return nil, notFoundErr
 		},
 	}
-	service := databaseservice.NewDatabaseService(repository, nil, nil, nil, nil)
-	_, err := service.CreateDatabase(context.Background(), &domain.CreateDatabaseInput{Port: 5432, Host: "localhost", User: "postgres", Name: "db"})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error=%v want=%v", err, wantErr)
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	db, err := service.GetDatabaseByID(context.Background(), 999)
+
+	// Assert
+	if !errors.Is(err, notFoundErr) {
+		t.Fatalf("expected ErrDatabaseNotFound, got: %v", err)
+	}
+	if db != nil {
+		t.Fatalf("expected nil database on error, got: %+v", db)
 	}
 }
 
-func TestDeleteStopsAtEachFailedDependency(t *testing.T) {
-	tests := []struct {
-		name       string
-		findErr    error
-		onlyErr    error
-		listErr    error
-		invalidate error
-		deleteErr  error
-		revokeErr  error
-		wantErr    error
-	}{
-		{name: "database lookup", findErr: domain.ErrDatabaseNotFound, wantErr: domain.ErrDatabaseNotFound},
-		{name: "group invariant lookup", onlyErr: errors.New("group lookup"), wantErr: errors.New("group lookup")},
-		{name: "affected users lookup", listErr: errors.New("users lookup"), wantErr: errors.New("users lookup")},
-		{name: "pool invalidation", invalidate: errors.New("pool failure"), wantErr: errors.New("pool failure")},
-		{name: "repository delete", deleteErr: errors.New("delete failure"), wantErr: errors.New("delete failure")},
-		{name: "session revoke", revokeErr: errors.New("revoke failure"), wantErr: errors.New("revoke failure")},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			deleteCalled := false
-			repository := &testutil.DatabaseRepository{
-				FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
-					if tt.findErr != nil {
-						return nil, tt.findErr
-					}
-					return &domain.Database{ID: 1}, nil
-				},
-				DeleteFunc: func(context.Context, uint) error {
-					deleteCalled = true
-					return tt.deleteErr
-				},
-			}
-			groups := &testutil.GroupRepository{
-				HasGroupWithOnlyDatabaseFunc: func(context.Context, uint) (bool, error) { return false, tt.onlyErr },
-				ListUserIDsByDatabaseFunc: func(context.Context, uint) ([]uint, error) {
-					if tt.listErr != nil {
-						return nil, tt.listErr
-					}
-					return []uint{7}, nil
-				},
-			}
-			pools := &testutil.DatabasePoolInvalidator{InvalidateFunc: func(uint) error { return tt.invalidate }}
-			sessions := &testutil.SessionService{RevokeUserFunc: func(context.Context, uint) error { return tt.revokeErr }}
-			service := databaseservice.NewDatabaseService(repository, nil, groups, sessions, pools)
-
-			err := service.DeleteDatabase(context.Background(), 1)
-			if err == nil || err.Error() != tt.wantErr.Error() {
-				t.Fatalf("error=%v want=%v", err, tt.wantErr)
-			}
-			if tt.findErr != nil || tt.onlyErr != nil || tt.listErr != nil || tt.invalidate != nil {
-				if deleteCalled {
-					t.Fatal("delete must not run after an earlier dependency failure")
-				}
-			}
-		})
-	}
-}
-
-func TestGetDatabaseHostsSuccessAndError(t *testing.T) {
-	expectedHosts := []domain.DatabaseHost{
-		{Host: "localhost", Port: 5432},
-		{Host: "db.remote.com", Port: 3306},
+func TestDatabaseService_GetAllDatabases_ValidParams_ReturnsPaginatedDatabasesAndTotal(t *testing.T) {
+	// Arrange
+	params := pagination.NewPaginationParams(2, 10)
+	dbs := []*domain.Database{
+		{ID: 11, Name: "db1"},
+		{ID: 12, Name: "db2"},
 	}
 	repo := &testutil.DatabaseRepository{
-		GetDistinctHostsFunc: func(ctx context.Context) ([]domain.DatabaseHost, error) {
+		FindAllFunc: func(_ context.Context, p pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			if p != params {
+				t.Fatalf("expected pagination %+v, got %+v", params, p)
+			}
+			return dbs, 25, nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	result, total, err := service.GetAllDatabases(context.Background(), params)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 25 {
+		t.Fatalf("expected total 25, got: %d", total)
+	}
+	if len(result) != 2 || result[0].ID != 11 || result[1].ID != 12 {
+		t.Fatalf("unexpected databases returned: %+v", result)
+	}
+}
+
+func TestDatabaseService_GetAllDatabases_RepositoryFails_PropagatesError(t *testing.T) {
+	// Arrange
+	repoErr := errors.New("query failed")
+	repo := &testutil.DatabaseRepository{
+		FindAllFunc: func(context.Context, pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			return nil, 0, repoErr
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	result, total, err := service.GetAllDatabases(context.Background(), pagination.NewPaginationParams(1, 10))
+
+	// Assert
+	if !errors.Is(err, repoErr) {
+		t.Fatalf("expected repo error %v, got: %v", repoErr, err)
+	}
+	if total != 0 || result != nil {
+		t.Fatalf("expected nil result and 0 total, got: total=%d, result=%+v", total, result)
+	}
+}
+
+func TestDatabaseService_GetDatabaseHosts_RepositoryAvailable_ReturnsDistinctHosts(t *testing.T) {
+	// Arrange
+	expectedHosts := []domain.DatabaseHost{
+		{Host: "localhost", Port: 5432, User: "postgres", Type: "postgresql"},
+		{Host: "remote.db", Port: 3306, User: "root", Type: "mysql"},
+	}
+	repo := &testutil.DatabaseRepository{
+		GetDistinctHostsFunc: func(context.Context) ([]domain.DatabaseHost, error) {
 			return expectedHosts, nil
 		},
 	}
 	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
 	hosts, err := service.GetDatabaseHosts(context.Background())
+
+	// Assert
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !reflect.DeepEqual(hosts, expectedHosts) {
-		t.Fatalf("got=%+v want=%+v", hosts, expectedHosts)
-	}
-
-	// Repository returns error
-	repoErr := &testutil.DatabaseRepository{
-		GetDistinctHostsFunc: func(ctx context.Context) ([]domain.DatabaseHost, error) {
-			return nil, errors.New("db query error")
-		},
-	}
-	serviceErr := databaseservice.NewDatabaseService(repoErr, nil, nil, nil, nil)
-	_, err = serviceErr.GetDatabaseHosts(context.Background())
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	// Nil repository returns empty slice
-	serviceNil := databaseservice.NewDatabaseService(nil, nil, nil, nil, nil)
-	hostsNil, err := serviceNil.GetDatabaseHosts(context.Background())
-	if err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
-	if len(hostsNil) != 0 {
-		t.Fatalf("expected empty slice, got %+v", hostsNil)
+		t.Fatalf("hosts = %+v, want %+v", hosts, expectedHosts)
 	}
 }
 
-func TestGetDatabasesByUserIDResolvesAccessLevels(t *testing.T) {
-	db1 := &domain.Database{ID: 10, Name: "db-edit"}
-	db2 := &domain.Database{ID: 20, Name: "db-view"}
-	db3 := &domain.Database{ID: 30, Name: "db-both"}
-	db4 := &domain.Database{ID: 40, Name: "db-none"}
+func TestDatabaseService_GetDatabaseHosts_RepositoryFails_PropagatesError(t *testing.T) {
+	// Arrange
+	queryErr := errors.New("db query error")
+	repo := &testutil.DatabaseRepository{
+		GetDistinctHostsFunc: func(context.Context) ([]domain.DatabaseHost, error) {
+			return nil, queryErr
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	hosts, err := service.GetDatabaseHosts(context.Background())
+
+	// Assert
+	if !errors.Is(err, queryErr) {
+		t.Fatalf("expected query error %v, got: %v", queryErr, err)
+	}
+	if hosts != nil {
+		t.Fatalf("expected nil hosts on error, got: %+v", hosts)
+	}
+}
+
+func TestDatabaseService_GetDatabaseHosts_NilRepository_ReturnsEmptySlice(t *testing.T) {
+	// Arrange
+	service := databaseservice.NewDatabaseService(nil, nil, nil, nil, nil)
+
+	// Act
+	hosts, err := service.GetDatabaseHosts(context.Background())
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hosts == nil || len(hosts) != 0 {
+		t.Fatalf("expected empty non-nil slice, got: %+v", hosts)
+	}
+}
+
+func TestDatabaseService_GetDatabasesByUserID_MultipleGroups_ResolvesHighestAccessTypePrecedence(t *testing.T) {
+	// Arrange
+	dbEdit := &domain.Database{ID: 10, Name: "db-edit"}
+	dbView := &domain.Database{ID: 20, Name: "db-view"}
+	dbUnion := &domain.Database{ID: 30, Name: "db-union"}
+	dbErr := &domain.Database{ID: 40, Name: "db-error"}
 
 	repo := &testutil.DatabaseRepository{
-		FindAllByUserIDFunc: func(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
-			return []*domain.Database{db1, db2, db3, db4}, 4, nil
+		FindAllByUserIDFunc: func(_ context.Context, userID uint, _ pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			if userID != 5 {
+				t.Fatalf("expected userID 5, got: %d", userID)
+			}
+			return []*domain.Database{dbEdit, dbView, dbUnion, dbErr}, 4, nil
 		},
 	}
 
-	groupRepo := &testutil.GroupRepository{
-		ListAccessTypesFunc: func(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
+	userGroups := &testutil.UserGroupRepository{
+		FindAllAccessTypesFunc: func(_ context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
 			switch databaseID {
 			case 10:
 				return []domain.AccessType{domain.AccessViewEdit}, nil
 			case 20:
 				return []domain.AccessType{domain.AccessViewOnly}, nil
 			case 30:
-				// Multiple groups give both: ViewEdit takes precedence
+				// Multiple groups give both view_only and view_edit -> view_edit takes precedence
 				return []domain.AccessType{domain.AccessViewOnly, domain.AccessViewEdit}, nil
 			case 40:
-				// Error from group query
 				return nil, errors.New("group query failed")
 			default:
 				return nil, nil
@@ -582,13 +970,17 @@ func TestGetDatabasesByUserIDResolvesAccessLevels(t *testing.T) {
 		},
 	}
 
-	service := databaseservice.NewDatabaseService(repo, nil, groupRepo, nil, nil)
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, nil, nil)
+
+	// Act
 	dbs, total, err := service.GetDatabasesByUserID(context.Background(), 5, pagination.NewPaginationParams(1, 10))
+
+	// Assert
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if total != 4 || len(dbs) != 4 {
-		t.Fatalf("total=%d len=%d", total, len(dbs))
+		t.Fatalf("expected 4 databases, got total=%d len=%d", total, len(dbs))
 	}
 	if dbs[0].AccessType != domain.AccessViewEdit {
 		t.Fatalf("db1 AccessType = %q, want %q", dbs[0].AccessType, domain.AccessViewEdit)
@@ -597,130 +989,132 @@ func TestGetDatabasesByUserIDResolvesAccessLevels(t *testing.T) {
 		t.Fatalf("db2 AccessType = %q, want %q", dbs[1].AccessType, domain.AccessViewOnly)
 	}
 	if dbs[2].AccessType != domain.AccessViewEdit {
-		t.Fatalf("db3 AccessType = %q, want %q", dbs[2].AccessType, domain.AccessViewEdit)
+		t.Fatalf("db3 AccessType = %q, want %q (highest privilege precedence)", dbs[2].AccessType, domain.AccessViewEdit)
 	}
 	if dbs[3].AccessType != "" {
-		t.Fatalf("db4 AccessType = %q, want empty on group error", dbs[3].AccessType)
-	}
-
-	// FindAllByUserID error propagation
-	repoError := &testutil.DatabaseRepository{
-		FindAllByUserIDFunc: func(ctx context.Context, userID uint, params pagination.PaginationParams) ([]*domain.Database, int64, error) {
-			return nil, 0, errors.New("find all error")
-		},
-	}
-	serviceError := databaseservice.NewDatabaseService(repoError, nil, groupRepo, nil, nil)
-	_, _, err = serviceError.GetDatabasesByUserID(context.Background(), 5, pagination.NewPaginationParams(1, 10))
-	if err == nil {
-		t.Fatal("expected error, got nil")
+		t.Fatalf("db4 AccessType = %q, want empty when access lookup fails", dbs[3].AccessType)
 	}
 }
 
-func TestGetDatabaseByIDAndUserIDResolvesAccessLevelAndErrors(t *testing.T) {
-	db := &domain.Database{ID: 100, Name: "db-inspect"}
+func TestDatabaseService_GetDatabasesByUserID_RepositoryFails_PropagatesError(t *testing.T) {
+	// Arrange
+	queryErr := errors.New("db find all failed")
 	repo := &testutil.DatabaseRepository{
-		FindByIDAndUserIDFunc: func(ctx context.Context, databaseID uint, userID uint) (*domain.Database, error) {
-			if databaseID == 999 {
-				return nil, domain.ErrDatabaseNotFound
-			}
-			return db, nil
+		FindAllByUserIDFunc: func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			return nil, 0, queryErr
 		},
 	}
-	groupRepo := &testutil.GroupRepository{
-		ListAccessTypesFunc: func(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error) {
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	dbs, total, err := service.GetDatabasesByUserID(context.Background(), 5, pagination.NewPaginationParams(1, 10))
+
+	// Assert
+	if !errors.Is(err, queryErr) {
+		t.Fatalf("expected query error %v, got: %v", queryErr, err)
+	}
+	if total != 0 || dbs != nil {
+		t.Fatalf("expected nil result and 0 total, got: total=%d, dbs=%+v", total, dbs)
+	}
+}
+
+func TestDatabaseService_GetDatabasesByUserID_NilUserGroupsRepository_LeavesAccessTypeEmpty(t *testing.T) {
+	// Arrange
+	db := &domain.Database{ID: 10, Name: "db1"}
+	repo := &testutil.DatabaseRepository{
+		FindAllByUserIDFunc: func(context.Context, uint, pagination.PaginationParams) ([]*domain.Database, int64, error) {
+			return []*domain.Database{db}, 1, nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	dbs, total, err := service.GetDatabasesByUserID(context.Background(), 1, pagination.NewPaginationParams(1, 10))
+
+	// Assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 1 || len(dbs) != 1 {
+		t.Fatalf("expected 1 database, got total=%d, len=%d", total, len(dbs))
+	}
+	if dbs[0].AccessType != "" {
+		t.Fatalf("expected empty access type when user groups repo is nil, got: %q", dbs[0].AccessType)
+	}
+}
+
+func TestDatabaseService_GetDatabaseByIDAndUserID_UserHasAccess_ResolvesAccessTypeAndReturnsDatabase(t *testing.T) {
+	// Arrange
+	targetDB := &domain.Database{ID: 100, Name: "db-inspect"}
+	repo := &testutil.DatabaseRepository{
+		FindByIDAndUserIDFunc: func(_ context.Context, databaseID uint, userID uint) (*domain.Database, error) {
+			if databaseID != 100 || userID != 7 {
+				t.Fatalf("expected databaseID 100 and userID 7, got: %d, %d", databaseID, userID)
+			}
+			return targetDB, nil
+		},
+	}
+	userGroups := &testutil.UserGroupRepository{
+		FindAllAccessTypesFunc: func(context.Context, uint, uint) ([]domain.AccessType, error) {
 			return []domain.AccessType{domain.AccessViewOnly, domain.AccessViewEdit}, nil
 		},
 	}
-	service := databaseservice.NewDatabaseService(repo, nil, groupRepo, nil, nil)
+	service := databaseservice.NewDatabaseService(repo, nil, userGroups, nil, nil)
 
-	// Success case
-	res, err := service.GetDatabaseByIDAndUserID(context.Background(), 100, 7)
+	// Act
+	result, err := service.GetDatabaseByIDAndUserID(context.Background(), 100, 7)
+
+	// Assert
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.AccessType != domain.AccessViewEdit {
-		t.Fatalf("AccessType=%q want=%q", res.AccessType, domain.AccessViewEdit)
+	if result != targetDB {
+		t.Fatalf("expected database %+v, got: %+v", targetDB, result)
 	}
-
-	// Error case (not found)
-	_, err = service.GetDatabaseByIDAndUserID(context.Background(), 999, 7)
-	if !errors.Is(err, domain.ErrDatabaseNotFound) {
-		t.Fatalf("got err=%v, want ErrDatabaseNotFound", err)
-	}
-
-	// Nil DB returned without error
-	repoNil := &testutil.DatabaseRepository{
-		FindByIDAndUserIDFunc: func(ctx context.Context, databaseID uint, userID uint) (*domain.Database, error) {
-			return nil, nil
-		},
-	}
-	serviceNil := databaseservice.NewDatabaseService(repoNil, nil, groupRepo, nil, nil)
-	nilRes, err := serviceNil.GetDatabaseByIDAndUserID(context.Background(), 100, 7)
-	if err != nil || nilRes != nil {
-		t.Fatalf("expected nil result and nil err, got res=%v err=%v", nilRes, err)
+	if result.AccessType != domain.AccessViewEdit {
+		t.Fatalf("expected resolved AccessType %q, got: %q", domain.AccessViewEdit, result.AccessType)
 	}
 }
 
-func TestCreateDatabaseReusesExistingCredentialWhenPasswordEmpty(t *testing.T) {
-	var testedPassword string
-	tester := &testutil.DatabaseConnectionTester{
-		TestFunc: func(_ context.Context, database domain.Database) error {
-			testedPassword = database.Password
-			return nil
-		},
-	}
-
+func TestDatabaseService_GetDatabaseByIDAndUserID_NotFoundOrNoAccess_PropagatesError(t *testing.T) {
+	// Arrange
+	notFoundErr := domain.ErrDatabaseNotFound
 	repo := &testutil.DatabaseRepository{
-		FindCredentialByHostAndPortFunc: func(ctx context.Context, host string, port uint, user string) (string, error) {
-			if host == "db.prod.internal" && port == 5432 && user == "appuser" {
-				return "reused-secret-password", nil
-			}
-			return "", nil
-		},
-		CreateDatabaseFunc: func(ctx context.Context, database *domain.Database) (*domain.Database, error) {
-			database.ID = 55
-			return database, nil
+		FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+			return nil, notFoundErr
 		},
 	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
 
-	service := databaseservice.NewDatabaseService(repo, tester, nil, nil, nil)
+	// Act
+	result, err := service.GetDatabaseByIDAndUserID(context.Background(), 999, 7)
 
-	input := &domain.CreateDatabaseInput{
-		Host:     "db.prod.internal",
-		Port:     5432,
-		User:     "appuser",
-		Password: "", // empty password to trigger reuse
-		Name:     "customer_db",
-		Type:     "postgresql",
+	// Assert
+	if !errors.Is(err, notFoundErr) {
+		t.Fatalf("expected error %v, got: %v", notFoundErr, err)
 	}
+	if result != nil {
+		t.Fatalf("expected nil result on error, got: %+v", result)
+	}
+}
 
-	created, err := service.CreateDatabase(context.Background(), input)
+func TestDatabaseService_GetDatabaseByIDAndUserID_RepositoryReturnsNil_ReturnsNilWithoutError(t *testing.T) {
+	// Arrange
+	repo := &testutil.DatabaseRepository{
+		FindByIDAndUserIDFunc: func(context.Context, uint, uint) (*domain.Database, error) {
+			return nil, nil
+		},
+	}
+	service := databaseservice.NewDatabaseService(repo, nil, nil, nil, nil)
+
+	// Act
+	result, err := service.GetDatabaseByIDAndUserID(context.Background(), 100, 7)
+
+	// Assert
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("expected nil error, got: %v", err)
 	}
-	if testedPassword != "reused-secret-password" {
-		t.Fatalf("connection tester received password=%q, want 'reused-secret-password'", testedPassword)
-	}
-	if created.Password != "reused-secret-password" {
-		t.Fatalf("created database password=%q, want 'reused-secret-password'", created.Password)
-	}
-
-	// When credential lookup fails or returns empty, password stays empty
-	repoNoCred := &testutil.DatabaseRepository{
-		FindCredentialByHostAndPortFunc: func(ctx context.Context, host string, port uint, user string) (string, error) {
-			return "", errors.New("lookup error")
-		},
-		CreateDatabaseFunc: func(ctx context.Context, database *domain.Database) (*domain.Database, error) {
-			return database, nil
-		},
-	}
-	testedPassword = "unset"
-	serviceNoCred := databaseservice.NewDatabaseService(repoNoCred, tester, nil, nil, nil)
-	createdNoCred, err := serviceNoCred.CreateDatabase(context.Background(), input)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if createdNoCred.Password != "" {
-		t.Fatalf("expected empty password, got %q", createdNoCred.Password)
+	if result != nil {
+		t.Fatalf("expected nil result, got: %+v", result)
 	}
 }
