@@ -44,4 +44,7 @@ var (
 	ErrMigrationInProgress          = errors.New("A migration is currently in progress for this database")
 	ErrQueryTimeout                 = errors.New("Query execution timed out")
 	ErrInvalidCSRFToken             = errors.New("Invalid or missing CSRF token")
+	ErrLeaderRequiresReplacement    = errors.New("Leader cannot be removed without a replacement")
+	ErrLeaderMustBeGroupMember      = errors.New("Leader must be a member of the group")
+	ErrUserIsGroupLeader            = errors.New("User is currently a leader of one or more groups")
 )

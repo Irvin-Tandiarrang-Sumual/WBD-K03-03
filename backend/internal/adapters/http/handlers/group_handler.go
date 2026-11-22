@@ -121,6 +121,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 
 	input := domain.CreateGroupInput{
 		Name:             request.Name,
+		LeaderID:         request.LeaderID,
 		DatabaseAccesses: toDatabaseAccesses(request.DatabaseAccesses),
 	}
 
@@ -166,7 +167,8 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 	}
 
 	input := domain.UpdateGroupInput{
-		Name: request.Name,
+		Name:     request.Name,
+		LeaderID: request.LeaderID,
 	}
 
 	if request.DatabaseAccesses != nil {

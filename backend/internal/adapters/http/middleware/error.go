@@ -66,6 +66,9 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrGroupMustHaveDatabase),
 		errors.Is(err, domain.ErrUserMustHaveGroup),
 		errors.Is(err, domain.ErrLastAdmin),
+		errors.Is(err, domain.ErrLeaderRequiresReplacement),
+		errors.Is(err, domain.ErrLeaderMustBeGroupMember),
+		errors.Is(err, domain.ErrUserIsGroupLeader),
 		errors.Is(err, domain.ErrMigrationRollbackUnavailable),
 		errors.Is(err, domain.ErrMigrationVersionUnavailable),
 		errors.Is(err, domain.ErrMigrationInProgress):
