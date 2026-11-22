@@ -12,6 +12,9 @@ func MigrateSystemDatabase(db *gorm.DB) error {
 		&model.Group{},
 		&model.GroupDatabase{},
 		&model.Session{},
+		&model.Draft{},
+		&model.DraftApproval{},
+		&model.DraftCheckpoint{},
 		&model.Migration{},
 	)
 }
