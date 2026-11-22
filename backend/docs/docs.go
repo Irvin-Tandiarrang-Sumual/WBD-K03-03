@@ -683,7 +683,7 @@ const docTemplate = `{
                         "CookieAuth": []
                     }
                 ],
-                "description": "Removes an existing user from an existing group. Requires admin privileges.",
+                "description": "Removes an existing user from an existing group. If the user is the group leader, replacement_leader_id query parameter is required. Requires admin privileges.",
                 "produces": [
                     "application/json"
                 ],
@@ -705,6 +705,12 @@ const docTemplate = `{
                         "name": "user_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Replacement leader ID (required if user is leader)",
+                        "name": "replacement_leader_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -724,7 +730,7 @@ const docTemplate = `{
                         "description": "Group or user not found"
                     },
                     "409": {
-                        "description": "Membership not found / user must remain in a group"
+                        "description": "Membership not found / user must remain in a group / leader requires replacement"
                     },
                     "500": {
                         "description": "Internal server error"
@@ -2042,6 +2048,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "databaseAccesses",
+                "leaderId",
                 "name"
             ],
             "properties": {
@@ -2050,6 +2057,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest"
                     }
+                },
+                "leaderId": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
@@ -2151,6 +2161,9 @@ const docTemplate = `{
                     }
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "leaderId": {
                     "type": "integer"
                 },
                 "name": {
@@ -2427,6 +2440,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest"
                     }
+                },
+                "leaderId": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
