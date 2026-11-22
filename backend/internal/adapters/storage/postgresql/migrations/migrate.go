@@ -8,9 +8,9 @@ import (
 func MigrateSystemDatabase(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&model.Database{},
+		&model.User{},
 		&model.Group{},
 		&model.GroupDatabase{},
-		&model.User{},
 		&model.Session{},
 		&model.Migration{},
 	)
