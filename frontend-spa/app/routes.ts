@@ -1,12 +1,10 @@
 import { type RouteConfig, index, layout, prefix, route } from "@react-router/dev/routes";
 
 export default [
-  // Auth routes with minimalist backdrop layout
   layout("layouts/auth-layout.tsx", [
     route("login", "routes/login.tsx"),
   ]),
 
-  // Main console workspace layout
   layout("layouts/app-layout.tsx", [
     index("routes/home.tsx"),
     route("databases", "routes/databases.tsx"),
@@ -16,7 +14,6 @@ export default [
     route("drafts/:id", "routes/draft-detail.tsx"),
     route("approvals", "routes/approvals.tsx"),
 
-    // Administration section
     ...prefix("admin", [
       route("databases", "routes/admin-databases.tsx"),
       route("users", "routes/admin-users.tsx"),
