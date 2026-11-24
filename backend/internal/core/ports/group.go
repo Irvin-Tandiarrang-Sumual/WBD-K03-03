@@ -23,4 +23,5 @@ type GroupRepository interface {
 	Update(ctx context.Context, group domain.Group) (domain.Group, error)
 	Delete(ctx context.Context, id uint) error
 	CountByLeaderID(ctx context.Context, leaderID uint) (int64, error)
+	FindAllByDatabaseID(ctx context.Context, databaseID uint) ([]domain.Group, error)
 }

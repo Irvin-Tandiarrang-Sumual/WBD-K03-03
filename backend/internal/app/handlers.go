@@ -14,6 +14,7 @@ type applicationHandlers struct {
 	database       *handlers.DatabaseHandler
 	databaseDriver *handlers.DatabaseDriverHandler
 	migration      *handlers.MigrationHandler
+	draft          *handlers.DraftHandler
 	health         *handlers.HealthHandler
 }
 
@@ -26,6 +27,7 @@ func buildHandlers(configuration *config.Config, services *applicationServices, 
 		database:       handlers.NewDatabaseHandler(services.database),
 		databaseDriver: handlers.NewDatabaseDriverHandler(services.databaseDriver),
 		migration:      handlers.NewMigrationHandler(services.migration),
+		draft:          handlers.NewDraftHandler(services.draft),
 		health:         handlers.NewHealthHandler(systemDatabase),
 	}
 }

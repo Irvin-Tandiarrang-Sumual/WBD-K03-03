@@ -92,6 +92,86 @@ func TestMapError_UsernameTaken_ReturnsConflict(t *testing.T) {
 	}
 }
 
+func TestMapError_Unauthorized_ReturnsUnauthorized(t *testing.T) {
+	// Arrange
+	err := domain.ErrUnauthorized
+
+	// Act
+	status, body := middleware.MapError(err)
+
+	// Assert
+	if status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", status, http.StatusUnauthorized)
+	}
+	if body.Message != domain.ErrUnauthorized.Error() {
+		t.Fatalf("message = %q, want %q", body.Message, domain.ErrUnauthorized.Error())
+	}
+}
+
+func TestMapError_Forbidden_ReturnsForbidden(t *testing.T) {
+	// Arrange
+	err := domain.ErrForbidden
+
+	// Act
+	status, body := middleware.MapError(err)
+
+	// Assert
+	if status != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", status, http.StatusForbidden)
+	}
+	if body.Message != domain.ErrForbidden.Error() {
+		t.Fatalf("message = %q, want %q", body.Message, domain.ErrForbidden.Error())
+	}
+}
+
+func TestMapError_DraftNotFound_ReturnsNotFound(t *testing.T) {
+	// Arrange
+	err := domain.ErrDraftNotFound
+
+	// Act
+	status, body := middleware.MapError(err)
+
+	// Assert
+	if status != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", status, http.StatusNotFound)
+	}
+	if body.Message != domain.ErrDraftNotFound.Error() {
+		t.Fatalf("message = %q, want %q", body.Message, domain.ErrDraftNotFound.Error())
+	}
+}
+
+func TestMapError_InvalidDraftState_ReturnsConflict(t *testing.T) {
+	// Arrange
+	err := domain.ErrInvalidDraftState
+
+	// Act
+	status, body := middleware.MapError(err)
+
+	// Assert
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", status, http.StatusConflict)
+	}
+	if body.Message != domain.ErrInvalidDraftState.Error() {
+		t.Fatalf("message = %q, want %q", body.Message, domain.ErrInvalidDraftState.Error())
+	}
+}
+
+func TestMapError_InvalidDraftInput_ReturnsBadRequest(t *testing.T) {
+	// Arrange
+	err := domain.ErrInvalidDraftInput
+
+	// Act
+	status, body := middleware.MapError(err)
+
+	// Assert
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if body.Message != domain.ErrInvalidDraftInput.Error() {
+		t.Fatalf("message = %q, want %q", body.Message, domain.ErrInvalidDraftInput.Error())
+	}
+}
+
 func TestMapError_DatabaseConnectionFailure_ReturnsBadRequest(t *testing.T) {
 	// Arrange
 	err := errors.New("dial tcp 127.0.0.1:5432: connect: connection refused")

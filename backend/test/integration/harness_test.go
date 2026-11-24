@@ -22,6 +22,7 @@ import (
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
 	databasedriverservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_driver"
+	draftservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/draft"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
@@ -47,12 +48,14 @@ type testStack struct {
 	databaseRepo          ports.DatabaseRepository
 	sessionRepo           ports.SessionRepository
 	migrationRepo         ports.MigrationRepository
+	draftRepo             ports.DraftRepository
 	userService           ports.UserService
 	sessionService        ports.SessionService
 	groupService          ports.GroupService
 	databaseService       ports.DatabaseService
 	databaseDriverService ports.DatabaseDriverService
 	migrationService      ports.MigrationService
+	draftService          ports.DraftService
 	authService           ports.AuthService
 }
 
@@ -88,6 +91,9 @@ func resetPlatformDB(t *testing.T, db *gorm.DB) {
 			sessions,
 			user_groups,
 			group_databases,
+			draft_checkpoints,
+			draft_approvals,
+			drafts,
 			migrations,
 			users,
 			groups,
@@ -125,6 +131,7 @@ func setupTestStack(t *testing.T) *testStack {
 	databaseRepo := repositories.NewDatabaseRepository(db, cipher)
 	sessionRepo := repositories.NewSessionRepository(db)
 	migrationRepo := repositories.NewMigrationRepository(db)
+	draftRepo := repositories.NewDraftRepository(db)
 
 	sessionService := sessionservice.NewSessionService(sessionRepo)
 	authService := authservice.NewAuthService(userRepo, sessionService)
@@ -134,6 +141,7 @@ func setupTestStack(t *testing.T) *testStack {
 	databaseService := databaseservice.NewDatabaseService(databaseRepo, connectionTester, userGroupRepo, sessionService, poolManager)
 	databaseDriverService := databasedriverservice.NewDatabaseDriverService(databaseService, databaseRepo, databaseDriver, userGroupService)
 	migrationService := migrationservice.NewMigrationService(migrationRepo, databaseRepo, databaseDriver, userGroupService)
+	draftService := draftservice.NewDraftService(draftRepo, groupRepo, userGroupService)
 
 	cfg := &config.Config{
 		Server: config.ServerConfig{
@@ -154,6 +162,7 @@ func setupTestStack(t *testing.T) *testStack {
 	databaseHandler := handlers.NewDatabaseHandler(databaseService)
 	databaseDriverHandler := handlers.NewDatabaseDriverHandler(databaseDriverService)
 	migrationHandler := handlers.NewMigrationHandler(migrationService)
+	draftHandler := handlers.NewDraftHandler(draftService)
 	healthHandler := handlers.NewHealthHandler(db)
 
 	router.SetupRouter(
@@ -166,6 +175,7 @@ func setupTestStack(t *testing.T) *testStack {
 		databaseHandler,
 		databaseDriverHandler,
 		migrationHandler,
+		draftHandler,
 		healthHandler,
 		sessionService,
 		userService,
@@ -184,12 +194,14 @@ func setupTestStack(t *testing.T) *testStack {
 		databaseRepo:          databaseRepo,
 		sessionRepo:           sessionRepo,
 		migrationRepo:         migrationRepo,
+		draftRepo:             draftRepo,
 		userService:           userService,
 		sessionService:        sessionService,
 		groupService:          groupService,
 		databaseService:       databaseService,
 		databaseDriverService: databaseDriverService,
 		migrationService:      migrationService,
+		draftService:          draftService,
 		authService:           authService,
 	}
 }

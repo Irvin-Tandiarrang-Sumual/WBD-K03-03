@@ -1,0 +1,1492 @@
+package draft_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/draft"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
+)
+
+// --- Draft Creation & Access Guard ---
+
+func TestDraftService_CreateDraft_ValidEditAccess_CreatesDraftAndApprovalsForAllLeaders(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	authorID := uint(10)
+	databaseID := uint(1)
+	leader1ID := uint(101)
+	leader2ID := uint(102)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			if uID == authorID && dbID == databaseID && reqAccess == domain.AccessViewEdit {
+				return nil
+			}
+			return domain.ErrDatabaseAccessDenied
+		},
+	}
+
+	groupRepo := &testutil.GroupRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint) ([]domain.Group, error) {
+			return []domain.Group{
+				{ID: 1, Name: "Frontend Group", LeaderID: leader1ID},
+				{ID: 2, Name: "Backend Group", LeaderID: leader2ID},
+			}, nil
+		},
+	}
+
+	savedApprovals := make([]*domain.DraftApproval, 0)
+	draftRepo := &testutil.DraftRepository{
+		SaveFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			d.ID = 1
+			return d, nil
+		},
+		SaveApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			app.ID = uint(len(savedApprovals) + 1)
+			savedApprovals = append(savedApprovals, app)
+			return app, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	input := domain.CreateDraftInput{
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		SqlUp:      "CREATE TABLE users (id INT PRIMARY KEY);",
+	}
+
+	// Act
+	createdDraft, err := svc.CreateDraft(ctx, input)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if createdDraft.Status != domain.DraftStatusPendingApproval {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusPendingApproval, createdDraft.Status)
+	}
+	if len(createdDraft.Approvals) != 2 {
+		t.Fatalf("expected 2 approvals, got %d", len(createdDraft.Approvals))
+	}
+	for _, app := range createdDraft.Approvals {
+		if app.Status != domain.ApprovalStatusPending {
+			t.Fatalf("expected approval status %q, got %q", domain.ApprovalStatusPending, app.Status)
+		}
+	}
+}
+
+func TestDraftService_CreateDraft_ViewOnlyAccess_ReturnsErrForbidden(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			// User only has view_only, rejecting view_edit
+			return domain.ErrDatabaseAccessDenied
+		},
+	}
+
+	groupRepo := &testutil.GroupRepository{}
+	draftRepo := &testutil.DraftRepository{}
+
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	input := domain.CreateDraftInput{
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		SqlUp:      "CREATE TABLE users (id INT PRIMARY KEY);",
+	}
+
+	// Act
+	_, err := svc.CreateDraft(ctx, input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestDraftService_CreateDraft_NoGroupAccess_ReturnsErrForbidden(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	authorID := uint(99)
+	databaseID := uint(1)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return domain.ErrAccessDenied
+		},
+	}
+
+	groupRepo := &testutil.GroupRepository{}
+	draftRepo := &testutil.DraftRepository{}
+
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	input := domain.CreateDraftInput{
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		SqlUp:      "CREATE TABLE users (id INT PRIMARY KEY);",
+	}
+
+	// Act
+	_, err := svc.CreateDraft(ctx, input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestDraftService_CreateDraft_AnotherDraftAlreadyApproved_AllowsCreationAndVoting(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	authorID := uint(10)
+	databaseID := uint(1)
+	leaderID := uint(101)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	groupRepo := &testutil.GroupRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint) ([]domain.Group, error) {
+			return []domain.Group{{ID: 1, Name: "Main Group", LeaderID: leaderID}}, nil
+		},
+	}
+
+	// Simulate Draft 1 is already approved in the database while Draft 2 is created and voted on
+	draftsStore := map[uint]*domain.Draft{
+		1: {ID: 1, DatabaseID: databaseID, UserID: authorID, Status: domain.DraftStatusApproved},
+	}
+	approvalsStore := map[uint][]*domain.DraftApproval{}
+
+	draftRepo := &testutil.DraftRepository{
+		SaveFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			d.ID = 2
+			draftsStore[d.ID] = d
+			return d, nil
+		},
+		SaveApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			app.ID = 2
+			approvalsStore[app.DraftID] = append(approvalsStore[app.DraftID], app)
+			return app, nil
+		},
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			if d, ok := draftsStore[id]; ok {
+				return d, nil
+			}
+			return nil, domain.ErrDraftNotFound
+		},
+		FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+			return approvalsStore[dID], nil
+		},
+		UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			for _, a := range approvalsStore[app.DraftID] {
+				if a.ID == app.ID {
+					a.Status = app.Status
+					a.RespondedAt = app.RespondedAt
+				}
+			}
+			return app, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			draftsStore[d.ID] = d
+			return d, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	createInput := domain.CreateDraftInput{
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		SqlUp:      "CREATE TABLE products (id INT PRIMARY KEY);",
+	}
+
+	// Act
+	newDraft, err := svc.CreateDraft(ctx, createInput)
+	if err != nil {
+		t.Fatalf("expected nil error on CreateDraft, got %v", err)
+	}
+
+	votedDraft, voteErr := svc.SubmitApproval(ctx, domain.SubmitApprovalInput{
+		DraftID: newDraft.ID,
+		UserID:  leaderID,
+		Status:  domain.ApprovalStatusApproved,
+	})
+
+	// Assert
+	if voteErr != nil {
+		t.Fatalf("expected nil error on SubmitApproval, got %v", voteErr)
+	}
+	if newDraft.ID != 2 {
+		t.Fatalf("expected new draft id 2, got %d", newDraft.ID)
+	}
+	if votedDraft.Status != domain.DraftStatusApproved {
+		t.Fatalf("expected voted draft status %q, got %q", domain.DraftStatusApproved, votedDraft.Status)
+	}
+	if draftsStore[1].Status != domain.DraftStatusApproved {
+		t.Fatalf("expected existing draft 1 to remain %q, got %q", domain.DraftStatusApproved, draftsStore[1].Status)
+	}
+}
+
+// --- Approval Consensus ---
+
+func TestDraftService_SubmitApproval_UserNotGroupLeader_ReturnsErrUnauthorized(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	nonLeaderUserID := uint(999)
+	leaderID := uint(100)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{
+				ID:         draftID,
+				DatabaseID: 1,
+				UserID:     authorID,
+				Status:     domain.DraftStatusPendingApproval,
+			}, nil
+		},
+		FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+			return []*domain.DraftApproval{
+				{ID: 1, DraftID: draftID, GroupID: 1, LeaderID: &leaderID, Status: domain.ApprovalStatusPending},
+			}, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	input := domain.SubmitApprovalInput{
+		DraftID: draftID,
+		UserID:  nonLeaderUserID,
+		Status:  domain.ApprovalStatusApproved,
+	}
+
+	// Act
+	_, err := svc.SubmitApproval(ctx, input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+}
+
+func TestDraftService_SubmitApproval_SingleLeaderRejects_TransitionsToRejected(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	leader1ID := uint(101)
+	leader2ID := uint(102)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: 1,
+		UserID:     authorID,
+		Status:     domain.DraftStatusPendingApproval,
+	}
+
+	approvals := []*domain.DraftApproval{
+		{ID: 1, DraftID: draftID, GroupID: 1, LeaderID: &leader1ID, Status: domain.ApprovalStatusApproved},
+		{ID: 2, DraftID: draftID, GroupID: 2, LeaderID: &leader2ID, Status: domain.ApprovalStatusPending},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+			return approvals, nil
+		},
+		UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			for _, a := range approvals {
+				if a.ID == app.ID {
+					a.Status = app.Status
+					a.RespondedAt = app.RespondedAt
+				}
+			}
+			return app, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	input := domain.SubmitApprovalInput{
+		DraftID: draftID,
+		UserID:  leader2ID,
+		Status:  domain.ApprovalStatusRejected,
+	}
+
+	// Act
+	updatedDraft, err := svc.SubmitApproval(ctx, input)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if updatedDraft.Status != domain.DraftStatusRejected {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusRejected, updatedDraft.Status)
+	}
+}
+
+func TestDraftService_SubmitApproval_AllLeadersApprove_TransitionsToApproved(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	leader1ID := uint(101)
+	leader2ID := uint(102)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: 1,
+		UserID:     authorID,
+		Status:     domain.DraftStatusPendingApproval,
+	}
+
+	approvals := []*domain.DraftApproval{
+		{ID: 1, DraftID: draftID, GroupID: 1, LeaderID: &leader1ID, Status: domain.ApprovalStatusApproved},
+		{ID: 2, DraftID: draftID, GroupID: 2, LeaderID: &leader2ID, Status: domain.ApprovalStatusPending},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+			return approvals, nil
+		},
+		UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			for _, a := range approvals {
+				if a.ID == app.ID {
+					a.Status = app.Status
+					a.RespondedAt = app.RespondedAt
+				}
+			}
+			return app, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	input := domain.SubmitApprovalInput{
+		DraftID: draftID,
+		UserID:  leader2ID,
+		Status:  domain.ApprovalStatusApproved,
+	}
+
+	// Act
+	updatedDraft, err := svc.SubmitApproval(ctx, input)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if updatedDraft.Status != domain.DraftStatusApproved {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusApproved, updatedDraft.Status)
+	}
+}
+
+func TestDraftService_SubmitApproval_DraftNotPendingApproval_ReturnsErrInvalidDraftState(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	leaderID := uint(101)
+
+	testCases := []string{
+		domain.DraftStatusApproved,
+		domain.DraftStatusRejected,
+		domain.DraftStatusInvalidated,
+		domain.DraftStatusExecuting,
+		domain.DraftStatusApplied,
+		domain.DraftStatusFailed,
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc, func(t *testing.T) {
+			draftRepo := &testutil.DraftRepository{
+				FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+					return &domain.Draft{
+						ID:     draftID,
+						Status: tc,
+					}, nil
+				},
+			}
+
+			svc := draft.NewDraftService(draftRepo, nil, nil)
+
+			input := domain.SubmitApprovalInput{
+				DraftID: draftID,
+				UserID:  leaderID,
+				Status:  domain.ApprovalStatusApproved,
+			}
+
+			// Act
+			_, err := svc.SubmitApproval(ctx, input)
+
+			// Assert
+			if !errors.Is(err, domain.ErrInvalidDraftState) {
+				t.Fatalf("expected ErrInvalidDraftState for status %s, got %v", tc, err)
+			}
+		})
+	}
+}
+
+func TestDraftService_SubmitApproval_AuthorLostEditAccess_InvalidatesDraftAndReturnsErrInvalidDraftState(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	leaderID := uint(101)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusPendingApproval,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return domain.ErrDatabaseAccessDenied
+		},
+	}
+
+	updateCalled := false
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			updateCalled = true
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	input := domain.SubmitApprovalInput{
+		DraftID: draftID,
+		UserID:  leaderID,
+		Status:  domain.ApprovalStatusApproved,
+	}
+
+	// Act
+	_, err := svc.SubmitApproval(ctx, input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftState) {
+		t.Fatalf("expected ErrInvalidDraftState, got %v", err)
+	}
+	if !updateCalled {
+		t.Fatal("expected draftRepo.Update to be called to persist invalidated state")
+	}
+	if activeDraft.Status != domain.DraftStatusInvalidated {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusInvalidated, activeDraft.Status)
+	}
+}
+
+// --- Auto-Invalidation Edge Cases ---
+
+func TestDraftService_ValidateDraft_AuthorRemovedFromGroup_TransitionsToInvalidated(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusPendingApproval,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			// Author was removed from group, so authorize fails
+			return domain.ErrAccessDenied
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	validatedDraft, err := svc.ValidateDraft(ctx, draftID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if validatedDraft.Status != domain.DraftStatusInvalidated {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusInvalidated, validatedDraft.Status)
+	}
+}
+
+func TestDraftService_ValidateDraft_GroupDetachedFromDatabase_TransitionsToInvalidated(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusApproved,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			// Group was detached from database
+			return domain.ErrDatabaseAccessDenied
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	validatedDraft, err := svc.ValidateDraft(ctx, draftID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if validatedDraft.Status != domain.DraftStatusInvalidated {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusInvalidated, validatedDraft.Status)
+	}
+}
+
+func TestDraftService_ValidateDraft_GroupAccessDowngradedToViewOnly_TransitionsToInvalidated(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusApproved,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			// Group access was downgraded from view_edit to view_only, rejecting view_edit
+			if reqAccess == domain.AccessViewEdit {
+				return domain.ErrDatabaseAccessDenied
+			}
+			return nil
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	validatedDraft, err := svc.ValidateDraft(ctx, draftID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if validatedDraft.Status != domain.DraftStatusInvalidated {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusInvalidated, validatedDraft.Status)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DraftInvalidated_ReturnsErrDraftNotApproved(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusApproved, // initially approved
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			// Access lost right before execution!
+			return domain.ErrDatabaseAccessDenied
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftNotApproved) {
+		t.Fatalf("expected ErrDraftNotApproved, got %v", err)
+	}
+	if activeDraft.Status != domain.DraftStatusInvalidated {
+		t.Fatalf("expected draft status to be updated to %q, got %q", domain.DraftStatusInvalidated, activeDraft.Status)
+	}
+}
+
+func TestDraftService_ExecuteDraft_CallerLacksEditAccess_ReturnsErrForbidden(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	callerID := uint(99)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusApproved,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			if uID == authorID {
+				return nil
+			}
+			return domain.ErrDatabaseAccessDenied
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, callerID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+	if activeDraft.Status != domain.DraftStatusApproved {
+		t.Fatalf("expected draft status to remain %q, got %q", domain.DraftStatusApproved, activeDraft.Status)
+	}
+}
+
+// --- Additional Edge Cases & Workflow ---
+
+func TestDraftService_ExecuteDraft_Approved_TransitionsToExecuting(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusApproved,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			activeDraft = d
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if activeDraft.Status != domain.DraftStatusExecuting {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusExecuting, activeDraft.Status)
+	}
+}
+
+func TestDraftService_ValidateDraft_StillValid_ReturnsDraftWithoutChanges(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	databaseID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: databaseID,
+		UserID:     authorID,
+		Status:     domain.DraftStatusPendingApproval,
+	}
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	validated, err := svc.ValidateDraft(ctx, draftID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if validated.Status != domain.DraftStatusPendingApproval {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusPendingApproval, validated.Status)
+	}
+}
+
+func TestDraftService_ValidateDraft_AlreadyTerminal_ReturnsDraftDirectly(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+
+	activeDraft := &domain.Draft{
+		ID:     draftID,
+		Status: domain.DraftStatusRejected,
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	validated, err := svc.ValidateDraft(ctx, draftID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if validated.Status != domain.DraftStatusRejected {
+		t.Fatalf("expected status %q, got %q", domain.DraftStatusRejected, validated.Status)
+	}
+}
+
+func TestDraftService_SubmitApproval_PartialApproval_RemainsPendingApproval(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	leader1ID := uint(101)
+	leader2ID := uint(102)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	activeDraft := &domain.Draft{
+		ID:         draftID,
+		DatabaseID: 1,
+		UserID:     authorID,
+		Status:     domain.DraftStatusPendingApproval,
+	}
+
+	approvals := []*domain.DraftApproval{
+		{ID: 1, DraftID: draftID, GroupID: 1, LeaderID: &leader1ID, Status: domain.ApprovalStatusPending},
+		{ID: 2, DraftID: draftID, GroupID: 2, LeaderID: &leader2ID, Status: domain.ApprovalStatusPending},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return activeDraft, nil
+		},
+		FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+			return approvals, nil
+		},
+		UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			for _, a := range approvals {
+				if a.ID == app.ID {
+					a.Status = app.Status
+					a.RespondedAt = app.RespondedAt
+				}
+			}
+			return app, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	input := domain.SubmitApprovalInput{
+		DraftID: draftID,
+		UserID:  leader1ID,
+		Status:  domain.ApprovalStatusApproved,
+	}
+
+	// Act
+	res, err := svc.SubmitApproval(ctx, input)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if res.Status != domain.DraftStatusPendingApproval {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusPendingApproval, res.Status)
+	}
+}
+
+// --- Querying Drafts ---
+
+func TestDraftService_GetDraftsByDatabaseID_ValidAccess_ReturnsDrafts(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	userID := uint(10)
+	databaseID := uint(1)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint, params pagination.PaginationParams) ([]*domain.Draft, int64, error) {
+			return []*domain.Draft{{ID: 1, DatabaseID: databaseID, Status: domain.DraftStatusApproved}}, 1, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	drafts, total, err := svc.GetDraftsByDatabaseID(ctx, databaseID, userID, pagination.PaginationParams{Page: 1, Limit: 10})
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if total != 1 || len(drafts) != 1 {
+		t.Fatalf("expected 1 draft, got %d with total %d", len(drafts), total)
+	}
+}
+
+func TestDraftService_GetDraftsByDatabaseID_NoAccess_ReturnsErrForbidden(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	userID := uint(10)
+	databaseID := uint(1)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return domain.ErrAccessDenied
+		},
+	}
+
+	svc := draft.NewDraftService(nil, nil, userGroupSvc)
+
+	// Act
+	_, _, err := svc.GetDraftsByDatabaseID(ctx, databaseID, userID, pagination.PaginationParams{Page: 1, Limit: 10})
+
+	// Assert
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestDraftService_GetDraftByID_ValidAccess_ReturnsDraft(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	userID := uint(10)
+	draftID := uint(1)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{ID: draftID, DatabaseID: 1, Status: domain.DraftStatusApproved}, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	d, err := svc.GetDraftByID(ctx, draftID, userID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if d.ID != draftID {
+		t.Fatalf("expected draft id %d, got %d", draftID, d.ID)
+	}
+}
+
+func TestDraftService_GetDraftByID_NoAccess_ReturnsErrForbidden(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	userID := uint(10)
+	draftID := uint(1)
+
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return domain.ErrAccessDenied
+		},
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{ID: draftID, DatabaseID: 1, Status: domain.DraftStatusApproved}, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
+
+	// Act
+	_, err := svc.GetDraftByID(ctx, draftID, userID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+// --- Validation & Repository Error Branch Coverage ---
+
+func TestDraftService_CreateDraft_InvalidInput_ReturnsErrInvalidDraftInput(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	svc := draft.NewDraftService(nil, nil, nil)
+	input := domain.CreateDraftInput{DatabaseID: 1, UserID: 10, SqlUp: "   "}
+
+	// Act
+	_, err := svc.CreateDraft(ctx, input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftInput) {
+		t.Fatalf("expected ErrInvalidDraftInput, got %v", err)
+	}
+}
+
+func TestDraftService_CreateDraft_GroupLookupFails_ReturnsError(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	repoErr := errors.New("db query failed")
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+	groupRepo := &testutil.GroupRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint) ([]domain.Group, error) {
+			return nil, repoErr
+		},
+	}
+	svc := draft.NewDraftService(nil, groupRepo, userGroupSvc)
+
+	// Act
+	_, err := svc.CreateDraft(ctx, domain.CreateDraftInput{DatabaseID: 1, UserID: 10, SqlUp: "CREATE TABLE t (id INT);"})
+
+	// Assert
+	if !errors.Is(err, repoErr) {
+		t.Fatalf("expected %v, got %v", repoErr, err)
+	}
+}
+
+func TestDraftService_CreateDraft_ExplicitIrreversibleFalse_SavesDraftWithIsReversibleFalse(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	isRev := false
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+	groupRepo := &testutil.GroupRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint) ([]domain.Group, error) {
+			return []domain.Group{}, nil
+		},
+	}
+	draftRepo := &testutil.DraftRepository{
+		SaveFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			d.ID = 1
+			return d, nil
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	// Act
+	created, err := svc.CreateDraft(ctx, domain.CreateDraftInput{
+		DatabaseID:         1,
+		UserID:             10,
+		SqlUp:              "DROP TABLE legacy;",
+		IsReversible:       &isRev,
+		IrreversibleReason: "drops table",
+	})
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if created.IsReversible {
+		t.Fatal("expected IsReversible to be false")
+	}
+}
+
+func TestDraftService_CreateDraft_SaveDraftFails_ReturnsError(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	repoErr := errors.New("save draft failed")
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+	groupRepo := &testutil.GroupRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint) ([]domain.Group, error) {
+			return []domain.Group{}, nil
+		},
+	}
+	draftRepo := &testutil.DraftRepository{
+		SaveFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			return nil, repoErr
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	// Act
+	_, err := svc.CreateDraft(ctx, domain.CreateDraftInput{DatabaseID: 1, UserID: 10, SqlUp: "CREATE TABLE t (id INT);"})
+
+	// Assert
+	if !errors.Is(err, repoErr) {
+		t.Fatalf("expected %v, got %v", repoErr, err)
+	}
+}
+
+func TestDraftService_CreateDraft_SaveApprovalFails_ReturnsError(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	repoErr := errors.New("save approval failed")
+	userGroupSvc := &testutil.UserGroupService{
+		AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+			return nil
+		},
+	}
+	groupRepo := &testutil.GroupRepository{
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint) ([]domain.Group, error) {
+			return []domain.Group{{ID: 1, LeaderID: 101}}, nil
+		},
+	}
+	draftRepo := &testutil.DraftRepository{
+		SaveFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			d.ID = 1
+			return d, nil
+		},
+		SaveApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+			return nil, repoErr
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, groupRepo, userGroupSvc)
+
+	// Act
+	_, err := svc.CreateDraft(ctx, domain.CreateDraftInput{DatabaseID: 1, UserID: 10, SqlUp: "CREATE TABLE t (id INT);"})
+
+	// Assert
+	if !errors.Is(err, repoErr) {
+		t.Fatalf("expected %v, got %v", repoErr, err)
+	}
+}
+
+func TestDraftService_GetDraftsByDatabaseID_InvalidIDs_ReturnsErrInvalidDraftInput(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	svc := draft.NewDraftService(nil, nil, nil)
+
+	// Act
+	_, _, err := svc.GetDraftsByDatabaseID(ctx, 0, 10, pagination.PaginationParams{Page: 1, Limit: 10})
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftInput) {
+		t.Fatalf("expected ErrInvalidDraftInput, got %v", err)
+	}
+}
+
+func TestDraftService_GetDraftByID_InvalidIDs_ReturnsErrInvalidDraftInput(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	svc := draft.NewDraftService(nil, nil, nil)
+
+	// Act
+	_, err := svc.GetDraftByID(ctx, 0, 10)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftInput) {
+		t.Fatalf("expected ErrInvalidDraftInput, got %v", err)
+	}
+}
+
+func TestDraftService_GetDraftByID_DraftNotFound_ReturnsErrDraftNotFound(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return nil, domain.ErrDraftNotFound
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	_, err := svc.GetDraftByID(ctx, 99, 10)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftNotFound) {
+		t.Fatalf("expected ErrDraftNotFound, got %v", err)
+	}
+}
+
+func TestDraftService_SubmitApproval_InvalidInput_ReturnsErrInvalidDraftInput(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	svc := draft.NewDraftService(nil, nil, nil)
+
+	// Act
+	_, err := svc.SubmitApproval(ctx, domain.SubmitApprovalInput{DraftID: 1, UserID: 10, Status: "maybe"})
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftInput) {
+		t.Fatalf("expected ErrInvalidDraftInput, got %v", err)
+	}
+}
+
+func TestDraftService_SubmitApproval_DraftNotFound_ReturnsErrDraftNotFound(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return nil, domain.ErrDraftNotFound
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	_, err := svc.SubmitApproval(ctx, domain.SubmitApprovalInput{DraftID: 99, UserID: 10, Status: domain.ApprovalStatusApproved})
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftNotFound) {
+		t.Fatalf("expected ErrDraftNotFound, got %v", err)
+	}
+}
+
+func TestDraftService_SubmitApproval_RepositoryErrors_ReturnsError(t *testing.T) {
+	repoErr := errors.New("repository failure")
+	leaderID := uint(101)
+
+	testCases := []struct {
+		name         string
+		status       string
+		authorizeErr error
+		setupRepo    func() *testutil.DraftRepository
+	}{
+		{
+			name:         "invalidation update fails",
+			status:       domain.ApprovalStatusApproved,
+			authorizeErr: domain.ErrAccessDenied,
+			setupRepo: func() *testutil.DraftRepository {
+				return &testutil.DraftRepository{
+					FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+						return &domain.Draft{ID: 1, DatabaseID: 1, UserID: 10, Status: domain.DraftStatusPendingApproval}, nil
+					},
+					UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+						return nil, repoErr
+					},
+				}
+			},
+		},
+		{
+			name:   "find approvals fails",
+			status: domain.ApprovalStatusApproved,
+			setupRepo: func() *testutil.DraftRepository {
+				return &testutil.DraftRepository{
+					FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+						return &domain.Draft{ID: 1, DatabaseID: 1, UserID: 10, Status: domain.DraftStatusPendingApproval}, nil
+					},
+					FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+						return nil, repoErr
+					},
+				}
+			},
+		},
+		{
+			name:   "update approval fails",
+			status: domain.ApprovalStatusApproved,
+			setupRepo: func() *testutil.DraftRepository {
+				return &testutil.DraftRepository{
+					FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+						return &domain.Draft{ID: 1, DatabaseID: 1, UserID: 10, Status: domain.DraftStatusPendingApproval}, nil
+					},
+					FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+						return []*domain.DraftApproval{{ID: 1, DraftID: 1, LeaderID: &leaderID, Status: domain.ApprovalStatusPending}}, nil
+					},
+					UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+						return nil, repoErr
+					},
+				}
+			},
+		},
+		{
+			name:   "reject draft update fails",
+			status: domain.ApprovalStatusRejected,
+			setupRepo: func() *testutil.DraftRepository {
+				return &testutil.DraftRepository{
+					FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+						return &domain.Draft{ID: 1, DatabaseID: 1, UserID: 10, Status: domain.DraftStatusPendingApproval}, nil
+					},
+					FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+						return []*domain.DraftApproval{{ID: 1, DraftID: 1, LeaderID: &leaderID, Status: domain.ApprovalStatusPending}}, nil
+					},
+					UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+						return app, nil
+					},
+					UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+						return nil, repoErr
+					},
+				}
+			},
+		},
+		{
+			name:   "reload approvals after approve fails",
+			status: domain.ApprovalStatusApproved,
+			setupRepo: func() *testutil.DraftRepository {
+				calls := 0
+				return &testutil.DraftRepository{
+					FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+						return &domain.Draft{ID: 1, DatabaseID: 1, UserID: 10, Status: domain.DraftStatusPendingApproval}, nil
+					},
+					FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+						calls++
+						if calls == 1 {
+							return []*domain.DraftApproval{{ID: 1, DraftID: 1, LeaderID: &leaderID, Status: domain.ApprovalStatusPending}}, nil
+						}
+						return nil, repoErr
+					},
+					UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+						return app, nil
+					},
+				}
+			},
+		},
+		{
+			name:   "approve draft update fails",
+			status: domain.ApprovalStatusApproved,
+			setupRepo: func() *testutil.DraftRepository {
+				return &testutil.DraftRepository{
+					FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+						return &domain.Draft{ID: 1, DatabaseID: 1, UserID: 10, Status: domain.DraftStatusPendingApproval}, nil
+					},
+					FindApprovalsByDraftIDFunc: func(ctx context.Context, dID uint) ([]*domain.DraftApproval, error) {
+						return []*domain.DraftApproval{{ID: 1, DraftID: 1, LeaderID: &leaderID, Status: domain.ApprovalStatusApproved}}, nil
+					},
+					UpdateApprovalFunc: func(ctx context.Context, app *domain.DraftApproval) (*domain.DraftApproval, error) {
+						return app, nil
+					},
+					UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+						return nil, repoErr
+					},
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			ctx := context.Background()
+			userGroupSvc := &testutil.UserGroupService{
+				AuthorizeFunc: func(ctx context.Context, uID uint, dbID uint, reqAccess domain.AccessType) error {
+					return tc.authorizeErr
+				},
+			}
+			svc := draft.NewDraftService(tc.setupRepo(), nil, userGroupSvc)
+
+			// Act
+			_, err := svc.SubmitApproval(ctx, domain.SubmitApprovalInput{
+				DraftID: 1,
+				UserID:  leaderID,
+				Status:  tc.status,
+			})
+
+			// Assert
+			if !errors.Is(err, repoErr) {
+				t.Fatalf("expected %v, got %v", repoErr, err)
+			}
+		})
+	}
+}
+
+func TestDraftService_ValidateDraft_InvalidID_ReturnsErrInvalidDraftInput(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	svc := draft.NewDraftService(nil, nil, nil)
+
+	// Act
+	_, err := svc.ValidateDraft(ctx, 0)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftInput) {
+		t.Fatalf("expected ErrInvalidDraftInput, got %v", err)
+	}
+}
+
+func TestDraftService_ValidateDraft_DraftNotFound_ReturnsErrDraftNotFound(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return nil, domain.ErrDraftNotFound
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	_, err := svc.ValidateDraft(ctx, 99)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftNotFound) {
+		t.Fatalf("expected ErrDraftNotFound, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_InvalidIDs_ReturnsErrInvalidDraftInput(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	svc := draft.NewDraftService(nil, nil, nil)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, 0, 10)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidDraftInput) {
+		t.Fatalf("expected ErrInvalidDraftInput, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DraftNotFound_ReturnsErrDraftNotFound(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return nil, domain.ErrDraftNotFound
+		},
+	}
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, 99, 10)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftNotFound) {
+		t.Fatalf("expected ErrDraftNotFound, got %v", err)
+	}
+}
