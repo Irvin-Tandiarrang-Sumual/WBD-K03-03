@@ -7,10 +7,12 @@ import (
 )
 
 type Migration struct {
-	ID                 uint   `gorm:"primaryKey"`
-	DatabaseID         int    `gorm:"not null;index"`
+	ID                 uint `gorm:"primaryKey"`
+	DatabaseID         int  `gorm:"not null;index"`
 	Version            string
-	RevertsMigrationID *uint  `gorm:"index"`
+	ParentMigrationID  *uint `gorm:"index"`
+	SourceMigrationID  *uint `gorm:"index"`
+	RevertsMigrationID *uint `gorm:"index"`
 
 	MigratedAt         time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	Status             string         `gorm:"not null;default:'fail'"`
@@ -21,7 +23,7 @@ type Migration struct {
 	UserID             int            `gorm:"not null"`
 	DraftID            *uint          `gorm:"index"`
 	ExecutionID        uint           `gorm:"not null;default:0;index"`
-	IsReversible       bool           `gorm:"not null;default:true"`
+	IsReversible       bool           `gorm:"not null"`
 	IrreversibleReason string         `gorm:"type:text;not null;default:''"`
 	ForwardMigrationID *uint          `gorm:"index"`
 

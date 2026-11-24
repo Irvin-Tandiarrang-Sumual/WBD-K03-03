@@ -45,8 +45,8 @@ func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependen
 		"/:database_id/migrations/:migration_id",
 		dependencies.migrationHandler.GetMigrationByIDAndDatabaseID,
 	)
-	databases.POST(
-		"/migrations/rollback",
-		dependencies.migrationHandler.RollbackMigrations,
-	)
+	databases.POST("/:database_id/rollback-draft", dependencies.migrationHandler.ProposeRollback)
+	databases.POST("/:database_id/forward-draft", dependencies.migrationHandler.ProposeForward)
+	databases.POST("/:database_id/migration-drafts/:draft_id/vote", dependencies.migrationHandler.VoteMigrationDraft)
+	databases.POST("/:database_id/migration-drafts/:draft_id/execute", dependencies.migrationHandler.ExecuteMigrationDraft)
 }

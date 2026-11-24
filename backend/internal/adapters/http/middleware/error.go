@@ -69,6 +69,7 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrLeaderRequiresReplacement),
 		errors.Is(err, domain.ErrLeaderMustBeGroupMember),
 		errors.Is(err, domain.ErrUserIsGroupLeader),
+		errors.Is(err, domain.ErrNoActiveMigration), errors.Is(err, domain.ErrNoForwardAvailable), errors.Is(err, domain.ErrDraftConflict),
 		errors.Is(err, domain.ErrMigrationRollbackUnavailable),
 		errors.Is(err, domain.ErrMigrationVersionUnavailable),
 		errors.Is(err, domain.ErrMigrationInProgress):
@@ -86,6 +87,7 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrInvalidDatabaseAccess),
 		errors.Is(err, domain.ErrInvalidDatabaseInput),
 		errors.Is(err, domain.ErrInvalidDatabaseQuery),
+		errors.Is(err, domain.ErrMigrationIrreversible),
 		errors.Is(err, domain.ErrInvalidMigrationInput),
 		errors.Is(err, domain.ErrInvalidMigrationComparison),
 		errors.Is(err, domain.ErrSQLDownGenerationUnsupported),

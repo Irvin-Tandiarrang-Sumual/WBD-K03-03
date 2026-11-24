@@ -6,6 +6,11 @@ import (
 )
 
 var (
+	ErrMigrationSnapshotUnavailable = errors.New("SQL applied; schema snapshot pending")
+	ErrNoActiveMigration            = errors.New("no active migration")
+	ErrNoForwardAvailable           = errors.New("no forward migration available")
+	ErrMigrationIrreversible        = errors.New("migration is irreversible")
+	ErrDraftConflict                = errors.New("draft state, approvals or database position has changed")
 	ErrInvalidGroupsIDs             = errors.New("Group ids are not valid")
 	ErrGroupNotFound                = errors.New("Group is not found")
 	ErrGroupMustHaveDatabase        = errors.New("Group must have access to at least one database")
