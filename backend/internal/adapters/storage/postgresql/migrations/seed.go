@@ -27,13 +27,40 @@ func seedData(db *gorm.DB, encodePassword func(string) (string, error)) error {
 			return err
 		}
 
-		groups, err := seedGroups(tx, databases)
+		adminUser, err := seedAdminUser(tx)
+		if err != nil {
+			return err
+		}
+
+		groups, err := seedGroups(tx, databases, adminUser.ID)
 		if err != nil {
 			return err
 		}
 
 		return seedTestUsers(tx, groups)
 	})
+}
+
+func seedAdminUser(tx *gorm.DB) (model.User, error) {
+	var admin model.User
+	err := tx.Where("username = ?", "admin").First(&admin).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		hashed, err := hasher.HashPassword("admin123")
+		if err != nil {
+			return model.User{}, fmt.Errorf("hashing password for admin: %w", err)
+		}
+		admin = model.User{
+			Username: "admin",
+			Password: hashed,
+			Role:     "admin",
+		}
+		if err := tx.Session(&gorm.Session{SkipHooks: true}).Create(&admin).Error; err != nil {
+			return model.User{}, fmt.Errorf("seeding initial admin: %w", err)
+		}
+	} else if err != nil {
+		return model.User{}, err
+	}
+	return admin, nil
 }
 
 func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error)) (map[string]model.Database, error) {
@@ -71,7 +98,7 @@ func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error))
 	return databases, nil
 }
 
-func seedGroups(tx *gorm.DB, databases map[string]model.Database) (map[string]model.Group, error) {
+func seedGroups(tx *gorm.DB, databases map[string]model.Database, leaderID uint) (map[string]model.Group, error) {
 	groupSeeds := []struct {
 		key        string
 		name       string
@@ -87,8 +114,10 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database) (map[string]mo
 		var group model.Group
 		err := tx.Where("name = ?", groupSeed.name).First(&group).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			group = model.Group{Name: groupSeed.name}
+			group = model.Group{Name: groupSeed.name, LeaderID: leaderID}
 			err = tx.Create(&group).Error
+		} else if err == nil && group.LeaderID == 0 {
+			err = tx.Model(&group).Update("leader_id", leaderID).Error
 		}
 		if err != nil {
 			return nil, fmt.Errorf("seeding %s group: %w", groupSeed.key, err)

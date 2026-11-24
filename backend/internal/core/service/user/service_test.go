@@ -596,6 +596,56 @@ func TestDeleteUser_UserLookupFailure_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestDeleteUser_CountByLeaderIDFailure_ReturnsError(t *testing.T) {
+	// Arrange
+	expectedErr := errors.New("count leader database error")
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Role: domain.RoleUser}, nil
+		},
+	}
+	groupRepo := &testutil.GroupRepository{
+		CountByLeaderIDFunc: func(_ context.Context, _ uint) (int64, error) {
+			return 0, expectedErr
+		},
+	}
+	service := userservice.NewUserService(userRepo, groupRepo, &testutil.SessionService{}, &testutil.UserGroupRepository{})
+
+	// Act
+	err := service.DeleteUser(context.Background(), 5)
+
+	// Assert
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
+	}
+}
+
+func TestDeleteUser_UserIsGroupLeader_ReturnsErrUserIsGroupLeader(t *testing.T) {
+	// Arrange
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Role: domain.RoleUser}, nil
+		},
+	}
+	groupRepo := &testutil.GroupRepository{
+		CountByLeaderIDFunc: func(_ context.Context, leaderID uint) (int64, error) {
+			if leaderID == 5 {
+				return 2, nil // leads 2 groups
+			}
+			return 0, nil
+		},
+	}
+	service := userservice.NewUserService(userRepo, groupRepo, &testutil.SessionService{}, &testutil.UserGroupRepository{})
+
+	// Act
+	err := service.DeleteUser(context.Background(), 5)
+
+	// Assert
+	if !errors.Is(err, domain.ErrUserIsGroupLeader) {
+		t.Fatalf("expected ErrUserIsGroupLeader, got %v", err)
+	}
+}
+
 func TestDeleteUser_LastAdminUser_ReturnsErrLastAdmin(t *testing.T) {
 	// Arrange
 	userRepo := &testutil.UserRepository{

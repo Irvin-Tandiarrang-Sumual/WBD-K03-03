@@ -6,10 +6,11 @@ import (
 )
 
 type User struct {
-	ID       uint   `gorm:"primaryKey"`
-	Username string `gorm:"unique;not null"`
-	Password string `gorm:"not null"`
-	Role     string `gorm:"type:text;check:role IN ('user', 'admin');default:user"`
+	ID        uint           `gorm:"primaryKey"`
+	Username  string         `gorm:"uniqueIndex:idx_users_username,where:deleted_at IS NULL;not null"`
+	Password  string         `gorm:"not null"`
+	Role      string         `gorm:"type:text;check:role IN ('user', 'admin');default:user"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 
 	Sessions []Session `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Groups   []Group   `gorm:"many2many:user_groups;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`

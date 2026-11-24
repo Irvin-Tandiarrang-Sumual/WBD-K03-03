@@ -105,6 +105,14 @@ func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 		return err
 	}
 
+	leadCount, err := s.groups.CountByLeaderID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if leadCount > 0 {
+		return domain.ErrUserIsGroupLeader
+	}
+
 	if current.Role == domain.RoleAdmin {
 		if err := s.ensureNotLastAdmin(ctx); err != nil {
 			return err

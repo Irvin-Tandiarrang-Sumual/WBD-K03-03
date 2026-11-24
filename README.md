@@ -1,5 +1,4 @@
 # Database Management Platform (WBD-K03-03)
-
 Platform manajemen database berbasis web  untuk mengelola koneksi database secara dinamis, mengontrol hak akses pengguna berbasis grup (*Role-Based Access Control*), mengeksekusi dan membandingkan migrasi skema (*Schema Diff & Migration*), menganalisis rencana eksekusi query (*EXPLAIN / EXPLAIN ANALYZE*), serta melakukan *automated rollback*.
 
 ---
@@ -11,6 +10,10 @@ Platform manajemen database berbasis web  untuk mengelola koneksi database secar
 5. **Automated Schema Rollback**:
 ---
 
+<p align="center">
+  <img src="assets/images/oogway-quotes.jpg" alt="Master Oogway" width="250" align="center"/>
+</p>
+---
 ## Tech Stack & Architecture
 
 - **Backend**: Go 1.23, Gin Web Framework, GORM ORM, PostgreSQL Driver (`pgx`), MySQL Driver (`go-sql-driver/mysql`), Swaggo (OpenAPI/Swagger).
@@ -200,7 +203,7 @@ swag init -g cmd/api/main.go -o docs/ --parseDependency --parseInternal
 
 ---
 
-## 👥 Kontributor
+## Kontributor
 
 | NIM | Nama |
 |---|---|

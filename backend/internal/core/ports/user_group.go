@@ -8,13 +8,13 @@ import (
 
 type UserGroupService interface {
 	AddUser(ctx context.Context, groupID uint, userID uint) error
-	RemoveUser(ctx context.Context, groupID uint, userID uint) error
+	RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error
 	Authorize(ctx context.Context, userID uint, databaseID uint, requiredAccessType domain.AccessType) error
 }
 
 type UserGroupRepository interface {
 	AddUser(ctx context.Context, groupID uint, userID uint) error
-	RemoveUser(ctx context.Context, groupID uint, userID uint) error
+	RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error
 	CountByUserID(ctx context.Context, userID uint) (int64, error)
 	FindAllUserIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error)
 	FindAllAccessTypes(ctx context.Context, userID uint, databaseID uint) ([]domain.AccessType, error)

@@ -17,8 +17,9 @@ type GroupRepository struct {
 	SaveFunc                         func(context.Context, domain.Group) (domain.Group, error)
 	UpdateFunc                       func(context.Context, domain.Group) (domain.Group, error)
 	DeleteFunc                       func(context.Context, uint) error
+	CountByLeaderIDFunc              func(context.Context, uint) (int64, error)
 	AddUserFunc                      func(context.Context, uint, uint) error
-	RemoveUserFunc                   func(context.Context, uint, uint) error
+	RemoveUserFunc                   func(context.Context, uint, uint, *uint) error
 	CountByUserIDFunc                func(context.Context, uint) (int64, error)
 	FindAllUserIDsByGroupIDFunc      func(context.Context, uint) ([]uint, error)
 	FindAllAccessTypesFunc           func(context.Context, uint, uint) ([]domain.AccessType, error)
@@ -69,6 +70,13 @@ func (f *GroupRepository) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
+func (f *GroupRepository) CountByLeaderID(ctx context.Context, leaderID uint) (int64, error) {
+	if f.CountByLeaderIDFunc != nil {
+		return f.CountByLeaderIDFunc(ctx, leaderID)
+	}
+	return 0, nil
+}
+
 func (f *GroupRepository) AddUser(ctx context.Context, groupID uint, userID uint) error {
 	if f.AddUserFunc != nil {
 		return f.AddUserFunc(ctx, groupID, userID)
@@ -76,9 +84,9 @@ func (f *GroupRepository) AddUser(ctx context.Context, groupID uint, userID uint
 	return nil
 }
 
-func (f *GroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+func (f *GroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error {
 	if f.RemoveUserFunc != nil {
-		return f.RemoveUserFunc(ctx, groupID, userID)
+		return f.RemoveUserFunc(ctx, groupID, userID, replacementLeaderID)
 	}
 	return nil
 }
