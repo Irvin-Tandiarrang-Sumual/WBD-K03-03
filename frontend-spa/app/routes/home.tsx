@@ -1,7 +1,6 @@
+import React from 'react';
+import { Navigate } from 'react-router';
+
 export default function Home() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">Wedebe Migration Console</h1>
-    </div>
-  );
+  return <Navigate to="/databases" replace />;
 }
