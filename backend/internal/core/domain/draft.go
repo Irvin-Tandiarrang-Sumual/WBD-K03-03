@@ -135,10 +135,10 @@ func (s *SubmitApprovalInput) Validate() error {
 }
 
 type BatchProgress struct {
-	CurrentBatch  int     `json:"currentBatch"`
-	TotalBatches  int     `json:"totalBatches"`
-	RowsProcessed int64   `json:"rowsProcessed"`
-	TotalRows     int64   `json:"totalRows"`
-	Percentage    float64 `json:"percentage"`
-	Status        string  `json:"status"`
+	CurrentBatch  int
+	TotalBatches  int
+	RowsProcessed int64
+	TotalRows     int64
+	Percentage    float64
+	Status        string
 }

@@ -82,10 +82,13 @@ func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraft
 	if input.IsBatch {
 		tbl, err := sqlutil.ValidateBatchDML(input.SqlUp)
 		if err != nil {
+			if errors.Is(err, sqlutil.ErrBatchContainsDDL) {
+				return nil, domain.ErrBatchContainsDDL
+			}
 			if errors.Is(err, sqlutil.ErrBatchMultipleUnrelatedTables) {
 				return nil, domain.ErrBatchMultipleUnrelatedTables
 			}
-			return nil, err
+			return nil, domain.ErrInvalidDraftInput
 		}
 		if s.databaseDriver != nil && s.databaseRepo != nil {
 			db, err := s.databaseRepo.FindWithCredentialByID(ctx, input.DatabaseID)

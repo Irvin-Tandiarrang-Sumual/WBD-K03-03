@@ -3,8 +3,6 @@ package domain
 import (
 	"errors"
 	"fmt"
-
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
 
 var (
@@ -63,7 +61,7 @@ var (
 	ErrDatabaseLocked                       = errors.New("Database is locked by another migration or quarantine")
 	ErrDatabaseMustResolvePartiallyReverted = fmt.Errorf("%w: Database must resolve partially reverted draft before new executions", ErrDatabaseLocked)
 	ErrQueueFull                            = errors.New("Task queue is full")
-	ErrBatchContainsDDL                     = sqlutil.ErrBatchContainsDDL
+	ErrBatchContainsDDL                     = fmt.Errorf("%w: Batch draft must only contain DML statements (INSERT, UPDATE, DELETE)", ErrInvalidInput)
 	ErrBatchMissingColumnOrSize             = fmt.Errorf("%w: Batch draft requires batch_column and positive batch_size", ErrInvalidInput)
 	ErrBatchColumnNotFound                  = fmt.Errorf("%w: batch_column not found in target table", ErrInvalidInput)
 	ErrBatchMultipleUnrelatedTables         = fmt.Errorf("%w: Batch draft statements must target the same table", ErrInvalidInput)
