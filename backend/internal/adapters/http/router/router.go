@@ -19,6 +19,7 @@ type routerDependencies struct {
 	databaseHandler       *handlers.DatabaseHandler
 	databaseDriverHandler *handlers.DatabaseDriverHandler
 	migrationHandler      *handlers.MigrationHandler
+	draftHandler          *handlers.DraftHandler
 	healthHandler         *handlers.HealthHandler
 }
 
@@ -32,6 +33,7 @@ func SetupRouter(
 	databaseHandler *handlers.DatabaseHandler,
 	databaseDriverHandler *handlers.DatabaseDriverHandler,
 	migrationHandler *handlers.MigrationHandler,
+	draftHandler *handlers.DraftHandler,
 	healthHandler *handlers.HealthHandler,
 	sessionService ports.SessionService,
 	userService ports.UserService,
@@ -48,6 +50,7 @@ func SetupRouter(
 		databaseHandler:       databaseHandler,
 		databaseDriverHandler: databaseDriverHandler,
 		migrationHandler:      migrationHandler,
+		draftHandler:          draftHandler,
 		healthHandler:         healthHandler,
 	}
 

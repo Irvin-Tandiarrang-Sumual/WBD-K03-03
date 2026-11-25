@@ -6,6 +6,7 @@ import (
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
 	databasedriverservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_driver"
+	draftservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/draft"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
@@ -23,6 +24,7 @@ type applicationServices struct {
 	database       ports.DatabaseService
 	databaseDriver ports.DatabaseDriverService
 	migration      ports.MigrationService
+	draft          ports.DraftService
 }
 
 func buildServices(
@@ -38,6 +40,7 @@ func buildServices(
 	)
 	sessionRepository := repositories.NewSessionRepository(systemDatabase)
 	migrationRepository := repositories.NewMigrationRepository(systemDatabase)
+	draftRepository := repositories.NewDraftRepository(systemDatabase)
 
 	sessionService := sessionservice.NewSessionService(sessionRepository)
 	authService := authservice.NewAuthService(userRepository, sessionService)
@@ -69,6 +72,11 @@ func buildServices(
 		infrastructure.databaseDriver,
 		userGroupService,
 	)
+	draftService := draftservice.NewDraftService(
+		draftRepository,
+		groupRepository,
+		userGroupService,
+	)
 
 	return &applicationServices{
 		auth:           authService,
@@ -79,5 +87,6 @@ func buildServices(
 		database:       databaseService,
 		databaseDriver: databaseDriverService,
 		migration:      migrationService,
+		draft:          draftService,
 	}, nil
 }

@@ -8,6 +8,16 @@ func registerAuthenticatedUserRoutes(protected *gin.RouterGroup, dependencies ro
 	me := protected.Group("/me")
 
 	registerUserDatabaseRoutes(me, dependencies)
+	registerDraftRoutes(protected, dependencies)
+	me.GET("/drafts/:id", dependencies.draftHandler.GetDraftByID)
+	me.POST("/drafts/:id/approvals", dependencies.draftHandler.SubmitApproval)
+}
+
+func registerDraftRoutes(group *gin.RouterGroup, dependencies routerDependencies) {
+	group.POST("/databases/:id/drafts", dependencies.draftHandler.CreateDraft)
+	group.GET("/databases/:id/drafts", dependencies.draftHandler.GetDraftsByDatabaseID)
+	group.GET("/drafts/:id", dependencies.draftHandler.GetDraftByID)
+	group.POST("/drafts/:id/approvals", dependencies.draftHandler.SubmitApproval)
 }
 
 func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependencies) {
@@ -49,4 +59,16 @@ func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependen
 	databases.POST("/:database_id/forward-draft", dependencies.migrationHandler.ProposeForward)
 	databases.POST("/:database_id/migration-drafts/:draft_id/vote", dependencies.migrationHandler.VoteMigrationDraft)
 	databases.POST("/:database_id/migration-drafts/:draft_id/execute", dependencies.migrationHandler.ExecuteMigrationDraft)
+	databases.POST(
+		"/:database_id/drafts",
+		dependencies.draftHandler.CreateDraft,
+	)
+	databases.GET(
+		"/:database_id/drafts",
+		dependencies.draftHandler.GetDraftsByDatabaseID,
+	)
+	databases.POST(
+		"/migrations/rollback",
+		dependencies.migrationHandler.RollbackMigrations,
+	)
 }
