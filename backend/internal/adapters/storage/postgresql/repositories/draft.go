@@ -218,6 +218,20 @@ func (r *draftRepository) FindApprovalByDraftAndGroup(ctx context.Context, draft
 	return toDomainDraftApproval(&modelApproval), nil
 }
 
+func (r *draftRepository) FindDraftByStatusAndDatabaseID(ctx context.Context, databaseID uint, status string) (*domain.Draft, error) {
+	var modelDraft model.Draft
+	err := r.db.WithContext(ctx).
+		Where("database_id = ? AND status = ?", databaseID, status).
+		First(&modelDraft).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrDraftNotFound
+		}
+		return nil, err
+	}
+	return toDomainDraft(&modelDraft), nil
+}
+
 func toDomainDraft(m *model.Draft) *domain.Draft {
 	if m == nil {
 		return nil

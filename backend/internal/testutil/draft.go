@@ -17,8 +17,16 @@ type DraftRepository struct {
 	FindAllByDatabaseIDFunc         func(context.Context, uint, pagination.PaginationParams) ([]*domain.Draft, int64, error)
 	SaveApprovalFunc                func(context.Context, *domain.DraftApproval) (*domain.DraftApproval, error)
 	UpdateApprovalFunc              func(context.Context, *domain.DraftApproval) (*domain.DraftApproval, error)
-	FindApprovalsByDraftIDFunc      func(context.Context, uint) ([]*domain.DraftApproval, error)
-	FindApprovalByDraftAndGroupFunc func(context.Context, uint, uint) (*domain.DraftApproval, error)
+	FindApprovalsByDraftIDFunc         func(context.Context, uint) ([]*domain.DraftApproval, error)
+	FindApprovalByDraftAndGroupFunc    func(context.Context, uint, uint) (*domain.DraftApproval, error)
+	FindDraftByStatusAndDatabaseIDFunc func(context.Context, uint, string) (*domain.Draft, error)
+}
+
+func (f *DraftRepository) FindDraftByStatusAndDatabaseID(ctx context.Context, databaseID uint, status string) (*domain.Draft, error) {
+	if f.FindDraftByStatusAndDatabaseIDFunc != nil {
+		return f.FindDraftByStatusAndDatabaseIDFunc(ctx, databaseID, status)
+	}
+	return nil, nil
 }
 
 func (f *DraftRepository) WithTransaction(ctx context.Context, fn func(ports.DraftRepository) error) error {
@@ -92,6 +100,7 @@ type DraftService struct {
 	SubmitApprovalFunc        func(context.Context, domain.SubmitApprovalInput) (*domain.Draft, error)
 	ValidateDraftFunc         func(context.Context, uint) (*domain.Draft, error)
 	ExecuteDraftFunc          func(context.Context, uint, uint) error
+	UnlockDatabaseFunc        func(databaseID uint)
 }
 
 func (f *DraftService) CreateDraft(ctx context.Context, input domain.CreateDraftInput) (*domain.Draft, error) {
@@ -134,4 +143,10 @@ func (f *DraftService) ExecuteDraft(ctx context.Context, draftID uint, userID ui
 		return f.ExecuteDraftFunc(ctx, draftID, userID)
 	}
 	return nil
+}
+
+func (f *DraftService) UnlockDatabase(databaseID uint) {
+	if f.UnlockDatabaseFunc != nil {
+		f.UnlockDatabaseFunc(databaseID)
+	}
 }

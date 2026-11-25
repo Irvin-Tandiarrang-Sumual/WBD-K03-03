@@ -10,14 +10,16 @@ const (
 )
 
 type Database struct {
-	ID         uint
-	Port       uint
-	Host       string
-	User       string
-	Password   string
-	Type       string
-	Name       string
-	AccessType AccessType
+	ID                 uint
+	Port               uint
+	Host               string
+	User               string
+	Password           string
+	Type               string
+	Name               string
+	AccessType         AccessType
+	LatestExecutionID  uint
+	CurrentMigrationID *uint
 }
 
 type CreateDatabaseInput struct {

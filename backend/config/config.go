@@ -10,6 +10,12 @@ type Config struct {
 	Server   ServerConfig
 	Security SecurityConfig
 	Session  SessionConfig
+	Worker   WorkerConfig
+}
+
+type WorkerConfig struct {
+	Count         int
+	QueueCapacity int
 }
 
 type ServerConfig struct {
@@ -59,6 +65,11 @@ func LoadConfig() (*Config, error) {
 
 		Session: SessionConfig{
 			CookieSecure: getEnvAsBoolValue("SESSION_COOKIE_SECURE", true),
+		},
+
+		Worker: WorkerConfig{
+			Count:         getEnvAsIntValue("MIGRATION_WORKER_COUNT", 5),
+			QueueCapacity: getEnvAsIntValue("MIGRATION_QUEUE_CAPACITY", 100),
 		},
 	}
 

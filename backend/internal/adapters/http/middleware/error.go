@@ -82,6 +82,12 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrDraftNotApproved):
 		return http.StatusConflict, response.Error(err.Error())
 
+	case errors.Is(err, domain.ErrDatabaseMustResolvePartiallyReverted):
+		return http.StatusLocked, response.Error(err.Error())
+
+	case errors.Is(err, domain.ErrQueueFull):
+		return http.StatusServiceUnavailable, response.Error(err.Error())
+
 	case errors.Is(err, domain.ErrPasswordTooLong):
 		return http.StatusBadRequest, response.Error("password must not exceed 72 bytes")
 	case errors.Is(err, domain.ErrPasswordEmpty):
