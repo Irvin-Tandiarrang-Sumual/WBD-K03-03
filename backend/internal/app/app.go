@@ -60,7 +60,7 @@ func buildApplication() (*application, error) {
 		return nil, err
 	}
 
-	services, err := buildServices(systemDatabase, targetDatabaseInfrastructure)
+	services, err := buildServices(systemDatabase, targetDatabaseInfrastructure, configuration.Worker)
 	if err != nil {
 		targetDatabaseInfrastructure.close()
 		closeSystemDatabase()
@@ -109,6 +109,7 @@ func buildApplication() (*application, error) {
 		config: configuration,
 		engine: engine,
 		closeTarget: func() {
+			services.close()
 			targetDatabaseInfrastructure.close()
 			closeSystemDatabase()
 		},

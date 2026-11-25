@@ -1,6 +1,8 @@
 package app
 
 import (
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/channel"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
@@ -25,11 +27,19 @@ type applicationServices struct {
 	databaseDriver ports.DatabaseDriverService
 	migration      ports.MigrationService
 	draft          ports.DraftService
+	queue          *channel.ChannelQueue
+}
+
+func (s *applicationServices) close() {
+	if s.queue != nil {
+		s.queue.Close()
+	}
 }
 
 func buildServices(
 	systemDatabase *gorm.DB,
 	infrastructure *targetDatabaseInfrastructure,
+	workerConfig config.WorkerConfig,
 ) (*applicationServices, error) {
 	userRepository := repositories.NewUserRepository(systemDatabase)
 	groupRepository := repositories.NewGroupRepository(systemDatabase)
@@ -72,11 +82,35 @@ func buildServices(
 		infrastructure.databaseDriver,
 		userGroupService,
 	)
+
+	var draftSvc ports.DraftService
+	worker := draftservice.NewExecutionWorker(
+		draftRepository,
+		databaseRepository,
+		migrationRepository,
+		infrastructure.databaseDriver,
+		func(databaseID uint) {
+			if draftSvc != nil {
+				draftSvc.UnlockDatabase(databaseID)
+			}
+		},
+	)
+
+	taskQueue := channel.NewChannelQueue(
+		worker.Execute,
+		workerConfig.Count,
+		workerConfig.QueueCapacity,
+		channel.DefaultTaskTimeout,
+	)
+
 	draftService := draftservice.NewDraftService(
 		draftRepository,
 		groupRepository,
 		userGroupService,
+		databaseRepository,
+		taskQueue,
 	)
+	draftSvc = draftService
 
 	return &applicationServices{
 		auth:           authService,
@@ -88,5 +122,6 @@ func buildServices(
 		databaseDriver: databaseDriverService,
 		migration:      migrationService,
 		draft:          draftService,
+		queue:          taskQueue,
 	}, nil
 }

@@ -217,3 +217,41 @@ func (h *DraftHandler) SubmitApproval(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.Success("approval submitted successfully", toDraftResponse(updatedDraft)))
 }
+
+// ExecuteDraft triggers asynchronous execution of an approved migration draft.
+//
+//	@Summary		Execute draft
+//	@Description	Triggers asynchronous migration execution for an approved draft. Requires caller to be the draft author. Returns HTTP 202 Accepted.
+//	@Tags			Me - Drafts
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			id		path		int							true	"Draft ID"
+//	@Success		202		{object}	response.BaseResponse[any]	"Draft execution accepted"
+//	@Failure		400		{object}	response.BaseResponse[any]	"Invalid draft ID"
+//	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
+//	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not author)"
+//	@Failure		404		{object}	response.BaseResponse[any]	"Draft or database not found"
+//	@Failure		409		{object}	response.BaseResponse[any]	"Conflict (migration in progress or not approved)"
+//	@Failure		423		{object}	response.BaseResponse[any]	"Locked (database must resolve partially reverted)"
+//	@Failure		500		{object}	response.BaseResponse[any]	"Internal server error"
+//	@Router			/drafts/{id}/execute [post]
+func (h *DraftHandler) ExecuteDraft(c *gin.Context) {
+	draftID, err := ginutil.ParseUintParam(c, "id")
+	if err != nil {
+		c.Error(domain.ErrInvalidInput)
+		return
+	}
+
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	if err := h.service.ExecuteDraft(c.Request.Context(), draftID, userID); err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, response.Success[any]("draft execution accepted", nil))
+}
