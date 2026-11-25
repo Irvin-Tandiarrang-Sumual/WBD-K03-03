@@ -16,7 +16,9 @@ type Draft struct {
 	IsBatch            bool   `gorm:"not null;default:false"`
 	BatchColumn        string `gorm:"type:varchar(100);not null;default:''"`
 	BatchSize          int    `gorm:"not null;default:0"`
-	Status             string `gorm:"type:text;check:status IN ('pending_approval','approved','rejected','invalidated','executing','partially_reverted','applied','failed');not null;default:'pending_approval'"`
+	CurrentRound       uint   `gorm:"not null;default:1"`
+	RecoveryAction     string `gorm:"type:varchar(50);not null;default:''"`
+	Status             string `gorm:"type:text;check:status IN ('pending_approval','approved','rejected','invalidated','executing','partial','partially_reverted','applied','failed');not null;default:'pending_approval'"`
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 
@@ -28,10 +30,13 @@ type Draft struct {
 
 type DraftApproval struct {
 	ID          uint       `gorm:"primaryKey"`
-	DraftID     uint       `gorm:"not null;uniqueIndex:idx_draft_approvals_draft_group,priority:1"`
-	GroupID     uint       `gorm:"not null;uniqueIndex:idx_draft_approvals_draft_group,priority:2"`
+	DraftID     uint       `gorm:"not null;uniqueIndex:idx_draft_approvals_draft_group_round,priority:1"`
+	GroupID     uint       `gorm:"not null;uniqueIndex:idx_draft_approvals_draft_group_round,priority:2"`
+	Round       uint       `gorm:"not null;default:1;uniqueIndex:idx_draft_approvals_draft_group_round,priority:3"`
 	LeaderID    *uint      `gorm:"index"`
+	Phase       string     `gorm:"type:varchar(50);not null;default:'initial'"`
 	Status      string     `gorm:"type:text;check:status IN ('pending','approved','rejected');not null;default:'pending'"`
+	Vote        string     `gorm:"type:varchar(50);not null;default:'pending'"`
 	RespondedAt *time.Time `gorm:"default:null"`
 
 	Draft  Draft `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
