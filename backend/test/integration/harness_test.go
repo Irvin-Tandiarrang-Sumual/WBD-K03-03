@@ -16,6 +16,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -340,4 +341,17 @@ func parseResponseBody[T any](t *testing.T, rec *httptest.ResponseRecorder) resp
 	}
 	t.Fatalf("failed to decode response JSON: raw body: %s", rec.Body.String())
 	return res
+}
+
+func createMigrationLeader(t *testing.T, stack *testStack, username string) model.User {
+	t.Helper()
+	hash, err := hasher.HashPassword("password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	leader := model.User{Username: username, Password: hash, Role: "user"}
+	if err := stack.db.Session(&gorm.Session{SkipHooks: true}).Create(&leader).Error; err != nil {
+		t.Fatal(err)
+	}
+	return leader
 }

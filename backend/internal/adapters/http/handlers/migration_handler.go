@@ -29,6 +29,9 @@ func NewMigrationHandler(service ports.MigrationService) *MigrationHandler {
 //	@Produce		json
 //	@Security		CookieAuth
 //	@Param			database_id	path		int										true	"Database ID"
+//
+// @Param hide_rollback query bool false "Hide successful rollback pairs"
+//
 //	@Param			page		query		int										false	"Page number (default: 1)"
 //	@Param			limit		query		int										false	"Items per page (default: 10)"
 //	@Success		200			{object}	response.PagedResponse[MigrationResponse]	"Migrations retrieved"
@@ -56,7 +59,12 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 		return
 	}
 
-	migrations, totalData, err := h.service.GetMigrationsByDatabaseID(c.Request.Context(), databaseID, userID, params)
+	hideRollback, err := strconv.ParseBool(c.DefaultQuery("hide_rollback", "false"))
+	if err != nil {
+		c.Error(domain.ErrInvalidMigrationInput)
+		return
+	}
+	migrations, totalData, err := h.service.GetMigrationsByDatabaseID(c.Request.Context(), databaseID, userID, params, hideRollback)
 	if err != nil {
 		c.Error(err)
 		return
@@ -224,50 +232,142 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 	}))
 }
 
-// RollbackMigrations rolls back migrations to a target migration.
+// ProposeRollback handles the migration draft workflow.
 //
-//	@Summary		Rollback migrations
-//	@Description	Rolls back all migrations up to and including the target migration ID.
-//	@Tags			Me - Migrations
-//	@Accept			json
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Param			body	body		RollbackMigrationRequest						true	"Rollback target"
-//	@Success		200		{object}	response.BaseResponse[[]MigrationResponse]		"Migrations rolled back"
-//	@Failure		400		{object}	response.BaseResponse[any]						"Invalid input"
-//	@Failure		401		{object}	response.BaseResponse[any]						"Unauthorized"
-//	@Failure		403		{object}	response.BaseResponse[any]						"Forbidden"
-//	@Failure		409		{object}	response.BaseResponse[any]						"Rollback unavailable or version conflict"
-//	@Failure		500		{object}	response.BaseResponse[any]						"Internal server error"
-//	@Router			/me/databases/migrations/rollback [post]
-func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
+// @Summary Propose rollback of the active migration
+// @Tags Me - Migrations
+// @Produce json
+// @Security CookieAuth
+// @Param database_id path int true "Database ID"
+// @Success 201 {object} response.BaseResponse[MigrationDraftResponse]
+// @Failure 400 {object} response.BaseResponse[any] "Invalid request or irreversible migration"
+// @Failure 401 {object} response.BaseResponse[any] "Unauthorized"
+// @Failure 403 {object} response.BaseResponse[any] "Forbidden"
+// @Failure 404 {object} response.BaseResponse[any] "Database or draft not found"
+// @Failure 409 {object} response.BaseResponse[any] "Unavailable in the current state"
+// @Failure 500 {object} response.BaseResponse[any] "Internal server error"
+// @Router /me/databases/{database_id}/rollback-draft [post]
+func (h *MigrationHandler) ProposeRollback(c *gin.Context) {
+	h.proposeDraft(c, domain.OperationRollback)
+}
+
+// ProposeForward handles the migration draft workflow.
+//
+// @Summary Propose one forward step
+// @Tags Me - Migrations
+// @Produce json
+// @Security CookieAuth
+// @Param database_id path int true "Database ID"
+// @Success 201 {object} response.BaseResponse[MigrationDraftResponse]
+// @Failure 400 {object} response.BaseResponse[any] "Invalid request or irreversible migration"
+// @Failure 401 {object} response.BaseResponse[any] "Unauthorized"
+// @Failure 403 {object} response.BaseResponse[any] "Forbidden"
+// @Failure 404 {object} response.BaseResponse[any] "Database or draft not found"
+// @Failure 409 {object} response.BaseResponse[any] "Unavailable in the current state"
+// @Failure 500 {object} response.BaseResponse[any] "Internal server error"
+// @Router /me/databases/{database_id}/forward-draft [post]
+func (h *MigrationHandler) ProposeForward(c *gin.Context) {
+	h.proposeDraft(c, domain.OperationForward)
+}
+
+// VoteMigrationDraft handles the migration draft workflow.
+//
+// @Summary Submit a group leader vote
+// @Tags Me - Migrations
+// @Produce json
+// @Security CookieAuth
+// @Param database_id path int true "Database ID"
+// @Param draft_id path int true "Draft ID"
+// @Accept json
+// @Param body body VoteMigrationDraftRequest true "Leader decision"
+// @Success 204 "Vote recorded"
+// @Failure 400 {object} response.BaseResponse[any] "Invalid request or irreversible migration"
+// @Failure 401 {object} response.BaseResponse[any] "Unauthorized"
+// @Failure 403 {object} response.BaseResponse[any] "Forbidden"
+// @Failure 404 {object} response.BaseResponse[any] "Database or draft not found"
+// @Failure 409 {object} response.BaseResponse[any] "Unavailable in the current state"
+// @Failure 500 {object} response.BaseResponse[any] "Internal server error"
+// @Router /me/databases/{database_id}/migration-drafts/{draft_id}/vote [post]
+func (h *MigrationHandler) VoteMigrationDraft(c *gin.Context) {
+	dbID, userID, ok := migrationActor(c)
+	if !ok {
+		return
+	}
+	id, err := ginutil.ParseUintParam(c, "draft_id")
+	if err != nil {
+		c.Error(domain.ErrInvalidMigrationInput)
+		return
+	}
+	var req VoteMigrationDraftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	if err := h.service.VoteMigrationDraft(c.Request.Context(), dbID, id, userID, *req.Approve); err != nil {
+		c.Error(err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// ExecuteMigrationDraft handles the migration draft workflow.
+//
+// @Summary Execute a unanimously approved migration draft
+// @Tags Me - Migrations
+// @Produce json
+// @Security CookieAuth
+// @Param database_id path int true "Database ID"
+// @Param draft_id path int true "Draft ID"
+// @Success 200 {object} response.BaseResponse[MigrationResponse]
+// @Failure 400 {object} response.BaseResponse[any] "Invalid request or irreversible migration"
+// @Failure 401 {object} response.BaseResponse[any] "Unauthorized"
+// @Failure 403 {object} response.BaseResponse[any] "Forbidden"
+// @Failure 404 {object} response.BaseResponse[any] "Database or draft not found"
+// @Failure 409 {object} response.BaseResponse[any] "Unavailable in the current state"
+// @Failure 500 {object} response.BaseResponse[any] "Internal server error"
+// @Router /me/databases/{database_id}/migration-drafts/{draft_id}/execute [post]
+func (h *MigrationHandler) ExecuteMigrationDraft(c *gin.Context) {
+	dbID, userID, ok := migrationActor(c)
+	if !ok {
+		return
+	}
+	id, err := ginutil.ParseUintParam(c, "draft_id")
+	if err != nil {
+		c.Error(domain.ErrInvalidMigrationInput)
+		return
+	}
+	m, err := h.service.ExecuteMigrationDraft(c.Request.Context(), dbID, id, userID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response.Success("draft applied", toMigrationResponse(m)))
+}
+
+func migrationActor(c *gin.Context) (uint, uint, bool) {
+	dbID, err := ginutil.ParseUintParam(c, "database_id")
+	if err != nil {
+		c.Error(domain.ErrInvalidDatabaseID)
+		return 0, 0, false
+	}
 	userID, err := middleware.CurrentUserID(c)
 	if err != nil {
 		c.Error(err)
+		return 0, 0, false
+	}
+	return dbID, userID, true
+}
+func (h *MigrationHandler) proposeDraft(c *gin.Context, operation string) {
+	dbID, userID, ok := migrationActor(c)
+	if !ok {
 		return
 	}
-	var request RollbackMigrationRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.Error(err)
-		return
-	}
-	rolledBack, err := h.service.RollbackMigrations(
-		c.Request.Context(),
-		domain.RollbackMigrationsInput{
-			DatabaseID:        request.DatabaseID,
-			UserID:            userID,
-			TargetMigrationID: request.TargetMigrationID,
-		},
-	)
+	d, err := h.service.ProposeMigrationDraft(c.Request.Context(), dbID, userID, operation)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	data := make([]MigrationResponse, 0, len(rolledBack))
-	for _, migration := range rolledBack {
-		data = append(data, toMigrationResponse(migration))
-	}
-	c.JSON(http.StatusOK, response.Success("migrations rolled back successfully", data))
+	c.JSON(http.StatusCreated, response.Success("draft submitted", MigrationDraftResponse{ID: d.ID, Operation: d.Operation, TargetMigrationID: d.TargetID, SqlUp: d.SqlUp, Status: d.Status}))
 }
 
 func toMigrationResponse(migration *domain.Migration) MigrationResponse {
@@ -276,6 +376,12 @@ func toMigrationResponse(migration *domain.Migration) MigrationResponse {
 		snapshot = json.RawMessage(migration.Snapshot)
 	}
 	return MigrationResponse{
+		ExecutionID:        migration.ExecutionID,
+		RevertsMigrationID: migration.RevertsMigrationID,
+		SourceMigrationID:  migration.SourceMigrationID,
+		IsReversible:       migration.IsReversible,
+		IrreversibleReason: migration.IrreversibleReason,
+
 		ID:           migration.ID,
 		DatabaseID:   migration.DatabaseID,
 		Version:      migration.Version,

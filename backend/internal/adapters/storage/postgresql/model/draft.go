@@ -3,6 +3,9 @@ package model
 import "time"
 
 type Draft struct {
+	Operation          string
+	TargetID           uint
+	BaseExecutionID    uint
 	ID                 uint   `gorm:"primaryKey"`
 	DatabaseID         uint   `gorm:"not null;index"`
 	UserID             uint   `gorm:"not null;index"`
@@ -31,9 +34,9 @@ type DraftApproval struct {
 	Status      string     `gorm:"type:text;check:status IN ('pending','approved','rejected');not null;default:'pending'"`
 	RespondedAt *time.Time `gorm:"default:null"`
 
-	Draft  Draft  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Group  Group  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Leader *User  `gorm:"foreignKey:LeaderID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Draft  Draft `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Group  Group `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Leader *User `gorm:"foreignKey:LeaderID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
 
 type DraftCheckpoint struct {

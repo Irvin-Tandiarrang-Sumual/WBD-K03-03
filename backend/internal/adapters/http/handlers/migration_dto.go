@@ -10,9 +10,15 @@ type CreateMigrationRequest struct {
 	SqlUp string `json:"sqlUp" binding:"required"`
 }
 
-type RollbackMigrationRequest struct {
-	DatabaseID        uint `json:"databaseId" binding:"required"`
-	TargetMigrationID uint `json:"targetMigrationId" binding:"required"`
+type VoteMigrationDraftRequest struct {
+	Approve *bool `json:"approve" binding:"required"`
+}
+type MigrationDraftResponse struct {
+	ID                uint   `json:"id"`
+	Operation         string `json:"operation"`
+	TargetMigrationID uint   `json:"targetMigrationId"`
+	SqlUp             string `json:"sqlUp"`
+	Status            string `json:"status"`
 }
 
 type SchemaColumnSnapshotResponse struct {
@@ -66,6 +72,12 @@ type MigrationComparisonResponse struct {
 }
 
 type MigrationResponse struct {
+	ExecutionID        uint   `json:"executionId"`
+	RevertsMigrationID *uint  `json:"revertsMigrationId"`
+	SourceMigrationID  *uint  `json:"sourceMigrationId"`
+	IsReversible       bool   `json:"isReversible"`
+	IrreversibleReason string `json:"irreversibleReason"`
+
 	ID           uint            `json:"id"`
 	DatabaseID   uint            `json:"databaseId"`
 	Version      string          `json:"version"`

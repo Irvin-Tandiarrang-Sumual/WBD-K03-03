@@ -58,6 +58,9 @@ func (d *SQLDialect) generateSingleDown(ctx context.Context, database domain.Dat
 		return "", domain.ErrInvalidMigrationInput
 	}
 
+	if inverse, ok := sqlutil.InverseRename(statement); ok {
+		return inverse, nil
+	}
 	switch {
 	case strings.HasPrefix(lower, "create table "):
 		return generateCreateTableDown(statement)

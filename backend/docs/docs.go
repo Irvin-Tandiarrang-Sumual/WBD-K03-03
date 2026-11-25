@@ -1359,75 +1359,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/me/databases/migrations/rollback": {
-            "post": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Rolls back all migrations up to and including the target migration ID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Me - Migrations"
-                ],
-                "summary": "Rollback migrations",
-                "parameters": [
-                    {
-                        "description": "Rollback target",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers.RollbackMigrationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Migrations rolled back",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Rollback unavailable or version conflict",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    }
-                }
-            }
-        },
         "/me/databases/{database_id}": {
             "get": {
                 "security": [
@@ -1492,6 +1423,236 @@ const docTemplate = `{
                 }
             }
         },
+        "/me/databases/{database_id}/forward-draft": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Propose one forward step",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/databases/{database_id}/migration-drafts/{draft_id}/execute": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Execute a unanimously approved migration draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "draft_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/databases/{database_id}/migration-drafts/{draft_id}/vote": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Submit a group leader vote",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "draft_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Leader decision",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_adapters_http_handlers.VoteMigrationDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Vote recorded"
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
         "/me/databases/{database_id}/migrations": {
             "get": {
                 "security": [
@@ -1514,6 +1675,12 @@ const docTemplate = `{
                         "name": "database_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Hide successful rollback pairs",
+                        "name": "hide_rollback",
+                        "in": "query"
                     },
                     {
                         "type": "integer",
@@ -1785,6 +1952,7 @@ const docTemplate = `{
                 }
             }
         },
+        "/me/databases/{database_id}/rollback-draft": {
         "/databases/{id}/drafts": {
             "post": {
                 "security": [
@@ -1800,6 +1968,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Propose rollback of the active migration",
                     "Me - Drafts"
                 ],
                 "summary": "Create draft",
@@ -1807,6 +1978,9 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1823,6 +1997,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
                         "description": "Draft created successfully",
                         "schema": {
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse"
@@ -1973,6 +2154,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
+                        "description": "Database or draft not found",
                         "description": "Draft not found",
                         "schema": {
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
@@ -2049,6 +2231,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
+                        "description": "Unavailable in the current state",
                         "description": "Conflict (draft not in pending_approval state)",
                         "schema": {
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
@@ -2069,23 +2252,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "data": {},
-                "message": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
-                    }
-                },
                 "message": {
                     "type": "string"
                 },
@@ -2155,6 +2321,20 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/internal_adapters_http_handlers.MigrationComparisonResponse"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers.MigrationDraftResponse"
                 },
                 "message": {
                     "type": "string"
@@ -2537,6 +2717,26 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.MigrationDraftResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "operation": {
+                    "type": "string"
+                },
+                "sqlUp": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "targetMigrationId": {
+                    "type": "integer"
+                }
+            }
+        },
         "internal_adapters_http_handlers.MigrationResponse": {
             "type": "object",
             "properties": {
@@ -2546,7 +2746,19 @@ const docTemplate = `{
                 "errorMessage": {
                     "type": "string"
                 },
+                "executionId": {
+                    "type": "integer"
+                },
                 "id": {
+                    "type": "integer"
+                },
+                "irreversibleReason": {
+                    "type": "string"
+                },
+                "isReversible": {
+                    "type": "boolean"
+                },
+                "revertsMigrationId": {
                     "type": "integer"
                 },
                 "snapshot": {
@@ -2554,6 +2766,9 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                },
+                "sourceMigrationId": {
+                    "type": "integer"
                 },
                 "sqlDown": {
                     "type": "string"
@@ -2569,21 +2784,6 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers.RollbackMigrationRequest": {
-            "type": "object",
-            "required": [
-                "databaseId",
-                "targetMigrationId"
-            ],
-            "properties": {
-                "databaseId": {
-                    "type": "integer"
-                },
-                "targetMigrationId": {
-                    "type": "integer"
                 }
             }
         },
@@ -2752,6 +2952,13 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.VoteMigrationDraftRequest": {
+            "type": "object",
+            "required": [
+                "approve"
+            ],
+            "properties": {
+                "approve": {
         "internal_adapters_http_handlers.CreateDraftRequest": {
             "type": "object",
             "required": [
