@@ -2,6 +2,8 @@ package draft
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
@@ -9,10 +11,32 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 )
 
+type dbLock struct {
+	mu     sync.Mutex
+	locked atomic.Bool
+}
+
+func (l *dbLock) TryLock() bool {
+	if l.mu.TryLock() {
+		l.locked.Store(true)
+		return true
+	}
+	return false
+}
+
+func (l *dbLock) Unlock() {
+	if l.locked.CompareAndSwap(true, false) {
+		l.mu.Unlock()
+	}
+}
+
 type draftService struct {
 	draftRepo        ports.DraftRepository
 	groupRepo        ports.GroupRepository
+	databaseRepo     ports.DatabaseRepository
 	userGroupService ports.UserGroupService
+	taskQueue        ports.TaskQueue
+	dbLocks          sync.Map
 }
 
 var _ ports.DraftService = (*draftService)(nil)
@@ -21,12 +45,22 @@ func NewDraftService(
 	draftRepo ports.DraftRepository,
 	groupRepo ports.GroupRepository,
 	userGroupService ports.UserGroupService,
+	extra ...any,
 ) ports.DraftService {
-	return &draftService{
+	s := &draftService{
 		draftRepo:        draftRepo,
 		groupRepo:        groupRepo,
 		userGroupService: userGroupService,
 	}
+	for _, dep := range extra {
+		switch d := dep.(type) {
+		case ports.DatabaseRepository:
+			s.databaseRepo = d
+		case ports.TaskQueue:
+			s.taskQueue = d
+		}
+	}
+	return s
 }
 
 func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraftInput) (*domain.Draft, error) {
@@ -271,21 +305,89 @@ func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID ui
 		return domain.ErrInvalidDraftInput
 	}
 
-	validatedDraft, err := s.ValidateDraft(ctx, draftID)
+	draft, err := s.draftRepo.FindByID(ctx, draftID)
 	if err != nil {
 		return err
 	}
 
-	if validatedDraft.Status != domain.DraftStatusApproved {
-		return domain.ErrDraftNotApproved
+	if s.databaseRepo != nil {
+		db, err := s.databaseRepo.FindById(ctx, draft.DatabaseID)
+		if err != nil || db == nil {
+			return domain.ErrDatabaseNotFound
+		}
 	}
 
-	if err := s.userGroupService.Authorize(ctx, userID, validatedDraft.DatabaseID, domain.AccessViewEdit); err != nil {
+	if draft.UserID != userID {
 		return domain.ErrForbidden
 	}
 
-	validatedDraft.Status = domain.DraftStatusExecuting
-	validatedDraft.UpdatedAt = time.Now()
-	_, err = s.draftRepo.Update(ctx, validatedDraft)
-	return err
+	if s.userGroupService != nil {
+		if authErr := s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit); authErr != nil {
+			draft.Status = domain.DraftStatusInvalidated
+			draft.UpdatedAt = time.Now()
+			_, _ = s.draftRepo.Update(ctx, draft)
+			return domain.ErrDraftNotApproved
+		}
+	}
+
+	if draft.Status != domain.DraftStatusApproved {
+		return domain.ErrDraftNotApproved
+	}
+
+	if s.draftRepo != nil {
+		partiallyReverted, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, draft.DatabaseID, domain.DraftStatusPartiallyReverted)
+		if err == nil && partiallyReverted != nil && partiallyReverted.ID != 0 {
+			return domain.ErrDatabaseMustResolvePartiallyReverted
+		}
+
+		executingDraft, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, draft.DatabaseID, domain.DraftStatusExecuting)
+		if err == nil && executingDraft != nil && executingDraft.ID != 0 {
+			return domain.ErrMigrationInProgress
+		}
+	}
+
+	val, _ := s.dbLocks.LoadOrStore(draft.DatabaseID, &dbLock{})
+	lock := val.(*dbLock)
+	if !lock.TryLock() {
+		return domain.ErrMigrationInProgress
+	}
+
+	var execID uint
+	if s.databaseRepo != nil {
+		incID, err := s.databaseRepo.IncrementExecutionID(ctx, draft.DatabaseID)
+		if err != nil {
+			lock.Unlock()
+			return err
+		}
+		execID = incID
+	}
+
+	draft.Status = domain.DraftStatusExecuting
+	draft.UpdatedAt = time.Now()
+	if _, err := s.draftRepo.Update(ctx, draft); err != nil {
+		lock.Unlock()
+		return err
+	}
+
+	if s.taskQueue != nil {
+		task := ports.ExecutionTask{
+			DraftID:     draft.ID,
+			DatabaseID:  draft.DatabaseID,
+			ExecutionID: execID,
+			UserID:      userID,
+		}
+		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
+			lock.Unlock()
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *draftService) UnlockDatabase(databaseID uint) {
+	if val, ok := s.dbLocks.Load(databaseID); ok {
+		lock := val.(*dbLock)
+		lock.Unlock()
+	}
 }

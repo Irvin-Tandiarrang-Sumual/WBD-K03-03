@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/draft"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/testutil"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
@@ -1488,5 +1489,315 @@ func TestDraftService_ExecuteDraft_DraftNotFound_ReturnsErrDraftNotFound(t *test
 	// Assert
 	if !errors.Is(err, domain.ErrDraftNotFound) {
 		t.Fatalf("expected ErrDraftNotFound, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DatabaseNotFound_ReturnsErrDatabaseNotFound(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	dbID := uint(99)
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{
+				ID:         draftID,
+				UserID:     authorID,
+				DatabaseID: dbID,
+				Status:     domain.DraftStatusApproved,
+			}, nil
+		},
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(ctx context.Context, id uint) (*domain.Database, error) {
+			return nil, domain.ErrDatabaseNotFound
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDatabaseNotFound) {
+		t.Fatalf("expected ErrDatabaseNotFound, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_NotAuthor_ReturnsErrForbidden(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	callerID := uint(99) // Different user
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{
+				ID:         draftID,
+				UserID:     authorID,
+				DatabaseID: 1,
+				Status:     domain.DraftStatusApproved,
+			}, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, callerID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DraftNotApproved_ReturnsErrDraftNotApproved(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{
+				ID:         draftID,
+				UserID:     authorID,
+				DatabaseID: 1,
+				Status:     domain.DraftStatusPendingApproval, // Not approved!
+			}, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftNotApproved) {
+		t.Fatalf("expected ErrDraftNotApproved, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DatabaseExecuting_ReturnsErrMigrationInProgress(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	dbID := uint(1)
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{
+				ID:         draftID,
+				UserID:     authorID,
+				DatabaseID: dbID,
+				Status:     domain.DraftStatusApproved,
+			}, nil
+		},
+		FindDraftByStatusAndDatabaseIDFunc: func(ctx context.Context, dID uint, status string) (*domain.Draft, error) {
+			if status == domain.DraftStatusExecuting {
+				return &domain.Draft{ID: 999, DatabaseID: dbID, Status: domain.DraftStatusExecuting}, nil
+			}
+			return nil, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrMigrationInProgress) {
+		t.Fatalf("expected ErrMigrationInProgress, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DatabasePartiallyReverted_ReturnsErrDatabaseMustResolvePartiallyReverted(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(1)
+	authorID := uint(10)
+	dbID := uint(1)
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return &domain.Draft{
+				ID:         draftID,
+				UserID:     authorID,
+				DatabaseID: dbID,
+				Status:     domain.DraftStatusApproved,
+			}, nil
+		},
+		FindDraftByStatusAndDatabaseIDFunc: func(ctx context.Context, dID uint, status string) (*domain.Draft, error) {
+			if status == domain.DraftStatusPartiallyReverted {
+				return &domain.Draft{ID: 888, DatabaseID: dbID, Status: domain.DraftStatusPartiallyReverted}, nil
+			}
+			return nil, nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDatabaseMustResolvePartiallyReverted) {
+		t.Fatalf("expected ErrDatabaseMustResolvePartiallyReverted, got %v", err)
+	}
+}
+
+func TestDraftService_ExecuteDraft_ConcurrentRequestsSameDatabase_OnlyOneSucceedsAndSecondReturnsErrMigrationInProgress(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	authorID := uint(10)
+	dbID := uint(1)
+
+	draft1 := &domain.Draft{ID: 1, UserID: authorID, DatabaseID: dbID, Status: domain.DraftStatusApproved}
+	draft2 := &domain.Draft{ID: 2, UserID: authorID, DatabaseID: dbID, Status: domain.DraftStatusApproved}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			if id == 1 {
+				return draft1, nil
+			}
+			return draft2, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			return d, nil
+		},
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(ctx context.Context, id uint) (*domain.Database, error) {
+			return &domain.Database{ID: dbID}, nil
+		},
+		IncrementExecutionIDFunc: func(ctx context.Context, dID uint) (uint, error) {
+			return 1, nil
+		},
+	}
+	queue := &testutil.TaskQueue{}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
+
+	// Act: First request acquires lock
+	err1 := svc.ExecuteDraft(ctx, 1, authorID)
+	// Second request for same DB while first is executing
+	err2 := svc.ExecuteDraft(ctx, 2, authorID)
+
+	// Assert
+	if err1 != nil {
+		t.Fatalf("expected first execution to succeed, got %v", err1)
+	}
+	if !errors.Is(err2, domain.ErrMigrationInProgress) {
+		t.Fatalf("expected ErrMigrationInProgress on second concurrent request, got %v", err2)
+	}
+}
+
+func TestDraftService_ExecuteDraft_DifferentDatabases_AllowsParallelExecution(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	authorID := uint(10)
+	db1ID := uint(1)
+	db2ID := uint(2)
+
+	draft1 := &domain.Draft{ID: 1, UserID: authorID, DatabaseID: db1ID, Status: domain.DraftStatusApproved}
+	draft2 := &domain.Draft{ID: 2, UserID: authorID, DatabaseID: db2ID, Status: domain.DraftStatusApproved}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			if id == 1 {
+				return draft1, nil
+			}
+			return draft2, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			return d, nil
+		},
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(ctx context.Context, id uint) (*domain.Database, error) {
+			return &domain.Database{ID: id}, nil
+		},
+		IncrementExecutionIDFunc: func(ctx context.Context, dID uint) (uint, error) {
+			return 1, nil
+		},
+	}
+	queue := &testutil.TaskQueue{}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
+
+	// Act: Execute draft on DB 1 and draft on DB 2
+	err1 := svc.ExecuteDraft(ctx, 1, authorID)
+	err2 := svc.ExecuteDraft(ctx, 2, authorID)
+
+	// Assert: Both succeed because database mutexes are isolated per databaseID
+	if err1 != nil {
+		t.Fatalf("expected DB1 execution to succeed, got %v", err1)
+	}
+	if err2 != nil {
+		t.Fatalf("expected DB2 execution to succeed, got %v", err2)
+	}
+}
+
+func TestDraftService_ExecuteDraft_ValidApprovedDraft_IncrementsExecutionIDAndEnqueuesTask(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	draftID := uint(42)
+	authorID := uint(10)
+	dbID := uint(1)
+	expectedExecutionID := uint(7)
+
+	var enqueuedTask ports.ExecutionTask
+	draftObj := &domain.Draft{
+		ID:         draftID,
+		UserID:     authorID,
+		DatabaseID: dbID,
+		Status:     domain.DraftStatusApproved,
+	}
+
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return draftObj, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			draftObj = d
+			return draftObj, nil
+		},
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(ctx context.Context, id uint) (*domain.Database, error) {
+			return &domain.Database{ID: dbID}, nil
+		},
+		IncrementExecutionIDFunc: func(ctx context.Context, dID uint) (uint, error) {
+			return expectedExecutionID, nil
+		},
+	}
+	queue := &testutil.TaskQueue{
+		EnqueueFunc: func(ctx context.Context, task ports.ExecutionTask) error {
+			enqueuedTask = task
+			return nil
+		},
+	}
+
+	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
+
+	// Act
+	err := svc.ExecuteDraft(ctx, draftID, authorID)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if draftObj.Status != domain.DraftStatusExecuting {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusExecuting, draftObj.Status)
+	}
+	if enqueuedTask.DraftID != draftID || enqueuedTask.DatabaseID != dbID || enqueuedTask.ExecutionID != expectedExecutionID {
+		t.Fatalf("expected enqueued task with execution_id %d, got %+v", expectedExecutionID, enqueuedTask)
 	}
 }
