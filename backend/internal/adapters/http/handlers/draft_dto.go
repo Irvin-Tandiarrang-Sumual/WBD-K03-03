@@ -26,6 +26,9 @@ type DraftApprovalResponse struct {
 	GroupID     uint       `json:"groupId"`
 	LeaderID    *uint      `json:"leaderId"`
 	Status      string     `json:"status"`
+	Round       uint       `json:"round"`
+	Phase       string     `json:"phase,omitempty"`
+	Vote        string     `json:"vote,omitempty"`
 	RespondedAt *time.Time `json:"respondedAt,omitempty"`
 }
 
@@ -40,10 +43,21 @@ type DraftResponse struct {
 	IsBatch            bool                    `json:"isBatch"`
 	BatchColumn        string                  `json:"batchColumn"`
 	BatchSize          int                     `json:"batchSize"`
+	CurrentRound       uint                    `json:"currentRound"`
+	RecoveryAction     string                  `json:"recoveryAction,omitempty"`
 	Status             string                  `json:"status"`
 	CreatedAt          time.Time               `json:"createdAt"`
 	UpdatedAt          time.Time               `json:"updatedAt"`
 	Approvals          []DraftApprovalResponse `json:"approvals"`
+}
+
+type BatchProgressResponse struct {
+	CurrentBatch  int     `json:"current_batch"`
+	TotalBatches  int     `json:"total_batches"`
+	RowsProcessed int64   `json:"rows_processed"`
+	TotalRows     int64   `json:"total_rows"`
+	Percentage    float64 `json:"percentage"`
+	Status        string  `json:"status"`
 }
 
 func toDraftResponse(d *domain.Draft) DraftResponse {
@@ -59,6 +73,9 @@ func toDraftResponse(d *domain.Draft) DraftResponse {
 			GroupID:     app.GroupID,
 			LeaderID:    app.LeaderID,
 			Status:      app.Status,
+			Round:       app.Round,
+			Phase:       app.Phase,
+			Vote:        app.Vote,
 			RespondedAt: app.RespondedAt,
 		})
 	}
@@ -74,6 +91,8 @@ func toDraftResponse(d *domain.Draft) DraftResponse {
 		IsBatch:            d.IsBatch,
 		BatchColumn:        d.BatchColumn,
 		BatchSize:          d.BatchSize,
+		CurrentRound:       d.CurrentRound,
+		RecoveryAction:     d.RecoveryAction,
 		Status:             d.Status,
 		CreatedAt:          d.CreatedAt,
 		UpdatedAt:          d.UpdatedAt,

@@ -12,6 +12,10 @@ func registerAuthenticatedUserRoutes(protected *gin.RouterGroup, dependencies ro
 	me.GET("/drafts/:id", dependencies.draftHandler.GetDraftByID)
 	me.POST("/drafts/:id/approvals", dependencies.draftHandler.SubmitApproval)
 	me.POST("/drafts/:id/execute", dependencies.draftHandler.ExecuteDraft)
+	me.POST("/drafts/:id/resume", dependencies.draftHandler.ResumeBatch)
+	me.POST("/drafts/:id/revert-batch", dependencies.draftHandler.RevertBatch)
+	me.GET("/drafts/:id/progress", dependencies.draftHandler.GetBatchProgress)
+	me.GET("/drafts/:id/progress/stream", dependencies.draftHandler.StreamBatchProgress)
 }
 
 func registerDraftRoutes(group *gin.RouterGroup, dependencies routerDependencies) {
@@ -20,6 +24,10 @@ func registerDraftRoutes(group *gin.RouterGroup, dependencies routerDependencies
 	group.GET("/drafts/:id", dependencies.draftHandler.GetDraftByID)
 	group.POST("/drafts/:id/approvals", dependencies.draftHandler.SubmitApproval)
 	group.POST("/drafts/:id/execute", dependencies.draftHandler.ExecuteDraft)
+	group.POST("/drafts/:id/resume", dependencies.draftHandler.ResumeBatch)
+	group.POST("/drafts/:id/revert-batch", dependencies.draftHandler.RevertBatch)
+	group.GET("/drafts/:id/progress", dependencies.draftHandler.GetBatchProgress)
+	group.GET("/drafts/:id/progress/stream", dependencies.draftHandler.StreamBatchProgress)
 }
 
 func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependencies) {

@@ -89,6 +89,7 @@ func buildServices(
 		databaseRepository,
 		migrationRepository,
 		infrastructure.databaseDriver,
+		groupRepository,
 		func(databaseID uint) {
 			if draftSvc != nil {
 				draftSvc.UnlockDatabase(databaseID)

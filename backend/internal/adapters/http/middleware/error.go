@@ -85,6 +85,9 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 	case errors.Is(err, domain.ErrDatabaseMustResolvePartiallyReverted):
 		return http.StatusLocked, response.Error(err.Error())
 
+	case errors.Is(err, domain.ErrDatabaseLocked):
+		return http.StatusLocked, response.Error(err.Error())
+
 	case errors.Is(err, domain.ErrQueueFull):
 		return http.StatusServiceUnavailable, response.Error(err.Error())
 
@@ -103,6 +106,11 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrMigrationIrreversible),
 		errors.Is(err, domain.ErrInvalidMigrationInput),
 		errors.Is(err, domain.ErrInvalidDraftInput),
+		errors.Is(err, domain.ErrBatchContainsDDL),
+		errors.Is(err, domain.ErrBatchMissingColumnOrSize),
+		errors.Is(err, domain.ErrBatchColumnNotFound),
+		errors.Is(err, domain.ErrBatchMultipleUnrelatedTables),
+		errors.Is(err, domain.ErrNoCheckpointToResume),
 		errors.Is(err, domain.ErrInvalidMigrationComparison),
 		errors.Is(err, domain.ErrSQLDownGenerationUnsupported),
 		errors.Is(err, domain.ErrDatabaseConnectionFailed):
