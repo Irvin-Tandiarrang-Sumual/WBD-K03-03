@@ -11,6 +11,7 @@ const (
 	DraftStatusRejected          = "rejected"
 	DraftStatusInvalidated       = "invalidated"
 	DraftStatusExecuting         = "executing"
+	DraftStatusPartial           = "partial"
 	DraftStatusPartiallyReverted = "partially_reverted"
 	DraftStatusApplied           = "applied"
 	DraftStatusFailed            = "failed"
@@ -18,6 +19,17 @@ const (
 	ApprovalStatusPending  = "pending"
 	ApprovalStatusApproved = "approved"
 	ApprovalStatusRejected = "rejected"
+
+	ApprovalPhaseInitial         = "initial"
+	ApprovalPhasePartialRecovery = "partial_recovery"
+	ApprovalPhaseRevertFailure   = "revert_failure"
+
+	VoteApproved = "approved"
+	VoteRejected = "rejected"
+	VoteResume   = "resume"
+	VoteRevert   = "revert"
+	VoteYes      = "yes"
+	VoteNo       = "no"
 )
 
 type Draft struct {
@@ -31,6 +43,8 @@ type Draft struct {
 	IsBatch            bool
 	BatchColumn        string
 	BatchSize          int
+	CurrentRound       uint
+	RecoveryAction     string
 	Status             string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -48,7 +62,10 @@ type DraftApproval struct {
 	DraftID     uint
 	GroupID     uint
 	LeaderID    *uint
+	Round       uint
+	Phase       string
 	Status      string
+	Vote        string
 	RespondedAt *time.Time
 }
 
@@ -79,6 +96,11 @@ func (d *CreateDraftInput) Validate() error {
 	if d.DatabaseID == 0 || d.UserID == 0 || strings.TrimSpace(d.SqlUp) == "" {
 		return ErrInvalidDraftInput
 	}
+	if d.IsBatch {
+		if strings.TrimSpace(d.BatchColumn) == "" || d.BatchSize <= 0 {
+			return ErrBatchMissingColumnOrSize
+		}
+	}
 	return nil
 }
 
@@ -86,14 +108,37 @@ type SubmitApprovalInput struct {
 	DraftID uint
 	UserID  uint
 	Status  string
+	Vote    string
 }
 
 func (s *SubmitApprovalInput) Validate() error {
 	if s.DraftID == 0 || s.UserID == 0 {
 		return ErrInvalidDraftInput
 	}
-	if s.Status != ApprovalStatusApproved && s.Status != ApprovalStatusRejected {
+	v := s.Vote
+	if v == "" {
+		v = s.Status
+	}
+	v = strings.ToLower(strings.TrimSpace(v))
+	validVotes := map[string]bool{
+		ApprovalStatusApproved: true,
+		ApprovalStatusRejected: true,
+		VoteResume:             true,
+		VoteRevert:             true,
+		VoteYes:                true,
+		VoteNo:                 true,
+	}
+	if !validVotes[v] {
 		return ErrInvalidDraftInput
 	}
 	return nil
+}
+
+type BatchProgress struct {
+	CurrentBatch  int     `json:"currentBatch"`
+	TotalBatches  int     `json:"totalBatches"`
+	RowsProcessed int64   `json:"rowsProcessed"`
+	TotalRows     int64   `json:"totalRows"`
+	Percentage    float64 `json:"percentage"`
+	Status        string  `json:"status"`
 }
