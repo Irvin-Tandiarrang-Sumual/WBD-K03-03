@@ -102,20 +102,17 @@ func (q *ChannelQueue) Enqueue(ctx context.Context, task ports.ExecutionTask) er
 	}
 	q.mu.Unlock()
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case q.tasks <- task:
 		return nil
 	default:
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case q.tasks <- task:
-			return nil
-		default:
-			return domain.ErrQueueFull
-		}
+		return domain.ErrQueueFull
 	}
 }
 
