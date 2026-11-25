@@ -45,9 +45,14 @@ func (r *draftRepository) Save(ctx context.Context, draft *domain.Draft) (*domai
 		IsBatch:            draft.IsBatch,
 		BatchColumn:        draft.BatchColumn,
 		BatchSize:          draft.BatchSize,
+		CurrentRound:       draft.CurrentRound,
+		RecoveryAction:     draft.RecoveryAction,
 		Status:             draft.Status,
 		CreatedAt:          draft.CreatedAt,
 		UpdatedAt:          draft.UpdatedAt,
+	}
+	if modelDraft.CurrentRound == 0 {
+		modelDraft.CurrentRound = 1
 	}
 
 	if err := r.db.WithContext(ctx).Create(&modelDraft).Error; err != nil {
@@ -70,6 +75,8 @@ func (r *draftRepository) Update(ctx context.Context, draft *domain.Draft) (*dom
 		"is_batch":            draft.IsBatch,
 		"batch_column":        draft.BatchColumn,
 		"batch_size":          draft.BatchSize,
+		"current_round":       draft.CurrentRound,
+		"recovery_action":     draft.RecoveryAction,
 		"updated_at":          draft.UpdatedAt,
 	}
 
@@ -92,6 +99,7 @@ func (r *draftRepository) FindByID(ctx context.Context, id uint) (*domain.Draft,
 	}
 	err := query.
 		Preload("Approvals").
+		Preload("Checkpoints").
 		Where("id = ?", id).
 		First(&modelDraft).Error
 	if err != nil {
@@ -142,12 +150,28 @@ func (r *draftRepository) SaveApproval(ctx context.Context, approval *domain.Dra
 		return nil, domain.ErrInvalidDraftInput
 	}
 
+	round := approval.Round
+	if round == 0 {
+		round = 1
+	}
+	phase := approval.Phase
+	if phase == "" {
+		phase = domain.ApprovalPhaseInitial
+	}
+	vote := approval.Vote
+	if vote == "" {
+		vote = approval.Status
+	}
+
 	modelApproval := model.DraftApproval{
 		ID:          approval.ID,
 		DraftID:     approval.DraftID,
 		GroupID:     approval.GroupID,
+		Round:       round,
+		Phase:       phase,
 		LeaderID:    approval.LeaderID,
 		Status:      approval.Status,
+		Vote:        vote,
 		RespondedAt: approval.RespondedAt,
 	}
 
@@ -165,6 +189,7 @@ func (r *draftRepository) UpdateApproval(ctx context.Context, approval *domain.D
 
 	updates := map[string]any{
 		"status":       approval.Status,
+		"vote":         approval.Vote,
 		"responded_at": approval.RespondedAt,
 		"leader_id":    approval.LeaderID,
 	}
@@ -203,10 +228,29 @@ func (r *draftRepository) FindApprovalsByDraftID(ctx context.Context, draftID ui
 	return results, nil
 }
 
+func (r *draftRepository) FindApprovalsByDraftAndRound(ctx context.Context, draftID uint, round uint) ([]*domain.DraftApproval, error) {
+	var modelApprovals []model.DraftApproval
+	err := r.db.WithContext(ctx).
+		Where("draft_id = ? AND round = ?", draftID, round).
+		Order("id ASC").
+		Find(&modelApprovals).Error
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]*domain.DraftApproval, 0, len(modelApprovals))
+	for i := range modelApprovals {
+		results = append(results, toDomainDraftApproval(&modelApprovals[i]))
+	}
+
+	return results, nil
+}
+
 func (r *draftRepository) FindApprovalByDraftAndGroup(ctx context.Context, draftID uint, groupID uint) (*domain.DraftApproval, error) {
 	var modelApproval model.DraftApproval
 	err := r.db.WithContext(ctx).
 		Where("draft_id = ? AND group_id = ?", draftID, groupID).
+		Order("round DESC, id DESC").
 		First(&modelApproval).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -216,6 +260,107 @@ func (r *draftRepository) FindApprovalByDraftAndGroup(ctx context.Context, draft
 	}
 
 	return toDomainDraftApproval(&modelApproval), nil
+}
+
+func (r *draftRepository) FindApprovalByDraftGroupAndRound(ctx context.Context, draftID uint, groupID uint, round uint) (*domain.DraftApproval, error) {
+	var modelApproval model.DraftApproval
+	err := r.db.WithContext(ctx).
+		Where("draft_id = ? AND group_id = ? AND round = ?", draftID, groupID, round).
+		First(&modelApproval).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrDraftNotFound
+		}
+		return nil, err
+	}
+
+	return toDomainDraftApproval(&modelApproval), nil
+}
+
+func (r *draftRepository) CreateApprovalsForRound(ctx context.Context, approvals []domain.DraftApproval) error {
+	if len(approvals) == 0 {
+		return nil
+	}
+	models := make([]model.DraftApproval, len(approvals))
+	for i, a := range approvals {
+		models[i] = model.DraftApproval{
+			DraftID:     a.DraftID,
+			GroupID:     a.GroupID,
+			Round:       a.Round,
+			Phase:       a.Phase,
+			LeaderID:    a.LeaderID,
+			Status:      a.Status,
+			Vote:        a.Vote,
+			RespondedAt: a.RespondedAt,
+		}
+	}
+	return r.db.WithContext(ctx).Create(&models).Error
+}
+
+func (r *draftRepository) SaveCheckpoint(ctx context.Context, cp *domain.DraftCheckpoint) (*domain.DraftCheckpoint, error) {
+	if cp == nil {
+		return nil, domain.ErrInvalidDraftInput
+	}
+	m := model.DraftCheckpoint{
+		ID:           cp.ID,
+		DraftID:      cp.DraftID,
+		ExecutionID:  cp.ExecutionID,
+		BatchNumber:  cp.BatchNumber,
+		CursorLastID: cp.CursorLastID,
+		RowsAffected: cp.RowsAffected,
+		Status:       cp.Status,
+		CreatedAt:    cp.CreatedAt,
+	}
+	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
+		return nil, err
+	}
+	return toDomainDraftCheckpoint(&m), nil
+}
+
+func (r *draftRepository) UpdateCheckpoint(ctx context.Context, cp *domain.DraftCheckpoint) (*domain.DraftCheckpoint, error) {
+	if cp == nil || cp.ID == 0 {
+		return nil, domain.ErrInvalidDraftInput
+	}
+	updates := map[string]any{
+		"cursor_last_id": cp.CursorLastID,
+		"rows_affected":  cp.RowsAffected,
+		"status":         cp.Status,
+	}
+	if err := r.db.WithContext(ctx).Model(&model.DraftCheckpoint{}).Where("id = ?", cp.ID).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	return cp, nil
+}
+
+func (r *draftRepository) FindCheckpointsByDraftID(ctx context.Context, draftID uint) ([]*domain.DraftCheckpoint, error) {
+	var models []model.DraftCheckpoint
+	err := r.db.WithContext(ctx).
+		Where("draft_id = ?", draftID).
+		Order("batch_number ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*domain.DraftCheckpoint, len(models))
+	for i := range models {
+		results[i] = toDomainDraftCheckpoint(&models[i])
+	}
+	return results, nil
+}
+
+func (r *draftRepository) FindLastCommittedCheckpoint(ctx context.Context, draftID uint) (*domain.DraftCheckpoint, error) {
+	var m model.DraftCheckpoint
+	err := r.db.WithContext(ctx).
+		Where("draft_id = ? AND status = ?", draftID, "committed").
+		Order("batch_number DESC").
+		First(&m).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return toDomainDraftCheckpoint(&m), nil
 }
 
 func (r *draftRepository) FindDraftByStatusAndDatabaseID(ctx context.Context, databaseID uint, status string) (*domain.Draft, error) {
@@ -242,6 +387,11 @@ func toDomainDraft(m *model.Draft) *domain.Draft {
 		approvals = append(approvals, *toDomainDraftApproval(&m.Approvals[i]))
 	}
 
+	checkpoints := make([]domain.DraftCheckpoint, 0, len(m.Checkpoints))
+	for i := range m.Checkpoints {
+		checkpoints = append(checkpoints, *toDomainDraftCheckpoint(&m.Checkpoints[i]))
+	}
+
 	return &domain.Draft{
 		ID:                 m.ID,
 		DatabaseID:         m.DatabaseID,
@@ -253,10 +403,13 @@ func toDomainDraft(m *model.Draft) *domain.Draft {
 		IsBatch:            m.IsBatch,
 		BatchColumn:        m.BatchColumn,
 		BatchSize:          m.BatchSize,
+		CurrentRound:       m.CurrentRound,
+		RecoveryAction:     m.RecoveryAction,
 		Status:             m.Status,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
 		Approvals:          approvals,
+		Checkpoints:        checkpoints,
 	}
 }
 
@@ -269,8 +422,28 @@ func toDomainDraftApproval(m *model.DraftApproval) *domain.DraftApproval {
 		ID:          m.ID,
 		DraftID:     m.DraftID,
 		GroupID:     m.GroupID,
+		Round:       m.Round,
+		Phase:       m.Phase,
 		LeaderID:    m.LeaderID,
 		Status:      m.Status,
+		Vote:        m.Vote,
 		RespondedAt: m.RespondedAt,
+	}
+}
+
+func toDomainDraftCheckpoint(m *model.DraftCheckpoint) *domain.DraftCheckpoint {
+	if m == nil {
+		return nil
+	}
+
+	return &domain.DraftCheckpoint{
+		ID:           m.ID,
+		DraftID:      m.DraftID,
+		ExecutionID:  m.ExecutionID,
+		BatchNumber:  m.BatchNumber,
+		CursorLastID: m.CursorLastID,
+		RowsAffected: m.RowsAffected,
+		Status:       m.Status,
+		CreatedAt:    m.CreatedAt,
 	}
 }

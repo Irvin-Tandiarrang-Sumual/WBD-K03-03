@@ -8,6 +8,15 @@ definitions:
       success:
         type: boolean
     type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_BatchProgressResponse:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers.BatchProgressResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
   github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DatabaseResponse:
     properties:
       data:
@@ -156,6 +165,21 @@ definitions:
       totalPage:
         type: integer
     type: object
+  internal_adapters_http_handlers.BatchProgressResponse:
+    properties:
+      current_batch:
+        type: integer
+      percentage:
+        type: number
+      rows_processed:
+        type: integer
+      status:
+        type: string
+      total_batches:
+        type: integer
+      total_rows:
+        type: integer
+    type: object
   internal_adapters_http_handlers.ColumnDiffChangeResponse:
     properties:
       after:
@@ -289,9 +313,15 @@ definitions:
         type: integer
       leaderId:
         type: integer
+      phase:
+        type: string
       respondedAt:
         type: string
+      round:
+        type: integer
       status:
+        type: string
+      vote:
         type: string
     type: object
   internal_adapters_http_handlers.DraftResponse:
@@ -306,6 +336,8 @@ definitions:
         type: integer
       createdAt:
         type: string
+      currentRound:
+        type: integer
       databaseId:
         type: integer
       id:
@@ -316,6 +348,8 @@ definitions:
         type: boolean
       isReversible:
         type: boolean
+      recoveryAction:
+        type: string
       sqlDown:
         type: string
       sqlUp:
@@ -1623,6 +1657,176 @@ paths:
       security:
       - CookieAuth: []
       summary: Execute draft
+      tags:
+      - Me - Drafts
+  /drafts/{id}/progress:
+    get:
+      description: Returns execution progress percentage and rows processed for a
+        batch draft.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Batch progress retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_BatchProgressResponse'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get batch draft progress
+      tags:
+      - Me - Drafts
+  /drafts/{id}/progress/stream:
+    get:
+      description: Streams batch progress updates as text/event-stream until execution
+        completes or quarantines.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          schema:
+            type: string
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Stream batch draft progress (SSE)
+      tags:
+      - Me - Drafts
+  /drafts/{id}/resume:
+    post:
+      description: Resumes execution of a batch draft from the last committed checkpoint.
+        Requires caller to be the draft author and consensus approval to resume. Returns
+        HTTP 202 Accepted.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Batch draft resume accepted
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not author)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Conflict (migration in progress or invalid draft state)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Resume batch draft
+      tags:
+      - Me - Drafts
+  /drafts/{id}/revert-batch:
+    post:
+      description: Rolls back committed chunks of a batch draft in reverse order.
+        Requires caller to be the draft author and consensus approval to revert. Returns
+        HTTP 202 Accepted.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Batch draft rollback accepted
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not author)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Conflict (migration in progress or invalid draft state)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Rollback batch draft
       tags:
       - Me - Drafts
   /health:

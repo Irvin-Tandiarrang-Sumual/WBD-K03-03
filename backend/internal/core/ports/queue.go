@@ -7,6 +7,7 @@ type ExecutionTask struct {
 	DatabaseID  uint
 	ExecutionID uint
 	UserID      uint
+	Operation   string
 }
 
 type TaskQueue interface {
