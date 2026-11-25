@@ -15,6 +15,9 @@ type DraftService interface {
 	ValidateDraft(ctx context.Context, draftID uint) (*domain.Draft, error)
 	ExecuteDraft(ctx context.Context, draftID uint, userID uint) error
 	UnlockDatabase(databaseID uint)
+	ResumeBatch(ctx context.Context, draftID uint, userID uint) error
+	RevertBatch(ctx context.Context, draftID uint, userID uint) error
+	GetBatchProgress(ctx context.Context, draftID uint, userID uint) (*domain.BatchProgress, error)
 }
 
 type DraftRepository interface {
@@ -26,6 +29,13 @@ type DraftRepository interface {
 	SaveApproval(ctx context.Context, approval *domain.DraftApproval) (*domain.DraftApproval, error)
 	UpdateApproval(ctx context.Context, approval *domain.DraftApproval) (*domain.DraftApproval, error)
 	FindApprovalsByDraftID(ctx context.Context, draftID uint) ([]*domain.DraftApproval, error)
+	FindApprovalsByDraftAndRound(ctx context.Context, draftID uint, round uint) ([]*domain.DraftApproval, error)
 	FindApprovalByDraftAndGroup(ctx context.Context, draftID uint, groupID uint) (*domain.DraftApproval, error)
+	FindApprovalByDraftGroupAndRound(ctx context.Context, draftID uint, groupID uint, round uint) (*domain.DraftApproval, error)
 	FindDraftByStatusAndDatabaseID(ctx context.Context, databaseID uint, status string) (*domain.Draft, error)
+	SaveCheckpoint(ctx context.Context, cp *domain.DraftCheckpoint) (*domain.DraftCheckpoint, error)
+	UpdateCheckpoint(ctx context.Context, cp *domain.DraftCheckpoint) (*domain.DraftCheckpoint, error)
+	FindCheckpointsByDraftID(ctx context.Context, draftID uint) ([]*domain.DraftCheckpoint, error)
+	FindLastCommittedCheckpoint(ctx context.Context, draftID uint) (*domain.DraftCheckpoint, error)
+	CreateApprovalsForRound(ctx context.Context, approvals []domain.DraftApproval) error
 }
