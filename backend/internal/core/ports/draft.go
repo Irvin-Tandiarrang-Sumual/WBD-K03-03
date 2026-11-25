@@ -14,6 +14,7 @@ type DraftService interface {
 	SubmitApproval(ctx context.Context, input domain.SubmitApprovalInput) (*domain.Draft, error)
 	ValidateDraft(ctx context.Context, draftID uint) (*domain.Draft, error)
 	ExecuteDraft(ctx context.Context, draftID uint, userID uint) error
+	UnlockDatabase(databaseID uint)
 }
 
 type DraftRepository interface {
@@ -26,4 +27,5 @@ type DraftRepository interface {
 	UpdateApproval(ctx context.Context, approval *domain.DraftApproval) (*domain.DraftApproval, error)
 	FindApprovalsByDraftID(ctx context.Context, draftID uint) ([]*domain.DraftApproval, error)
 	FindApprovalByDraftAndGroup(ctx context.Context, draftID uint, groupID uint) (*domain.DraftApproval, error)
+	FindDraftByStatusAndDatabaseID(ctx context.Context, databaseID uint, status string) (*domain.Draft, error)
 }

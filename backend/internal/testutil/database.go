@@ -20,6 +20,22 @@ type DatabaseRepository struct {
 	FindCredentialByHostAndPortFunc func(context.Context, string, uint, string) (string, error)
 	GetDistinctHostsFunc            func(context.Context) ([]domain.DatabaseHost, error)
 	ExistsAllFunc                   func(context.Context, []uint) (bool, error)
+	IncrementExecutionIDFunc        func(context.Context, uint) (uint, error)
+	UpdateCurrentMigrationIDFunc    func(context.Context, uint, uint) error
+}
+
+func (f *DatabaseRepository) IncrementExecutionID(ctx context.Context, databaseID uint) (uint, error) {
+	if f.IncrementExecutionIDFunc != nil {
+		return f.IncrementExecutionIDFunc(ctx, databaseID)
+	}
+	return 1, nil
+}
+
+func (f *DatabaseRepository) UpdateCurrentMigrationID(ctx context.Context, databaseID uint, migrationID uint) error {
+	if f.UpdateCurrentMigrationIDFunc != nil {
+		return f.UpdateCurrentMigrationIDFunc(ctx, databaseID, migrationID)
+	}
+	return nil
 }
 
 func (f *DatabaseRepository) FindById(ctx context.Context, id uint) (*domain.Database, error) {
