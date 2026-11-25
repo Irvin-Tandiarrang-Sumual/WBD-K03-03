@@ -3,6 +3,8 @@ package domain
 import (
 	"errors"
 	"fmt"
+
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
 
 var (
@@ -58,6 +60,12 @@ var (
 	ErrInvalidDraftState                    = errors.New("Draft is not in pending approval state")
 	ErrDraftNotApproved                     = errors.New("Draft is not approved")
 	ErrInvalidDraftInput                    = errors.New("Draft input is not valid")
-	ErrDatabaseMustResolvePartiallyReverted = errors.New("Database must resolve partially reverted draft before new executions")
+	ErrDatabaseLocked                       = errors.New("Database is locked by another migration or quarantine")
+	ErrDatabaseMustResolvePartiallyReverted = fmt.Errorf("%w: Database must resolve partially reverted draft before new executions", ErrDatabaseLocked)
 	ErrQueueFull                            = errors.New("Task queue is full")
+	ErrBatchContainsDDL                     = sqlutil.ErrBatchContainsDDL
+	ErrBatchMissingColumnOrSize             = fmt.Errorf("%w: Batch draft requires batch_column and positive batch_size", ErrInvalidInput)
+	ErrBatchColumnNotFound                  = fmt.Errorf("%w: batch_column not found in target table", ErrInvalidInput)
+	ErrBatchMultipleUnrelatedTables         = fmt.Errorf("%w: Batch draft statements must target the same table", ErrInvalidInput)
+	ErrNoCheckpointToResume                 = errors.New("No committed checkpoints found to resume")
 )
