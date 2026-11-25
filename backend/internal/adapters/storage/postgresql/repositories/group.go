@@ -300,3 +300,51 @@ func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.Databa
 
 	return tx.Create(&relations).Error
 }
+
+func (r *groupRepository) FindAllByDatabaseID(ctx context.Context, databaseID uint) ([]domain.Group, error) {
+	var relations []models.GroupDatabase
+	if err := r.db.WithContext(ctx).Where("database_id = ?", databaseID).Find(&relations).Error; err != nil {
+		return nil, err
+	}
+	if len(relations) == 0 {
+		return []domain.Group{}, nil
+	}
+
+	groupIDs := make([]uint, 0, len(relations))
+	for _, rel := range relations {
+		groupIDs = append(groupIDs, rel.GroupID)
+	}
+
+	var storedGroups []models.Group
+	if err := r.db.WithContext(ctx).Where("id IN ?", groupIDs).Order("id ASC").Find(&storedGroups).Error; err != nil {
+		return nil, err
+	}
+
+	var allGroupDatabases []models.GroupDatabase
+	if err := r.db.WithContext(ctx).Where("group_id IN ?", groupIDs).Order("group_id ASC, database_id ASC").Find(&allGroupDatabases).Error; err != nil {
+		return nil, err
+	}
+
+	accessesByGroup := make(map[uint][]domain.DatabaseAccess)
+	for _, relation := range allGroupDatabases {
+		accessesByGroup[relation.GroupID] = append(
+			accessesByGroup[relation.GroupID],
+			domain.DatabaseAccess{
+				DatabaseID: relation.DatabaseID,
+				AccessType: domain.AccessType(relation.AccessType),
+			},
+		)
+	}
+
+	groups := make([]domain.Group, 0, len(storedGroups))
+	for _, storedGroup := range storedGroups {
+		groups = append(groups, domain.Group{
+			ID:               storedGroup.ID,
+			Name:             storedGroup.Name,
+			LeaderID:         storedGroup.LeaderID,
+			DatabaseAccesses: accessesByGroup[storedGroup.ID],
+		})
+	}
+
+	return groups, nil
+}

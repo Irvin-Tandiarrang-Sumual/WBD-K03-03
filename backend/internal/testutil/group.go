@@ -18,6 +18,7 @@ type GroupRepository struct {
 	UpdateFunc                       func(context.Context, domain.Group) (domain.Group, error)
 	DeleteFunc                       func(context.Context, uint) error
 	CountByLeaderIDFunc              func(context.Context, uint) (int64, error)
+	FindAllByDatabaseIDFunc          func(context.Context, uint) ([]domain.Group, error)
 	AddUserFunc                      func(context.Context, uint, uint) error
 	RemoveUserFunc                   func(context.Context, uint, uint, *uint) error
 	CountByUserIDFunc                func(context.Context, uint) (int64, error)
@@ -75,6 +76,13 @@ func (f *GroupRepository) CountByLeaderID(ctx context.Context, leaderID uint) (i
 		return f.CountByLeaderIDFunc(ctx, leaderID)
 	}
 	return 0, nil
+}
+
+func (f *GroupRepository) FindAllByDatabaseID(ctx context.Context, databaseID uint) ([]domain.Group, error) {
+	if f.FindAllByDatabaseIDFunc != nil {
+		return f.FindAllByDatabaseIDFunc(ctx, databaseID)
+	}
+	return nil, nil
 }
 
 func (f *GroupRepository) AddUser(ctx context.Context, groupID uint, userID uint) error {

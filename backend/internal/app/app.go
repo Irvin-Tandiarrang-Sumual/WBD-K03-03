@@ -98,6 +98,7 @@ func buildApplication() (*application, error) {
 		handlers.database,
 		handlers.databaseDriver,
 		handlers.migration,
+		handlers.draft,
 		handlers.health,
 		services.session,
 		services.user,
