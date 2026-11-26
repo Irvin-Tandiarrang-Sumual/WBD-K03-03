@@ -683,7 +683,7 @@ const docTemplate = `{
                         "CookieAuth": []
                     }
                 ],
-                "description": "Removes an existing user from an existing group. Requires admin privileges.",
+                "description": "Removes an existing user from an existing group. If the user is the group leader, replacement_leader_id query parameter is required. Requires admin privileges.",
                 "produces": [
                     "application/json"
                 ],
@@ -705,6 +705,12 @@ const docTemplate = `{
                         "name": "user_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Replacement leader ID (required if user is leader)",
+                        "name": "replacement_leader_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -724,7 +730,7 @@ const docTemplate = `{
                         "description": "Group or user not found"
                     },
                     "409": {
-                        "description": "Membership not found / user must remain in a group"
+                        "description": "Membership not found / user must remain in a group / leader requires replacement"
                     },
                     "500": {
                         "description": "Internal server error"
@@ -1270,6 +1276,616 @@ const docTemplate = `{
                 }
             }
         },
+        "/databases/{id}/drafts": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of draft history for a specific database. Requires view access.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "List database drafts",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 10)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Drafts retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid database ID or pagination",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (no view access)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Creates a new migration draft on the specified database and initializes approvals for all connected group leaders. Requires edit access.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Create draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Draft details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Draft created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (no edit access)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Returns draft details and leader approval voting statuses. Requires view access to the database.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Get draft details",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Draft retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid draft ID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}/approvals": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Action voting by a connected group leader (status: \"approved\" | \"rejected\").",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Submit draft approval",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Approval vote",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_adapters_http_handlers.SubmitApprovalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vote submitted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input or status",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (voter not group leader)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (draft not in pending_approval state)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}/execute": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Triggers asynchronous migration execution for an approved draft. Requires caller to be the draft author. Returns HTTP 202 Accepted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Execute draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Draft execution accepted",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid draft ID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (not author)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft or database not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (migration in progress or not approved)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "423": {
+                        "description": "Locked (database must resolve partially reverted)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}/progress": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Returns execution progress percentage and rows processed for a batch draft.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Get batch draft progress",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Batch progress retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_BatchProgressResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid draft ID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}/progress/stream": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Streams batch progress updates as text/event-stream until execution completes or quarantines.",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Stream batch draft progress (SSE)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Server-Sent Events stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid draft ID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}/resume": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Resumes execution of a batch draft from the last committed checkpoint. Requires caller to be the draft author and consensus approval to resume. Returns HTTP 202 Accepted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Resume batch draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Batch draft resume accepted",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid draft ID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (not author)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (migration in progress or invalid draft state)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/drafts/{id}/revert-batch": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Rolls back committed chunks of a batch draft in reverse order. Requires caller to be the draft author and consensus approval to revert. Returns HTTP 202 Accepted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Drafts"
+                ],
+                "summary": "Rollback batch draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Batch draft rollback accepted",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid draft ID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (not author)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (migration in progress or invalid draft state)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Check server health status and system database connectivity.",
@@ -1353,75 +1969,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/me/databases/migrations/rollback": {
-            "post": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Rolls back all migrations up to and including the target migration ID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Me - Migrations"
-                ],
-                "summary": "Rollback migrations",
-                "parameters": [
-                    {
-                        "description": "Rollback target",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers.RollbackMigrationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Migrations rolled back",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Rollback unavailable or version conflict",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    }
-                }
-            }
-        },
         "/me/databases/{database_id}": {
             "get": {
                 "security": [
@@ -1486,6 +2033,236 @@ const docTemplate = `{
                 }
             }
         },
+        "/me/databases/{database_id}/forward-draft": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Propose one forward step",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/databases/{database_id}/migration-drafts/{draft_id}/execute": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Execute a unanimously approved migration draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "draft_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/databases/{database_id}/migration-drafts/{draft_id}/vote": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Submit a group leader vote",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Draft ID",
+                        "name": "draft_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Leader decision",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_adapters_http_handlers.VoteMigrationDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Vote recorded"
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
+        },
         "/me/databases/{database_id}/migrations": {
             "get": {
                 "security": [
@@ -1508,6 +2285,12 @@ const docTemplate = `{
                         "name": "database_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Hide successful rollback pairs",
+                        "name": "hide_rollback",
+                        "in": "query"
                     },
                     {
                         "type": "integer",
@@ -1778,6 +2561,75 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/me/databases/{database_id}/rollback-draft": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me - Migrations"
+                ],
+                "summary": "Propose rollback of the active migration",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Database ID",
+                        "name": "database_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or irreversible migration",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Database or draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Unavailable in the current state",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1793,14 +2645,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse": {
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_BatchProgressResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_adapters_http_handlers.MigrationResponse"
-                    }
+                    "$ref": "#/definitions/internal_adapters_http_handlers.BatchProgressResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1815,6 +2664,20 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseResponse"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers.DraftResponse"
                 },
                 "message": {
                     "type": "string"
@@ -1880,6 +2743,20 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers.MigrationDraftResponse"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
         "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse": {
             "type": "object",
             "properties": {
@@ -1904,6 +2781,26 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseResponse"
+                    }
+                },
+                "paging": {
+                    "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DraftResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers.DraftResponse"
                     }
                 },
                 "paging": {
@@ -1991,6 +2888,29 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.BatchProgressResponse": {
+            "type": "object",
+            "properties": {
+                "current_batch": {
+                    "type": "integer"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "rows_processed": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "total_batches": {
+                    "type": "integer"
+                },
+                "total_rows": {
+                    "type": "integer"
+                }
+            }
+        },
         "internal_adapters_http_handlers.ColumnDiffChangeResponse": {
             "type": "object",
             "properties": {
@@ -2038,10 +2958,40 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.CreateDraftRequest": {
+            "type": "object",
+            "required": [
+                "sqlUp"
+            ],
+            "properties": {
+                "batchColumn": {
+                    "type": "string"
+                },
+                "batchSize": {
+                    "type": "integer"
+                },
+                "irreversibleReason": {
+                    "type": "string"
+                },
+                "isBatch": {
+                    "type": "boolean"
+                },
+                "isReversible": {
+                    "type": "boolean"
+                },
+                "sqlDown": {
+                    "type": "string"
+                },
+                "sqlUp": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_adapters_http_handlers.CreateGroupRequest": {
             "type": "object",
             "required": [
                 "databaseAccesses",
+                "leaderId",
                 "name"
             ],
             "properties": {
@@ -2050,6 +3000,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest"
                     }
+                },
+                "leaderId": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
@@ -2141,6 +3094,94 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.DraftApprovalResponse": {
+            "type": "object",
+            "properties": {
+                "draftId": {
+                    "type": "integer"
+                },
+                "groupId": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "leaderId": {
+                    "type": "integer"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "respondedAt": {
+                    "type": "string"
+                },
+                "round": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "vote": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.DraftResponse": {
+            "type": "object",
+            "properties": {
+                "approvals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_adapters_http_handlers.DraftApprovalResponse"
+                    }
+                },
+                "batchColumn": {
+                    "type": "string"
+                },
+                "batchSize": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currentRound": {
+                    "type": "integer"
+                },
+                "databaseId": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "irreversibleReason": {
+                    "type": "string"
+                },
+                "isBatch": {
+                    "type": "boolean"
+                },
+                "isReversible": {
+                    "type": "boolean"
+                },
+                "recoveryAction": {
+                    "type": "string"
+                },
+                "sqlDown": {
+                    "type": "string"
+                },
+                "sqlUp": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
         "internal_adapters_http_handlers.GroupResponse": {
             "type": "object",
             "properties": {
@@ -2151,6 +3192,9 @@ const docTemplate = `{
                     }
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "leaderId": {
                     "type": "integer"
                 },
                 "name": {
@@ -2246,6 +3290,26 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.MigrationDraftResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "operation": {
+                    "type": "string"
+                },
+                "sqlUp": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "targetMigrationId": {
+                    "type": "integer"
+                }
+            }
+        },
         "internal_adapters_http_handlers.MigrationResponse": {
             "type": "object",
             "properties": {
@@ -2255,7 +3319,19 @@ const docTemplate = `{
                 "errorMessage": {
                     "type": "string"
                 },
+                "executionId": {
+                    "type": "integer"
+                },
                 "id": {
+                    "type": "integer"
+                },
+                "irreversibleReason": {
+                    "type": "string"
+                },
+                "isReversible": {
+                    "type": "boolean"
+                },
+                "revertsMigrationId": {
                     "type": "integer"
                 },
                 "snapshot": {
@@ -2263,6 +3339,9 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                },
+                "sourceMigrationId": {
+                    "type": "integer"
                 },
                 "sqlDown": {
                     "type": "string"
@@ -2278,21 +3357,6 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "string"
-                }
-            }
-        },
-        "internal_adapters_http_handlers.RollbackMigrationRequest": {
-            "type": "object",
-            "required": [
-                "databaseId",
-                "targetMigrationId"
-            ],
-            "properties": {
-                "databaseId": {
-                    "type": "integer"
-                },
-                "targetMigrationId": {
-                    "type": "integer"
                 }
             }
         },
@@ -2378,6 +3442,17 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_adapters_http_handlers.SubmitApprovalRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_adapters_http_handlers.TableDiffChangeResponse": {
             "type": "object",
             "properties": {
@@ -2428,6 +3503,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest"
                     }
                 },
+                "leaderId": {
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
                 }
@@ -2455,6 +3533,17 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.VoteMigrationDraftRequest": {
+            "type": "object",
+            "required": [
+                "approve"
+            ],
+            "properties": {
+                "approve": {
+                    "type": "boolean"
                 }
             }
         }

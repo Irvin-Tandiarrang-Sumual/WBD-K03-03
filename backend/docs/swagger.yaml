@@ -8,12 +8,10 @@ definitions:
       success:
         type: boolean
     type: object
-  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse:
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_BatchProgressResponse:
     properties:
       data:
-        items:
-          $ref: '#/definitions/internal_adapters_http_handlers.MigrationResponse'
-        type: array
+        $ref: '#/definitions/internal_adapters_http_handlers.BatchProgressResponse'
       message:
         type: string
       success:
@@ -23,6 +21,15 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/internal_adapters_http_handlers.DatabaseResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers.DraftResponse'
       message:
         type: string
       success:
@@ -64,6 +71,15 @@ definitions:
       success:
         type: boolean
     type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers.MigrationDraftResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
   github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse:
     properties:
       data:
@@ -80,6 +96,19 @@ definitions:
       data:
         items:
           $ref: '#/definitions/internal_adapters_http_handlers.DatabaseResponse'
+        type: array
+      paging:
+        $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
+      status:
+        type: string
+    type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DraftResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers.DraftResponse'
         type: array
       paging:
         $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagingMetadata'
@@ -136,6 +165,21 @@ definitions:
       totalPage:
         type: integer
     type: object
+  internal_adapters_http_handlers.BatchProgressResponse:
+    properties:
+      current_batch:
+        type: integer
+      percentage:
+        type: number
+      rows_processed:
+        type: integer
+      status:
+        type: string
+      total_batches:
+        type: integer
+      total_rows:
+        type: integer
+    type: object
   internal_adapters_http_handlers.ColumnDiffChangeResponse:
     properties:
       after:
@@ -169,16 +213,38 @@ definitions:
     - type
     - user
     type: object
+  internal_adapters_http_handlers.CreateDraftRequest:
+    properties:
+      batchColumn:
+        type: string
+      batchSize:
+        type: integer
+      irreversibleReason:
+        type: string
+      isBatch:
+        type: boolean
+      isReversible:
+        type: boolean
+      sqlDown:
+        type: string
+      sqlUp:
+        type: string
+    required:
+    - sqlUp
+    type: object
   internal_adapters_http_handlers.CreateGroupRequest:
     properties:
       databaseAccesses:
         items:
           $ref: '#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest'
         type: array
+      leaderId:
+        type: integer
       name:
         type: string
     required:
     - databaseAccesses
+    - leaderId
     - name
     type: object
   internal_adapters_http_handlers.CreateMigrationRequest:
@@ -237,6 +303,64 @@ definitions:
       user:
         type: string
     type: object
+  internal_adapters_http_handlers.DraftApprovalResponse:
+    properties:
+      draftId:
+        type: integer
+      groupId:
+        type: integer
+      id:
+        type: integer
+      leaderId:
+        type: integer
+      phase:
+        type: string
+      respondedAt:
+        type: string
+      round:
+        type: integer
+      status:
+        type: string
+      vote:
+        type: string
+    type: object
+  internal_adapters_http_handlers.DraftResponse:
+    properties:
+      approvals:
+        items:
+          $ref: '#/definitions/internal_adapters_http_handlers.DraftApprovalResponse'
+        type: array
+      batchColumn:
+        type: string
+      batchSize:
+        type: integer
+      createdAt:
+        type: string
+      currentRound:
+        type: integer
+      databaseId:
+        type: integer
+      id:
+        type: integer
+      irreversibleReason:
+        type: string
+      isBatch:
+        type: boolean
+      isReversible:
+        type: boolean
+      recoveryAction:
+        type: string
+      sqlDown:
+        type: string
+      sqlUp:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: integer
+    type: object
   internal_adapters_http_handlers.GroupResponse:
     properties:
       databaseAccesses:
@@ -244,6 +368,8 @@ definitions:
           $ref: '#/definitions/internal_adapters_http_handlers.DatabaseAccessResponse'
         type: array
       id:
+        type: integer
+      leaderId:
         type: integer
       name:
         type: string
@@ -306,18 +432,41 @@ definitions:
       sqlUpEqual:
         type: boolean
     type: object
+  internal_adapters_http_handlers.MigrationDraftResponse:
+    properties:
+      id:
+        type: integer
+      operation:
+        type: string
+      sqlUp:
+        type: string
+      status:
+        type: string
+      targetMigrationId:
+        type: integer
+    type: object
   internal_adapters_http_handlers.MigrationResponse:
     properties:
       databaseId:
         type: integer
       errorMessage:
         type: string
+      executionId:
+        type: integer
       id:
+        type: integer
+      irreversibleReason:
+        type: string
+      isReversible:
+        type: boolean
+      revertsMigrationId:
         type: integer
       snapshot:
         items:
           type: integer
         type: array
+      sourceMigrationId:
+        type: integer
       sqlDown:
         type: string
       sqlUp:
@@ -328,16 +477,6 @@ definitions:
         type: integer
       version:
         type: string
-    type: object
-  internal_adapters_http_handlers.RollbackMigrationRequest:
-    properties:
-      databaseId:
-        type: integer
-      targetMigrationId:
-        type: integer
-    required:
-    - databaseId
-    - targetMigrationId
     type: object
   internal_adapters_http_handlers.SchemaColumnSnapshotResponse:
     properties:
@@ -392,6 +531,13 @@ definitions:
       type:
         type: string
     type: object
+  internal_adapters_http_handlers.SubmitApprovalRequest:
+    properties:
+      status:
+        type: string
+    required:
+    - status
+    type: object
   internal_adapters_http_handlers.TableDiffChangeResponse:
     properties:
       addedColumns:
@@ -425,6 +571,8 @@ definitions:
         items:
           $ref: '#/definitions/internal_adapters_http_handlers.DatabaseAccessRequest'
         type: array
+      leaderId:
+        type: integer
       name:
         type: string
     type: object
@@ -443,6 +591,13 @@ definitions:
         type: string
       username:
         type: string
+    type: object
+  internal_adapters_http_handlers.VoteMigrationDraftRequest:
+    properties:
+      approve:
+        type: boolean
+    required:
+    - approve
     type: object
 host: localhost:8080
 info:
@@ -845,8 +1000,9 @@ paths:
       - Admin - Groups
   /admin/groups/{id}/users/{user_id}:
     delete:
-      description: Removes an existing user from an existing group. Requires admin
-        privileges.
+      description: Removes an existing user from an existing group. If the user is
+        the group leader, replacement_leader_id query parameter is required. Requires
+        admin privileges.
       parameters:
       - description: Group ID
         in: path
@@ -857,6 +1013,10 @@ paths:
         in: path
         name: user_id
         required: true
+        type: integer
+      - description: Replacement leader ID (required if user is leader)
+        in: query
+        name: replacement_leader_id
         type: integer
       produces:
       - application/json
@@ -872,7 +1032,8 @@ paths:
         "404":
           description: Group or user not found
         "409":
-          description: Membership not found / user must remain in a group
+          description: Membership not found / user must remain in a group / leader
+            requires replacement
         "500":
           description: Internal server error
       security:
@@ -1265,6 +1426,409 @@ paths:
       summary: Get current user
       tags:
       - Auth
+  /databases/{id}/drafts:
+    get:
+      description: Returns a paginated list of draft history for a specific database.
+        Requires view access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Drafts retrieved successfully
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.PagedResponse-internal_adapters_http_handlers_DraftResponse'
+        "400":
+          description: Invalid database ID or pagination
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no view access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: List database drafts
+      tags:
+      - Me - Drafts
+    post:
+      consumes:
+      - application/json
+      description: Creates a new migration draft on the specified database and initializes
+        approvals for all connected group leaders. Requires edit access.
+      parameters:
+      - description: Database ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Draft details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers.CreateDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Draft created successfully
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (no edit access)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Create draft
+      tags:
+      - Me - Drafts
+  /drafts/{id}:
+    get:
+      description: Returns draft details and leader approval voting statuses. Requires
+        view access to the database.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Draft retrieved successfully
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get draft details
+      tags:
+      - Me - Drafts
+  /drafts/{id}/approvals:
+    post:
+      consumes:
+      - application/json
+      description: 'Action voting by a connected group leader (status: "approved"
+        | "rejected").'
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Approval vote
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers.SubmitApprovalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Vote submitted successfully
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse'
+        "400":
+          description: Invalid input or status
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized (voter not group leader)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Conflict (draft not in pending_approval state)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Submit draft approval
+      tags:
+      - Me - Drafts
+  /drafts/{id}/execute:
+    post:
+      description: Triggers asynchronous migration execution for an approved draft.
+        Requires caller to be the draft author. Returns HTTP 202 Accepted.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Draft execution accepted
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not author)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft or database not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Conflict (migration in progress or not approved)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "423":
+          description: Locked (database must resolve partially reverted)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Execute draft
+      tags:
+      - Me - Drafts
+  /drafts/{id}/progress:
+    get:
+      description: Returns execution progress percentage and rows processed for a
+        batch draft.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Batch progress retrieved
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_BatchProgressResponse'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Get batch draft progress
+      tags:
+      - Me - Drafts
+  /drafts/{id}/progress/stream:
+    get:
+      description: Streams batch progress updates as text/event-stream until execution
+        completes or quarantines.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          schema:
+            type: string
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Stream batch draft progress (SSE)
+      tags:
+      - Me - Drafts
+  /drafts/{id}/resume:
+    post:
+      description: Resumes execution of a batch draft from the last committed checkpoint.
+        Requires caller to be the draft author and consensus approval to resume. Returns
+        HTTP 202 Accepted.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Batch draft resume accepted
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not author)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Conflict (migration in progress or invalid draft state)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Resume batch draft
+      tags:
+      - Me - Drafts
+  /drafts/{id}/revert-batch:
+    post:
+      description: Rolls back committed chunks of a batch draft in reverse order.
+        Requires caller to be the draft author and consensus approval to revert. Returns
+        HTTP 202 Accepted.
+      parameters:
+      - description: Draft ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Batch draft rollback accepted
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "400":
+          description: Invalid draft ID
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden (not author)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Conflict (migration in progress or invalid draft state)
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Rollback batch draft
+      tags:
+      - Me - Drafts
   /health:
     get:
       description: Check server health status and system database connectivity.
@@ -1361,6 +1925,154 @@ paths:
       summary: Get my database
       tags:
       - Me - Databases
+  /me/databases/{database_id}/forward-draft:
+    post:
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse'
+        "400":
+          description: Invalid request or irreversible migration
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database or draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Unavailable in the current state
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Propose one forward step
+      tags:
+      - Me - Migrations
+  /me/databases/{database_id}/migration-drafts/{draft_id}/execute:
+    post:
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: Draft ID
+        in: path
+        name: draft_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse'
+        "400":
+          description: Invalid request or irreversible migration
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database or draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Unavailable in the current state
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Execute a unanimously approved migration draft
+      tags:
+      - Me - Migrations
+  /me/databases/{database_id}/migration-drafts/{draft_id}/vote:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Database ID
+        in: path
+        name: database_id
+        required: true
+        type: integer
+      - description: Draft ID
+        in: path
+        name: draft_id
+        required: true
+        type: integer
+      - description: Leader decision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http_handlers.VoteMigrationDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Vote recorded
+        "400":
+          description: Invalid request or irreversible migration
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database or draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "409":
+          description: Unavailable in the current state
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+      security:
+      - CookieAuth: []
+      summary: Submit a group leader vote
+      tags:
+      - Me - Migrations
   /me/databases/{database_id}/migrations:
     get:
       description: Returns a paginated list of migrations for a specific database.
@@ -1371,6 +2083,10 @@ paths:
         name: database_id
         required: true
         type: integer
+      - description: Hide successful rollback pairs
+        in: query
+        name: hide_rollback
+        type: boolean
       - description: 'Page number (default: 1)'
         in: query
         name: page
@@ -1555,28 +2271,23 @@ paths:
       summary: Compare migrations
       tags:
       - Me - Migrations
-  /me/databases/migrations/rollback:
+  /me/databases/{database_id}/rollback-draft:
     post:
-      consumes:
-      - application/json
-      description: Rolls back all migrations up to and including the target migration
-        ID.
       parameters:
-      - description: Rollback target
-        in: body
-        name: body
+      - description: Database ID
+        in: path
+        name: database_id
         required: true
-        schema:
-          $ref: '#/definitions/internal_adapters_http_handlers.RollbackMigrationRequest'
+        type: integer
       produces:
       - application/json
       responses:
-        "200":
-          description: Migrations rolled back
+        "201":
+          description: Created
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-array_internal_adapters_http_handlers_MigrationResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationDraftResponse'
         "400":
-          description: Invalid input
+          description: Invalid request or irreversible migration
           schema:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
         "401":
@@ -1587,8 +2298,12 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+        "404":
+          description: Database or draft not found
+          schema:
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
         "409":
-          description: Rollback unavailable or version conflict
+          description: Unavailable in the current state
           schema:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
         "500":
@@ -1597,7 +2312,7 @@ paths:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
       security:
       - CookieAuth: []
-      summary: Rollback migrations
+      summary: Propose rollback of the active migration
       tags:
       - Me - Migrations
 schemes:

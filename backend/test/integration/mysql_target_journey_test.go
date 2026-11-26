@@ -193,8 +193,10 @@ func TestMySQLTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensatin
 		t.Fatalf("failed to register target mysql: %v", err)
 	}
 
-	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
-		Name: "mysql-rollback-group",
+	leader := createMigrationLeader(t, stack, "mysql_rollback_leader")
+	group, err := stack.groupRepo.Save(ctx, domain.Group{
+		LeaderID: leader.ID,
+		Name:     "mysql-rollback-group",
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewEdit},
 		},
@@ -213,7 +215,6 @@ func TestMySQLTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensatin
 	if rec1.Code != http.StatusCreated {
 		t.Fatalf("failed to create initial baseline migration in MySQL: %s", rec1.Body.String())
 	}
-	res1 := parseResponseBody[handlers.MigrationResponse](t, rec1)
 
 	// Step 2: Apply second migration to be rolled back
 	rec2 := executeRequest(stack.engine, http.MethodPost, fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID),
@@ -223,12 +224,24 @@ func TestMySQLTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensatin
 		t.Fatalf("failed to create second migration in MySQL: %s", rec2.Body.String())
 	}
 
-	// Act - Trigger Rollback targeting baseline migration 1
-	rollbackReq := handlers.RollbackMigrationRequest{
-		DatabaseID:        createdDB.ID,
-		TargetMigrationID: res1.Data.ID,
+	// Act
+	base := fmt.Sprintf("/api/v1/me/databases/%d", createdDB.ID)
+	proposal := executeRequest(stack.engine, http.MethodPost, base+"/rollback-draft", nil, sessionCookie, csrfToken)
+	if proposal.Code != http.StatusCreated {
+		t.Fatalf("propose: %s", proposal.Body.String())
 	}
-	recRollback := executeRequest(stack.engine, http.MethodPost, "/api/v1/me/databases/migrations/rollback", rollbackReq, sessionCookie, csrfToken)
+	draft := parseResponseBody[handlers.MigrationDraftResponse](t, proposal).Data
+	path := fmt.Sprintf("%s/migration-drafts/%d", base, draft.ID)
+	blocked := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, sessionCookie, csrfToken)
+	if blocked.Code != http.StatusConflict {
+		t.Fatalf("expected unapproved execution to fail: %s", blocked.Body.String())
+	}
+	leaderCookie, leaderToken := loginUser(t, stack.engine, leader.Username, "password123")
+	vote := executeRequest(stack.engine, http.MethodPost, path+"/vote", map[string]bool{"approve": true}, leaderCookie, leaderToken)
+	if vote.Code != http.StatusNoContent {
+		t.Fatalf("vote: %s", vote.Body.String())
+	}
+	recRollback := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, sessionCookie, csrfToken)
 
 	// Assert - Rollback execution success
 	if recRollback.Code != http.StatusOK {

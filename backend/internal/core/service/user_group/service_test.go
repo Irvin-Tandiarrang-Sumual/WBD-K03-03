@@ -199,7 +199,7 @@ func TestRemoveUser_GroupLookupFailure_ReturnsError(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(&testutil.UserGroupRepository{}, groupRepo, &testutil.UserRepository{}, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, expectedErr) {
@@ -223,7 +223,7 @@ func TestRemoveUser_UserLookupFailure_ReturnsError(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(&testutil.UserGroupRepository{}, groupRepo, userRepo, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, expectedErr) {
@@ -252,7 +252,7 @@ func TestRemoveUser_FindMembersFailure_ReturnsError(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, expectedErr) {
@@ -280,7 +280,7 @@ func TestRemoveUser_UserNotInGroup_ReturnsErrMembershipNotFound(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, domain.ErrMembershipNotFound) {
@@ -312,7 +312,7 @@ func TestRemoveUser_CountGroupsFailure_ReturnsError(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, expectedErr) {
@@ -343,7 +343,7 @@ func TestRemoveUser_RoleUserWithSingleGroup_ReturnsErrUserMustHaveGroup(t *testi
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, domain.ErrUserMustHaveGroup) {
@@ -371,7 +371,7 @@ func TestRemoveUser_RoleAdminWithSingleGroup_Success(t *testing.T) {
 		CountByUserIDFunc: func(_ context.Context, _ uint) (int64, error) {
 			return 1, nil
 		},
-		RemoveUserFunc: func(_ context.Context, _ uint, _ uint) error {
+		RemoveUserFunc: func(_ context.Context, _ uint, _ uint, _ *uint) error {
 			removed = true
 			return nil
 		},
@@ -384,7 +384,7 @@ func TestRemoveUser_RoleAdminWithSingleGroup_Success(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionSvc)
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 99)
+	err := service.RemoveUser(context.Background(), 1, 99, nil)
 
 	// Assert
 	if err != nil || !removed {
@@ -412,7 +412,7 @@ func TestRemoveUser_RoleUserWithMultipleGroups_Success(t *testing.T) {
 		CountByUserIDFunc: func(_ context.Context, _ uint) (int64, error) {
 			return 2, nil // Has 2 groups, safe to remove from one
 		},
-		RemoveUserFunc: func(_ context.Context, _ uint, _ uint) error {
+		RemoveUserFunc: func(_ context.Context, _ uint, _ uint, _ *uint) error {
 			removed = true
 			return nil
 		},
@@ -425,7 +425,7 @@ func TestRemoveUser_RoleUserWithMultipleGroups_Success(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionSvc)
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if err != nil || !removed {
@@ -453,14 +453,14 @@ func TestRemoveUser_PersistenceFailure_ReturnsError(t *testing.T) {
 		CountByUserIDFunc: func(_ context.Context, _ uint) (int64, error) {
 			return 2, nil
 		},
-		RemoveUserFunc: func(_ context.Context, _ uint, _ uint) error {
+		RemoveUserFunc: func(_ context.Context, _ uint, _ uint, _ *uint) error {
 			return expectedErr
 		},
 	}
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, expectedErr) {
@@ -488,7 +488,7 @@ func TestRemoveUser_SessionRevocationFailure_ReturnsError(t *testing.T) {
 		CountByUserIDFunc: func(_ context.Context, _ uint) (int64, error) {
 			return 2, nil
 		},
-		RemoveUserFunc: func(_ context.Context, _ uint, _ uint) error {
+		RemoveUserFunc: func(_ context.Context, _ uint, _ uint, _ *uint) error {
 			return nil
 		},
 	}
@@ -500,7 +500,7 @@ func TestRemoveUser_SessionRevocationFailure_ReturnsError(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionSvc)
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if !errors.Is(err, expectedErr) {
@@ -528,7 +528,7 @@ func TestRemoveUser_Success_RevokesUserSessions(t *testing.T) {
 		CountByUserIDFunc: func(_ context.Context, _ uint) (int64, error) {
 			return 2, nil
 		},
-		RemoveUserFunc: func(_ context.Context, _ uint, _ uint) error {
+		RemoveUserFunc: func(_ context.Context, _ uint, _ uint, _ *uint) error {
 			return nil
 		},
 	}
@@ -541,11 +541,175 @@ func TestRemoveUser_Success_RevokesUserSessions(t *testing.T) {
 	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, sessionSvc)
 
 	// Act
-	err := service.RemoveUser(context.Background(), 1, 10)
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
 
 	// Assert
 	if err != nil || revokedUserID != 10 {
 		t.Fatalf("expected sessions for user 10 to be revoked on remove, got %d, err: %v", revokedUserID, err)
+	}
+}
+
+func TestRemoveUser_UserIsLeaderWithoutReplacement_ReturnsErrLeaderRequiresReplacement(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.Group, error) {
+			return domain.Group{ID: id, LeaderID: 10}, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Role: domain.RoleAdmin}, nil
+		},
+	}
+	userGroupRepo := &testutil.UserGroupRepository{
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil
+		},
+	}
+	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
+
+	// Act
+	err := service.RemoveUser(context.Background(), 1, 10, nil)
+
+	// Assert
+	if !errors.Is(err, domain.ErrLeaderRequiresReplacement) {
+		t.Fatalf("expected ErrLeaderRequiresReplacement, got %v", err)
+	}
+}
+
+func TestRemoveUser_UserIsLeaderReplacementSameUser_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.Group, error) {
+			return domain.Group{ID: id, LeaderID: 10}, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Role: domain.RoleAdmin}, nil
+		},
+	}
+	userGroupRepo := &testutil.UserGroupRepository{
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil
+		},
+	}
+	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
+	sameUser := uint(10)
+
+	// Act
+	err := service.RemoveUser(context.Background(), 1, 10, &sameUser)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestRemoveUser_UserIsLeaderReplacementNotFound_ReturnsErrUserNotFound(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.Group, error) {
+			return domain.Group{ID: id, LeaderID: 10}, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			if id == 10 {
+				return domain.User{ID: id, Role: domain.RoleAdmin}, nil
+			}
+			return domain.User{}, domain.ErrUserNotFound
+		},
+	}
+	userGroupRepo := &testutil.UserGroupRepository{
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil
+		},
+	}
+	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
+	replacementUser := uint(999)
+
+	// Act
+	err := service.RemoveUser(context.Background(), 1, 10, &replacementUser)
+
+	// Assert
+	if !errors.Is(err, domain.ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestRemoveUser_UserIsLeaderReplacementNotMember_ReturnsErrLeaderMustBeGroupMember(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.Group, error) {
+			return domain.Group{ID: id, LeaderID: 10}, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Role: domain.RoleAdmin}, nil
+		},
+	}
+	userGroupRepo := &testutil.UserGroupRepository{
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil // replacement 30 is not in group
+		},
+	}
+	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
+	replacementUser := uint(30)
+
+	// Act
+	err := service.RemoveUser(context.Background(), 1, 10, &replacementUser)
+
+	// Assert
+	if !errors.Is(err, domain.ErrLeaderMustBeGroupMember) {
+		t.Fatalf("expected ErrLeaderMustBeGroupMember, got %v", err)
+	}
+}
+
+func TestRemoveUser_UserIsLeaderValidReplacement_UpdatesLeaderAndRemovesUser(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.Group, error) {
+			return domain.Group{ID: id, LeaderID: 10}, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Role: domain.RoleAdmin}, nil
+		},
+	}
+	userRemoved := false
+	capturedReplacementID := uint(0)
+	userGroupRepo := &testutil.UserGroupRepository{
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil
+		},
+		RemoveUserFunc: func(_ context.Context, _ uint, userID uint, rep *uint) error {
+			if userID == 10 {
+				userRemoved = true
+			}
+			if rep != nil {
+				capturedReplacementID = *rep
+			}
+			return nil
+		},
+	}
+	service := usergroupservice.NewUserGroupService(userGroupRepo, groupRepo, userRepo, &testutil.SessionService{})
+	replacementUser := uint(20)
+
+	// Act
+	err := service.RemoveUser(context.Background(), 1, 10, &replacementUser)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if capturedReplacementID != 20 {
+		t.Fatalf("expected updated leader ID 20 passed to repo, got %d", capturedReplacementID)
+	}
+	if !userRemoved {
+		t.Fatalf("expected user 10 to be removed from group")
 	}
 }
 

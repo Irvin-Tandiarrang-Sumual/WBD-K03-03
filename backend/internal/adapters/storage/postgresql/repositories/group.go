@@ -70,6 +70,7 @@ func (r *groupRepository) FindAll(ctx context.Context, params pagination.Paginat
 		groups = append(groups, domain.Group{
 			ID:               storedGroup.ID,
 			Name:             storedGroup.Name,
+			LeaderID:         storedGroup.LeaderID,
 			DatabaseAccesses: accessesByGroup[storedGroup.ID],
 		})
 	}
@@ -105,6 +106,7 @@ func (r *groupRepository) FindByID(ctx context.Context, id uint) (domain.Group, 
 	return domain.Group{
 		ID:               storedGroup.ID,
 		Name:             storedGroup.Name,
+		LeaderID:         storedGroup.LeaderID,
 		DatabaseAccesses: accesses,
 	}, nil
 }
@@ -141,7 +143,8 @@ func (r *groupRepository) Save(ctx context.Context, group domain.Group) (domain.
 	var created domain.Group
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		storedGroup := models.Group{
-			Name: group.Name,
+			Name:     group.Name,
+			LeaderID: group.LeaderID,
 		}
 
 		if err := tx.Create(&storedGroup).Error; err != nil {
@@ -152,6 +155,16 @@ func (r *groupRepository) Save(ctx context.Context, group domain.Group) (domain.
 		}
 		if err := replaceDatabaseAccesses(tx, storedGroup.ID, group.DatabaseAccesses); err != nil {
 			return err
+		}
+
+		if storedGroup.LeaderID != 0 {
+			userGroup := models.UserGroup{
+				GroupID: storedGroup.ID,
+				UserID:  storedGroup.LeaderID,
+			}
+			if err := tx.Create(&userGroup).Error; err != nil {
+				return err
+			}
 		}
 
 		group.ID = storedGroup.ID
@@ -169,10 +182,17 @@ func (r *groupRepository) Save(ctx context.Context, group domain.Group) (domain.
 
 func (r *groupRepository) Update(ctx context.Context, group domain.Group) (domain.Group, error) {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		updates := map[string]any{
+			"name": group.Name,
+		}
+		if group.LeaderID != 0 {
+			updates["leader_id"] = group.LeaderID
+		}
+
 		result := tx.
 			Model(&models.Group{}).
 			Where("id = ?", group.ID).
-			Update("name", group.Name)
+			Updates(updates)
 
 		if result.Error != nil {
 			if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
@@ -192,6 +212,12 @@ func (r *groupRepository) Update(ctx context.Context, group domain.Group) (domai
 	}
 
 	return group, nil
+}
+
+func (r *groupRepository) CountByLeaderID(ctx context.Context, leaderID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Group{}).Where("leader_id = ?", leaderID).Count(&count).Error
+	return count, err
 }
 
 func (r *groupRepository) Delete(ctx context.Context, id uint) error {
@@ -273,4 +299,52 @@ func replaceDatabaseAccesses(tx *gorm.DB, groupID uint, accesses []domain.Databa
 	}
 
 	return tx.Create(&relations).Error
+}
+
+func (r *groupRepository) FindAllByDatabaseID(ctx context.Context, databaseID uint) ([]domain.Group, error) {
+	var relations []models.GroupDatabase
+	if err := r.db.WithContext(ctx).Where("database_id = ?", databaseID).Find(&relations).Error; err != nil {
+		return nil, err
+	}
+	if len(relations) == 0 {
+		return []domain.Group{}, nil
+	}
+
+	groupIDs := make([]uint, 0, len(relations))
+	for _, rel := range relations {
+		groupIDs = append(groupIDs, rel.GroupID)
+	}
+
+	var storedGroups []models.Group
+	if err := r.db.WithContext(ctx).Where("id IN ?", groupIDs).Order("id ASC").Find(&storedGroups).Error; err != nil {
+		return nil, err
+	}
+
+	var allGroupDatabases []models.GroupDatabase
+	if err := r.db.WithContext(ctx).Where("group_id IN ?", groupIDs).Order("group_id ASC, database_id ASC").Find(&allGroupDatabases).Error; err != nil {
+		return nil, err
+	}
+
+	accessesByGroup := make(map[uint][]domain.DatabaseAccess)
+	for _, relation := range allGroupDatabases {
+		accessesByGroup[relation.GroupID] = append(
+			accessesByGroup[relation.GroupID],
+			domain.DatabaseAccess{
+				DatabaseID: relation.DatabaseID,
+				AccessType: domain.AccessType(relation.AccessType),
+			},
+		)
+	}
+
+	groups := make([]domain.Group, 0, len(storedGroups))
+	for _, storedGroup := range storedGroups {
+		groups = append(groups, domain.Group{
+			ID:               storedGroup.ID,
+			Name:             storedGroup.Name,
+			LeaderID:         storedGroup.LeaderID,
+			DatabaseAccesses: accessesByGroup[storedGroup.ID],
+		})
+	}
+
+	return groups, nil
 }

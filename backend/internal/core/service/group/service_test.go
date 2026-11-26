@@ -295,16 +295,25 @@ func TestCreateGroup_AccessesUnsorted_SavesNormalizedSortedAccesses(t *testing.T
 			return true, nil
 		},
 	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id}, nil
+		},
+	}
 	var capturedSavedGroup domain.Group
 	groupRepo := &testutil.GroupRepository{
 		SaveFunc: func(_ context.Context, g domain.Group) (domain.Group, error) {
 			capturedSavedGroup = g
 			return g, nil
 		},
+		AddUserFunc: func(_ context.Context, _ uint, _ uint) error {
+			return nil
+		},
 	}
-	service := groupservice.NewGroupService(groupRepo, groupRepo, &testutil.UserRepository{}, dbRepo, &testutil.SessionService{})
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, dbRepo, &testutil.SessionService{})
 	input := domain.CreateGroupInput{
-		Name: "Multi-DB Team",
+		Name:     "Multi-DB Team",
+		LeaderID: 10,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 5, AccessType: domain.AccessViewEdit},
 			{DatabaseID: 2, AccessType: domain.AccessViewOnly},
@@ -333,16 +342,25 @@ func TestCreateGroup_TrimmedName_SavesTrimmedName(t *testing.T) {
 			return true, nil
 		},
 	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id}, nil
+		},
+	}
 	var capturedSavedGroup domain.Group
 	groupRepo := &testutil.GroupRepository{
 		SaveFunc: func(_ context.Context, g domain.Group) (domain.Group, error) {
 			capturedSavedGroup = g
 			return g, nil
 		},
+		AddUserFunc: func(_ context.Context, _ uint, _ uint) error {
+			return nil
+		},
 	}
-	service := groupservice.NewGroupService(groupRepo, groupRepo, &testutil.UserRepository{}, dbRepo, &testutil.SessionService{})
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, dbRepo, &testutil.SessionService{})
 	input := domain.CreateGroupInput{
-		Name: "  Padded Name   ",
+		Name:     "  Padded Name   ",
+		LeaderID: 10,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
 		},
@@ -365,14 +383,20 @@ func TestCreateGroup_PersistenceFailure_ReturnsError(t *testing.T) {
 			return true, nil
 		},
 	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id}, nil
+		},
+	}
 	groupRepo := &testutil.GroupRepository{
 		SaveFunc: func(_ context.Context, _ domain.Group) (domain.Group, error) {
 			return domain.Group{}, expectedErr
 		},
 	}
-	service := groupservice.NewGroupService(groupRepo, groupRepo, &testutil.UserRepository{}, dbRepo, &testutil.SessionService{})
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, dbRepo, &testutil.SessionService{})
 	input := domain.CreateGroupInput{
-		Name: "Engineering",
+		Name:     "Engineering",
+		LeaderID: 10,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
 		},
@@ -394,21 +418,35 @@ func TestCreateGroup_ValidInput_ReturnsCreatedGroup(t *testing.T) {
 			return true, nil
 		},
 	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id}, nil
+		},
+	}
 	expectedGroup := domain.Group{
-		ID:   12,
-		Name: "Engineering",
+		ID:       12,
+		Name:     "Engineering",
+		LeaderID: 10,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
 		},
 	}
+	addedLeaderToGroup := false
 	groupRepo := &testutil.GroupRepository{
 		SaveFunc: func(_ context.Context, _ domain.Group) (domain.Group, error) {
 			return expectedGroup, nil
 		},
+		AddUserFunc: func(_ context.Context, groupID uint, userID uint) error {
+			if groupID == 12 && userID == 10 {
+				addedLeaderToGroup = true
+			}
+			return nil
+		},
 	}
-	service := groupservice.NewGroupService(groupRepo, groupRepo, &testutil.UserRepository{}, dbRepo, &testutil.SessionService{})
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, dbRepo, &testutil.SessionService{})
 	input := domain.CreateGroupInput{
-		Name: "Engineering",
+		Name:     "Engineering",
+		LeaderID: 10,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
 		},
@@ -420,6 +458,64 @@ func TestCreateGroup_ValidInput_ReturnsCreatedGroup(t *testing.T) {
 	// Assert
 	if !reflect.DeepEqual(created, expectedGroup) {
 		t.Fatalf("expected group %+v, got %+v", expectedGroup, created)
+	}
+	if !addedLeaderToGroup {
+		t.Fatalf("expected leader to be added to group membership")
+	}
+}
+
+func TestCreateGroup_ZeroLeaderID_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	dbRepo := &testutil.DatabaseRepository{
+		ExistsAllFunc: func(_ context.Context, _ []uint) (bool, error) {
+			return true, nil
+		},
+	}
+	service := groupservice.NewGroupService(&testutil.GroupRepository{}, &testutil.GroupRepository{}, &testutil.UserRepository{}, dbRepo, &testutil.SessionService{})
+	input := domain.CreateGroupInput{
+		Name:     "Engineering",
+		LeaderID: 0,
+		DatabaseAccesses: []domain.DatabaseAccess{
+			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
+		},
+	}
+
+	// Act
+	_, err := service.CreateGroup(context.Background(), input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestCreateGroup_LeaderNotFound_ReturnsErrUserNotFound(t *testing.T) {
+	// Arrange
+	dbRepo := &testutil.DatabaseRepository{
+		ExistsAllFunc: func(_ context.Context, _ []uint) (bool, error) {
+			return true, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.User, error) {
+			return domain.User{}, domain.ErrUserNotFound
+		},
+	}
+	service := groupservice.NewGroupService(&testutil.GroupRepository{}, &testutil.GroupRepository{}, userRepo, dbRepo, &testutil.SessionService{})
+	input := domain.CreateGroupInput{
+		Name:     "Engineering",
+		LeaderID: 999,
+		DatabaseAccesses: []domain.DatabaseAccess{
+			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
+		},
+	}
+
+	// Act
+	_, err := service.CreateGroup(context.Background(), input)
+
+	// Assert
+	if !errors.Is(err, domain.ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
 	}
 }
 

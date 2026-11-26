@@ -9,11 +9,13 @@ type DatabaseAccessRequest struct {
 
 type CreateGroupRequest struct {
 	Name             string                  `json:"name" binding:"required"`
+	LeaderID         uint                    `json:"leaderId" binding:"required"`
 	DatabaseAccesses []DatabaseAccessRequest `json:"databaseAccesses" binding:"required"`
 }
 
 type UpdateGroupRequest struct {
 	Name             *string                  `json:"name"`
+	LeaderID         *uint                    `json:"leaderId"`
 	DatabaseAccesses *[]DatabaseAccessRequest `json:"databaseAccesses"`
 }
 
@@ -25,6 +27,7 @@ type DatabaseAccessResponse struct {
 type GroupResponse struct {
 	ID               uint                     `json:"id"`
 	Name             string                   `json:"name"`
+	LeaderID         uint                     `json:"leaderId"`
 	DatabaseAccesses []DatabaseAccessResponse `json:"databaseAccesses"`
 }
 
@@ -54,6 +57,7 @@ func toGroupResponse(group domain.Group) GroupResponse {
 	return GroupResponse{
 		ID:               group.ID,
 		Name:             group.Name,
+		LeaderID:         group.LeaderID,
 		DatabaseAccesses: accesses,
 	}
 }

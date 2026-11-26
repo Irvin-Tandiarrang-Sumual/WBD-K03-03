@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
 
 type migrationService struct {
@@ -39,7 +37,7 @@ func (s *migrationService) GetMigrationsByDatabaseID(
 	ctx context.Context,
 	databaseID uint,
 	userID uint,
-	params pagination.PaginationParams,
+	params pagination.PaginationParams, hideRollback bool,
 ) ([]*domain.Migration, int64, error) {
 	if databaseID == 0 || userID == 0 {
 		return nil, 0, domain.ErrInvalidMigrationInput
@@ -47,7 +45,7 @@ func (s *migrationService) GetMigrationsByDatabaseID(
 	if err := s.userGroupsService.Authorize(ctx, userID, databaseID, domain.AccessViewOnly); err != nil {
 		return nil, 0, err
 	}
-	return s.repository.FindAllByDatabaseID(ctx, databaseID, params)
+	return s.repository.FindAllByDatabaseID(ctx, databaseID, params, hideRollback)
 }
 
 func (s *migrationService) GetMigrationByIDAndDatabaseID(
@@ -125,41 +123,74 @@ func (s *migrationService) CreateMigration(ctx context.Context, input domain.Cre
 		return nil, err
 	}
 
-	latest, err := s.ensureBaseline(ctx, dbWithCred, input.UserID)
+	var result *domain.Migration
+	err = s.repository.WithPosition(ctx, input.DatabaseID, func(repo ports.MigrationRepository, pos domain.MigrationPosition) error {
+		var applyErr error
+		result, applyErr = s.applyMigration(ctx, repo, pos, dbWithCred, input)
+		return applyErr
+	})
+	if err == nil && result != nil && result.Status == domain.MigrationStatusSnapshotPending {
+		return nil, domain.ErrMigrationSnapshotUnavailable
+	}
+	return result, err
+}
+
+func (s *migrationService) applyMigration(ctx context.Context, repo ports.MigrationRepository, pos domain.MigrationPosition, dbWithCred domain.Database, input domain.CreateMigrationInput) (*domain.Migration, error) {
+	if err := s.completePendingSnapshot(ctx, repo, dbWithCred); err != nil {
+		return nil, err
+	}
+	latest, err := s.ensureBaseline(ctx, repo, dbWithCred, input.UserID)
 	if err != nil {
 		return nil, err
 	}
 
+	if pos.HeadID == nil && latest != nil && latest.Status == domain.MigrationStatusSuccess {
+		pos.HeadID = &latest.ID
+		if err := repo.UpdatePosition(ctx, input.DatabaseID, pos.HeadID, nil, nil, pos.ExecutionID); err != nil {
+			return nil, err
+		}
+	}
 	version, err := s.resolveNextVersion(latest)
 	if err != nil {
 		return nil, err
 	}
 
-	migration, err := s.createPendingMigration(ctx, input, version)
+	migration, err := s.createPendingMigration(ctx, repo, input, version)
 	if err != nil {
 		return nil, err
 	}
 
-	sqlDown, err := s.databaseDriver.GenerateSQLDown(ctx, dbWithCred, input.SqlUp)
-	if err != nil {
-		return s.failMigration(ctx, migration, err)
+	migration.ParentMigrationID = pos.HeadID
+	migration.ExecutionID = pos.ExecutionID + 1
+	migration.IsReversible, migration.IrreversibleReason = domain.ClassifyMigration(input.SqlUp)
+	if migration.IsReversible {
+		sqlDown, err := s.databaseDriver.GenerateSQLDown(ctx, dbWithCred, input.SqlUp)
+		if err != nil {
+			return s.failMigration(ctx, repo, migration, err)
+		}
+		migration.SqlDown = sqlDown
+		if sqlDown == "" {
+			migration.IsReversible = false
+			migration.IrreversibleReason = "No inverse SQL available"
+		}
 	}
-	migration.SqlDown = sqlDown
-
 	if _, err := s.databaseDriver.ExecuteCommand(ctx, dbWithCred, input.SqlUp); err != nil {
-		return s.failMigration(ctx, migration, err)
+		return s.failMigration(ctx, repo, migration, err)
 	}
 
-	if snapshotBytes, _, err := CaptureDatabaseSnapshot(ctx, s.databaseDriver, dbWithCred); err == nil && len(snapshotBytes) > 0 {
-		migration.Snapshot = snapshotBytes
+	s.captureAppliedSnapshot(ctx, dbWithCred, migration)
+	saved, err := repo.Update(ctx, migration)
+	if err != nil {
+		return nil, err
 	}
-
-	migration.Status = domain.MigrationStatusSuccess
-	return s.repository.Update(ctx, migration)
+	if err = repo.UpdatePosition(ctx, input.DatabaseID, &saved.ID, pos.HeadID, &saved.ID, migration.ExecutionID); err != nil {
+		return nil, err
+	}
+	return saved, nil
 }
 
-func (s *migrationService) ensureBaseline(ctx context.Context, db domain.Database, userID uint) (*domain.Migration, error) {
-	latest, err := s.repository.FindLatestByDatabaseID(ctx, db.ID)
+func (s *migrationService) ensureBaseline(ctx context.Context, repo ports.MigrationRepository, db domain.Database, userID uint) (*domain.Migration, error) {
+	latest, err := repo.FindLatestByDatabaseID(ctx, db.ID)
 	if err != nil && !errors.Is(err, domain.ErrMigrationNotFound) {
 		return nil, err
 	}
@@ -168,227 +199,38 @@ func (s *migrationService) ensureBaseline(ctx context.Context, db domain.Databas
 		return latest, nil
 	}
 
-	return s.createInitialBaseline(ctx, db, userID)
+	return s.createInitialBaseline(ctx, repo, db, userID)
 }
 
-func (s *migrationService) createInitialBaseline(ctx context.Context, db domain.Database, userID uint) (*domain.Migration, error) {
+func (s *migrationService) createInitialBaseline(ctx context.Context, repo ports.MigrationRepository, db domain.Database, userID uint) (*domain.Migration, error) {
 	baselineBytes, baselineStruct, snapErr := CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
-	if snapErr != nil || len(baselineBytes) == 0 {
-		return nil, nil
+	if snapErr != nil {
+		return nil, snapErr
+	}
+	if len(baselineBytes) == 0 {
+		return nil, domain.ErrMigrationSnapshotUnavailable
 	}
 
 	baseline := &domain.Migration{
-		DatabaseID: db.ID,
-		Version:    "1",
-		Status:     domain.MigrationStatusSuccess,
-		SqlUp:      FormatSnapshotAsBaselineSQL(baselineStruct),
-		SqlDown:    "-- Baseline schema snapshot (initial state)",
-		Snapshot:   baselineBytes,
-		UserID:     userID,
+		DatabaseID:         db.ID,
+		Version:            "1",
+		IrreversibleReason: "Initial schema baseline",
+		Status:             domain.MigrationStatusSuccess,
+		SqlUp:              FormatSnapshotAsBaselineSQL(baselineStruct),
+		SqlDown:            "-- Baseline schema snapshot (initial state)",
+		Snapshot:           baselineBytes,
+		UserID:             userID,
 	}
 
-	savedBaseline, err := s.repository.Save(ctx, baseline)
+	savedBaseline, err := repo.Save(ctx, baseline)
 	if err != nil {
 		return nil, err
 	}
 	return savedBaseline, nil
 }
 
-func (s *migrationService) RollbackMigrations(ctx context.Context, input domain.RollbackMigrationsInput) ([]*domain.Migration, error) {
-	if err := input.Validate(); err != nil {
-		return nil, domain.ErrInvalidMigrationInput
-	}
-
-	if err := s.userGroupsService.Authorize(ctx, input.UserID, input.DatabaseID, domain.AccessViewEdit); err != nil {
-		return nil, err
-	}
-
-	unlock, ok := s.tryLockDatabase(input.DatabaseID)
-	if !ok {
-		return nil, domain.ErrMigrationInProgress
-	}
-	defer unlock()
-
-	dbWithCred, err := s.databaseRepository.FindWithCredentialByID(ctx, input.DatabaseID)
-	if err != nil {
-		return nil, err
-	}
-
-	target, err := s.resolveTargetMigration(ctx, input.TargetMigrationID, input.DatabaseID)
-	if err != nil {
-		return nil, err
-	}
-
-	latest, err := s.repository.FindLatestSuccessfulByDatabaseID(ctx, input.DatabaseID)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := s.validateRollbackOrder(target, latest); err != nil {
-		return nil, err
-	}
-
-	rolledBack, err := s.executeRollbackRange(ctx, dbWithCred, target, latest)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(rolledBack) == 0 {
-		return rolledBack, nil
-	}
-
-	auditMigration, err := s.recordRollbackMigration(ctx, dbWithCred, input.UserID, target, rolledBack)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(rolledBack, auditMigration), nil
-}
-
-func (s *migrationService) resolveTargetMigration(ctx context.Context, targetID, dbID uint) (*domain.Migration, error) {
-	target, err := s.repository.FindByIDAndDatabaseID(ctx, targetID, dbID)
-	if err != nil {
-		return nil, err
-	}
-	if target.Status != domain.MigrationStatusSuccess {
-		return nil, domain.ErrMigrationRollbackUnavailable
-	}
-	return target, nil
-}
-
-func (s *migrationService) validateRollbackOrder(target, latest *domain.Migration) error {
-	targetVersion, err := strconv.Atoi(target.Version)
-	if err != nil {
-		return domain.ErrMigrationVersionUnavailable
-	}
-
-	latestVersion, err := strconv.Atoi(latest.Version)
-	if err != nil {
-		return domain.ErrMigrationVersionUnavailable
-	}
-
-	if targetVersion >= latestVersion {
-		return domain.ErrMigrationRollbackUnavailable
-	}
-
-	return nil
-}
-
-func (s *migrationService) executeRollbackRange(
-	ctx context.Context,
-	db domain.Database,
-	target, latest *domain.Migration,
-) ([]*domain.Migration, error) {
-	targetVer, _ := strconv.Atoi(target.Version)
-	latestVer, _ := strconv.Atoi(latest.Version)
-
-	rolledBack := make([]*domain.Migration, 0)
-	compensatingUps := make([]string, 0)
-
-	for version := latestVer; version > targetVer; version-- {
-		migration, err := s.repository.FindByVersionAndDatabaseID(ctx, strconv.Itoa(version), db.ID)
-		if err != nil {
-			rollbackExecutedStatements(ctx, s.databaseDriver, db, compensatingUps)
-			return nil, err
-		}
-
-		if migration.Status != domain.MigrationStatusSuccess {
-			continue
-		}
-
-		if migration.SqlDown == "" {
-			rollbackExecutedStatements(ctx, s.databaseDriver, db, compensatingUps)
-			return nil, domain.ErrMigrationRollbackUnavailable
-		}
-
-		upsToCompensate, err := s.applyRollbackStatement(ctx, db, migration)
-		if err != nil {
-			rollbackExecutedStatements(ctx, s.databaseDriver, db, compensatingUps)
-			return nil, err
-		}
-
-		compensatingUps = append(compensatingUps, upsToCompensate...)
-		rolledBack = append(rolledBack, migration)
-	}
-
-	return rolledBack, nil
-}
-
-func (s *migrationService) applyRollbackStatement(
-	ctx context.Context, db domain.Database,
-	migration *domain.Migration,
-) ([]string, error) {
-	downStatements := sqlutil.SplitStatements(migration.SqlDown)
-	upStatements := sqlutil.SplitStatements(migration.SqlUp)
-	executedUps := make([]string, 0, len(downStatements))
-
-	for idx, downStmt := range downStatements {
-		if _, err := s.databaseDriver.ExecuteCommand(ctx, db, downStmt); err != nil {
-			return nil, err
-		}
-
-		correspondingUpIndex := len(upStatements) - 1 - idx
-		if correspondingUpIndex >= 0 && correspondingUpIndex < len(upStatements) {
-			executedUps = append(executedUps, upStatements[correspondingUpIndex])
-		}
-	}
-
-	return executedUps, nil
-}
-
-func (s *migrationService) recordRollbackMigration(
-	ctx context.Context, db domain.Database, userID uint,
-	target *domain.Migration, rolledBack []*domain.Migration,
-) (*domain.Migration, error) {
-	latestAttempt, err := s.repository.FindLatestByDatabaseID(ctx, db.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	nextVersion, err := s.resolveNextVersion(latestAttempt)
-	if err != nil {
-		return nil, err
-	}
-
-	snapshot := s.resolveRollbackSnapshot(ctx, db, target)
-
-	return s.repository.Save(ctx, &domain.Migration{
-		DatabaseID: db.ID,
-		Version:    nextVersion,
-		Status:     domain.MigrationStatusSuccess,
-		SqlUp:      buildRollbackSQLUp(rolledBack),
-		SqlDown:    buildRollbackSQLDown(rolledBack),
-		Snapshot:   snapshot,
-		UserID:     userID,
-	})
-}
-
-func (s *migrationService) resolveRollbackSnapshot(ctx context.Context, db domain.Database, target *domain.Migration) []byte {
-	snapshotBytes, _, _ := CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
-	if len(snapshotBytes) == 0 && len(target.Snapshot) > 0 {
-		return target.Snapshot
-	}
-	return snapshotBytes
-}
-
-func buildRollbackSQLUp(rolledBack []*domain.Migration) string {
-	statements := make([]string, 0, len(rolledBack))
-	for _, m := range rolledBack {
-		statements = append(statements, m.SqlDown)
-	}
-	return strings.Join(statements, ";\n")
-}
-
-func buildRollbackSQLDown(rolledBack []*domain.Migration) string {
-	statements := make([]string, 0, len(rolledBack))
-	for i := len(rolledBack) - 1; i >= 0; i-- {
-		statements = append(statements, rolledBack[i].SqlUp)
-	}
-	return strings.Join(statements, ";\n")
-}
-
 func (s *migrationService) createPendingMigration(
-	ctx context.Context, input domain.CreateMigrationInput,
+	ctx context.Context, repo ports.MigrationRepository, input domain.CreateMigrationInput,
 	version string,
 ) (*domain.Migration, error) {
 	migration := &domain.Migration{
@@ -398,15 +240,15 @@ func (s *migrationService) createPendingMigration(
 		SqlUp:      input.SqlUp,
 		UserID:     input.UserID,
 	}
-	return s.repository.Save(ctx, migration)
+	return repo.Save(ctx, migration)
 }
 
 func (s *migrationService) failMigration(
-	ctx context.Context, migration *domain.Migration,
+	ctx context.Context, repo ports.MigrationRepository, migration *domain.Migration,
 	failureErr error,
 ) (*domain.Migration, error) {
 	migration.ErrorMessage = failureErr.Error()
-	return s.repository.Update(ctx, migration)
+	return repo.Update(ctx, migration)
 }
 
 func (s *migrationService) resolveNextVersion(latest *domain.Migration) (string, error) {
@@ -429,22 +271,28 @@ func (s *migrationService) tryLockDatabase(databaseID uint) (func(), bool) {
 	return mu.Unlock, true
 }
 
-
-func rollbackExecutedStatements(
-	ctx context.Context, driver ports.DatabaseDriver,
-	database domain.Database, executedDowns []string,
-) {
-	for index := len(executedDowns) - 1; index >= 0; index-- {
-		downScript := executedDowns[index]
-		subStatements := sqlutil.SplitStatements(downScript)
-		if len(subStatements) <= 1 {
-			if strings.TrimSpace(downScript) != "" {
-				_, _ = driver.ExecuteCommand(ctx, database, downScript)
-			}
-			continue
-		}
-		for _, subStmt := range subStatements {
-			_, _ = driver.ExecuteCommand(ctx, database, subStmt)
-		}
+// The target and history databases commit independently. If metadata is
+// temporarily unavailable, record the committed SQL and finish its snapshot
+// under the database lock before allowing another change to the schema.
+func (s *migrationService) captureAppliedSnapshot(ctx context.Context, db domain.Database, m *domain.Migration) {
+	snapshot, _, err := CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
+	if err != nil || len(snapshot) == 0 {
+		m.Status = domain.MigrationStatusSnapshotPending
+		return
 	}
+	m.Snapshot = snapshot
+	m.Status = domain.MigrationStatusSuccess
+}
+
+func (s *migrationService) completePendingSnapshot(ctx context.Context, repo ports.MigrationRepository, db domain.Database) error {
+	pending, err := repo.FindPendingSnapshot(ctx, db.ID)
+	if err != nil || pending == nil {
+		return err
+	}
+	s.captureAppliedSnapshot(ctx, db, pending)
+	if pending.Status != domain.MigrationStatusSuccess {
+		return domain.ErrMigrationSnapshotUnavailable
+	}
+	_, err = repo.Update(ctx, pending)
+	return err
 }

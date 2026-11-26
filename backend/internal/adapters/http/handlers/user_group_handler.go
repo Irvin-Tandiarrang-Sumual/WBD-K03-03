@@ -62,19 +62,20 @@ func (h *UserGroupHandler) AddUser(c *gin.Context) {
 // RemoveUser removes a user from a group.
 //
 //	@Summary		Remove user from group
-//	@Description	Removes an existing user from an existing group. Requires admin privileges.
+//	@Description	Removes an existing user from an existing group. If the user is the group leader, replacement_leader_id query parameter is required. Requires admin privileges.
 //	@Tags			Admin - Groups
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Param			id	path	int	true	"Group ID"
-//	@Param			user_id	path	int	true	"User ID"
-//	@Success		204		"User removed from group"
-//	@Failure		400		"Invalid input"
-//	@Failure		401		"Unauthorized"
-//	@Failure		403		"Forbidden (not admin)"
-//	@Failure		404		"Group or user not found"
-//	@Failure		409		"Membership not found / user must remain in a group"
-//	@Failure		500		"Internal server error"
+//	@Param			id						path	int		true	"Group ID"
+//	@Param			user_id					path	int		true	"User ID"
+//	@Param			replacement_leader_id	query	int		false	"Replacement leader ID (required if user is leader)"
+//	@Success		204						"User removed from group"
+//	@Failure		400						"Invalid input"
+//	@Failure		401						"Unauthorized"
+//	@Failure		403						"Forbidden (not admin)"
+//	@Failure		404						"Group or user not found"
+//	@Failure		409						"Membership not found / user must remain in a group / leader requires replacement"
+//	@Failure		500						"Internal server error"
 //	@Router			/admin/groups/{id}/users/{user_id} [delete]
 func (h *UserGroupHandler) RemoveUser(c *gin.Context) {
 	groupID, err := ginutil.ParseUintParam(c, "id")
@@ -89,8 +90,19 @@ func (h *UserGroupHandler) RemoveUser(c *gin.Context) {
 		return
 	}
 
+	var replacementLeaderID *uint
+	if c.Query("replacement_leader_id") != "" {
+		val, err := ginutil.ParseQueryInt(c, "replacement_leader_id")
+		if err != nil || val <= 0 {
+			c.Error(domain.ErrInvalidInput)
+			return
+		}
+		u := uint(val)
+		replacementLeaderID = &u
+	}
+
 	if h.service != nil {
-		if err := h.service.RemoveUser(c.Request.Context(), groupID, userID); err != nil {
+		if err := h.service.RemoveUser(c.Request.Context(), groupID, userID, replacementLeaderID); err != nil {
 			c.Error(err)
 			return
 		}

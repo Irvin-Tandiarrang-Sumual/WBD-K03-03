@@ -2,9 +2,13 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '**' ]
   pull_request:
     branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend-unit-test:
@@ -31,6 +35,7 @@ jobs:
   backend-integration-test:
     name: be integration tests
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4

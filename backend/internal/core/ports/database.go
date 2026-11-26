@@ -31,4 +31,6 @@ type DatabaseRepository interface {
 	FindCredentialByHostAndPort(ctx context.Context, host string, port uint, user string) (string, error)
 	GetDistinctHosts(ctx context.Context) ([]domain.DatabaseHost, error)
 	ExistsAll(ctx context.Context, databaseIDs []uint) (bool, error)
+	IncrementExecutionID(ctx context.Context, databaseID uint) (uint, error)
+	UpdateCurrentMigrationID(ctx context.Context, databaseID uint, migrationID uint) error
 }

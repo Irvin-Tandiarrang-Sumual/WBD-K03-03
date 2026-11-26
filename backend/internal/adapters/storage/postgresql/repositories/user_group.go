@@ -42,7 +42,7 @@ func (r *userGroupRepository) AddUser(ctx context.Context, groupID uint, userID 
 	return nil
 }
 
-func (r *userGroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+func (r *userGroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing models.UserGroup
 		err := tx.Where("group_id = ? AND user_id = ?", groupID, userID).First(&existing).Error
@@ -68,6 +68,21 @@ func (r *userGroupRepository) RemoveUser(ctx context.Context, groupID uint, user
 			}
 			if count <= 1 {
 				return domain.ErrUserMustHaveGroup
+			}
+		}
+
+		if replacementLeaderID != nil && *replacementLeaderID != 0 {
+			var group models.Group
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&group, groupID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return domain.ErrGroupNotFound
+				}
+				return err
+			}
+			if group.LeaderID == userID {
+				if err := tx.Model(&group).Update("leader_id", *replacementLeaderID).Error; err != nil {
+					return err
+				}
 			}
 		}
 
