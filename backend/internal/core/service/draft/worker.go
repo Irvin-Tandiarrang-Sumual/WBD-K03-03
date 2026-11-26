@@ -11,6 +11,10 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ExecutionWorker struct {
@@ -20,6 +24,7 @@ type ExecutionWorker struct {
 	databaseDriver ports.DatabaseDriver
 	groupRepo      ports.GroupRepository
 	unlockDatabase func(databaseID uint)
+	metrics        ports.MigrationMetrics
 	maxRetries     int
 	backoffBase    time.Duration
 }
@@ -31,7 +36,11 @@ func NewExecutionWorker(
 	databaseDriver ports.DatabaseDriver,
 	groupRepo ports.GroupRepository,
 	unlockDatabase func(databaseID uint),
+	metrics ports.MigrationMetrics,
 ) *ExecutionWorker {
+	if metrics == nil {
+		metrics = ports.NoopMigrationMetrics{}
+	}
 	return &ExecutionWorker{
 		draftRepo:      draftRepo,
 		databaseRepo:   databaseRepo,
@@ -39,6 +48,7 @@ func NewExecutionWorker(
 		databaseDriver: databaseDriver,
 		groupRepo:      groupRepo,
 		unlockDatabase: unlockDatabase,
+		metrics:        metrics,
 		maxRetries:     3,
 		backoffBase:    10 * time.Millisecond,
 	}
@@ -53,6 +63,35 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 	if w.unlockDatabase != nil {
 		defer w.unlockDatabase(task.DatabaseID)
 	}
+
+	ctx = telemetry.Extract(ctx, task.TraceCarrier)
+	tr := telemetry.Tracer("migration.worker")
+	ctx, span := tr.Start(ctx, "worker.execute_task",
+		trace.WithAttributes(
+			attribute.Int("migration.draft_id", int(task.DraftID)),
+			attribute.Int("migration.database_id", int(task.DatabaseID)),
+			attribute.Int("migration.execution_id", int(task.ExecutionID)),
+			attribute.String("migration.operation", task.Operation),
+		),
+	)
+	start := time.Now()
+	op := task.Operation
+	if op == "" {
+		op = ports.MetricOpExecute
+	}
+
+	defer func() {
+		duration := time.Since(start).Seconds()
+		if err != nil {
+			w.metrics.RecordExecution(op, ports.MetricStatusFailed, duration)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		} else {
+			w.metrics.RecordExecution(op, ports.MetricStatusSuccess, duration)
+			span.SetStatus(codes.Ok, "success")
+		}
+		span.End()
+	}()
 
 	ctx, _ = logger.EnsureCorrelationID(ctx)
 	if task.UserID != 0 {
@@ -211,6 +250,7 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 
 	currentBatch := startBatch
 	cursor := lastCursor
+	tr := telemetry.Tracer("migration.worker")
 
 	for {
 		select {
@@ -220,17 +260,27 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 		default:
 		}
 
+		chunkCtx, chunkSpan := tr.Start(ctx, "migration.batch_chunk",
+			trace.WithAttributes(
+				attribute.Int("migration.batch_number", currentBatch),
+				attribute.Int("migration.draft_id", int(draft.ID)),
+			),
+		)
+
 		var rowsAffected int64
 		var chunkErr error
 		for attempt := 0; attempt <= w.maxRetries; attempt++ {
 			select {
-			case <-ctx.Done():
-				w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, ctx.Err().Error())
-				return ctx.Err()
+			case <-chunkCtx.Done():
+				chunkSpan.RecordError(chunkCtx.Err())
+				chunkSpan.SetStatus(codes.Error, chunkCtx.Err().Error())
+				chunkSpan.End()
+				w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, chunkCtx.Err().Error())
+				return chunkCtx.Err()
 			default:
 			}
 
-			res, cmdErr := w.databaseDriver.ExecuteCommand(ctx, db, draft.SqlUp)
+			res, cmdErr := w.databaseDriver.ExecuteCommand(chunkCtx, db, draft.SqlUp)
 			if cmdErr == nil {
 				if res != nil {
 					rowsAffected = res.RowsAffected
@@ -243,8 +293,9 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 				break
 			}
 			if attempt < w.maxRetries {
+				w.metrics.RecordRetry(ports.MetricOpExecute)
 				backoffDelay := w.backoffBase * time.Duration(1<<attempt)
-				slog.WarnContext(ctx, "batch chunk execution transient error, retrying with backoff",
+				slog.WarnContext(chunkCtx, "batch chunk execution transient error, retrying with backoff",
 					"event", "batch.chunk.retry",
 					"draft_id", draft.ID,
 					"batch_number", currentBatch,
@@ -258,11 +309,17 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 		}
 
 		if chunkErr != nil {
+			w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
+			chunkSpan.RecordError(chunkErr)
+			chunkSpan.SetStatus(codes.Error, chunkErr.Error())
+			chunkSpan.End()
 			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, chunkErr.Error())
 			return chunkErr
 		}
 
 		if rowsAffected == 0 && currentBatch > 1 {
+			chunkSpan.SetStatus(codes.Ok, "empty_chunk_terminal")
+			chunkSpan.End()
 			break
 		}
 
@@ -276,12 +333,22 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 			Status:       "committed",
 			CreatedAt:    time.Now(),
 		}
-		if _, saveErr := w.draftRepo.SaveCheckpoint(ctx, cp); saveErr != nil {
+		if _, saveErr := w.draftRepo.SaveCheckpoint(chunkCtx, cp); saveErr != nil {
+			w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
+			chunkSpan.RecordError(saveErr)
+			chunkSpan.SetStatus(codes.Error, saveErr.Error())
+			chunkSpan.End()
 			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, saveErr.Error())
 			return saveErr
 		}
 
-		slog.InfoContext(ctx, "batch chunk committed",
+		chunkSpan.SetAttributes(attribute.Int64("migration.rows_affected", rowsAffected))
+		chunkSpan.SetStatus(codes.Ok, "committed")
+		chunkSpan.End()
+
+		w.metrics.RecordBatchChunk(ports.MetricStatusCommitted, rowsAffected, ports.MetricOpExecute)
+
+		slog.InfoContext(chunkCtx, "batch chunk committed",
 			"event", "batch.chunk.complete",
 			"draft_id", draft.ID,
 			"batch_number", currentBatch,
@@ -301,6 +368,7 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 }
 
 func (w *ExecutionWorker) handleBatchFailure(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, batchNum int, cursor string, errMsg string) {
+	w.metrics.RecordBatchChunk(ports.MetricStatusQuarantined, 0, task.Operation)
 	slog.ErrorContext(ctx, "batch chunk failed, entering quarantine",
 		"event", "batch.chunk.failed",
 		"draft_id", draft.ID,
@@ -411,6 +479,7 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 		cp.Status = "reverted"
 		_, _ = w.draftRepo.UpdateCheckpoint(ctx, cp)
 
+		w.metrics.RecordBatchChunk(ports.MetricStatusReverted, 0, ports.MetricOpRevert)
 		slog.InfoContext(ctx, "batch chunk reverted",
 			"event", "batch.revert.chunk",
 			"draft_id", draft.ID,
