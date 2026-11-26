@@ -134,6 +134,15 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 		return w.executeBatch(ctx, task, draft, db)
 	}
 
+	return w.executeSingleMigrationWithRetry(ctx, task, draft, db)
+}
+
+func (w *ExecutionWorker) executeSingleMigrationWithRetry(
+	ctx context.Context,
+	task ports.ExecutionTask,
+	draft *domain.Draft,
+	db domain.Database,
+) error {
 	var lastErr error
 	for attempt := 0; attempt <= w.maxRetries; attempt++ {
 		select {
@@ -176,7 +185,52 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 	return lastErr
 }
 
+type batchPlan struct {
+	startBatch    int
+	lastCursor    string
+	batchSize     int
+	emptyTerminal bool
+}
+
 func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, db domain.Database) error {
+	logBatchStart(ctx, task, draft)
+
+	plan, err := w.prepareBatchPlan(ctx, task, draft, db)
+	if err != nil {
+		w.handleFailure(ctx, task, err.Error())
+		return err
+	}
+	if plan.emptyTerminal {
+		return w.handleSuccess(ctx, task, draft)
+	}
+
+	currentBatch := plan.startBatch
+	cursor := plan.lastCursor
+
+	for {
+		if err := ctx.Err(); err != nil {
+			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, err.Error())
+			return err
+		}
+
+		_, newCursor, isTerminal, chunkErr := w.executeAndCommitChunk(ctx, task, draft, db, currentBatch, plan.batchSize)
+		if chunkErr != nil {
+			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, chunkErr.Error())
+			return chunkErr
+		}
+
+		cursor = newCursor
+		currentBatch++
+
+		if isTerminal {
+			break
+		}
+	}
+
+	return w.handleSuccess(ctx, task, draft)
+}
+
+func logBatchStart(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft) {
 	slog.InfoContext(ctx, "batch execution started",
 		"event", "batch.execution.start",
 		"draft_id", draft.ID,
@@ -186,15 +240,43 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 		"batch_column", draft.BatchColumn,
 		"operation", task.Operation,
 	)
+}
 
-	tableName, err := sqlutil.ValidateBatchDML(draft.SqlUp)
-	if err != nil {
-		w.handleFailure(ctx, task, err.Error())
-		return err
+func (w *ExecutionWorker) executeAndCommitChunk(
+	ctx context.Context,
+	task ports.ExecutionTask,
+	draft *domain.Draft,
+	db domain.Database,
+	currentBatch int,
+	batchSize int,
+) (rowsAffected int64, newCursor string, isTerminal bool, err error) {
+	rowsAffected, chunkSpan, chunkErr := w.executeChunkWithRetry(ctx, draft, db, currentBatch)
+	if chunkErr != nil {
+		return 0, "", false, chunkErr
 	}
 
-	var startBatch int = 1
-	var lastCursor string = ""
+	if rowsAffected == 0 && currentBatch > 1 {
+		chunkSpan.SetStatus(codes.Ok, "empty_chunk_terminal")
+		chunkSpan.End()
+		return 0, "", true, nil
+	}
+
+	newCursor = fmt.Sprintf("%d", currentBatch*batchSize)
+	if saveErr := w.recordChunkCheckpoint(ctx, task, draft, currentBatch, rowsAffected, newCursor, chunkSpan); saveErr != nil {
+		return 0, "", false, saveErr
+	}
+
+	return rowsAffected, newCursor, rowsAffected < int64(batchSize), nil
+}
+
+func (w *ExecutionWorker) prepareBatchPlan(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, db domain.Database) (*batchPlan, error) {
+	tableName, err := sqlutil.ValidateBatchDML(draft.SqlUp)
+	if err != nil {
+		return nil, err
+	}
+
+	startBatch := 1
+	lastCursor := ""
 
 	if task.Operation == "resume" {
 		lastCp, cpErr := w.draftRepo.FindLastCommittedCheckpoint(ctx, draft.ID)
@@ -219,11 +301,11 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 		batchCol = "id"
 	}
 
-	// Pre-flight boundary scan: check target row count
 	countQuery := fmt.Sprintf("SELECT COUNT(*) as count FROM %s", tableName)
 	if lastCursor != "" {
 		countQuery = fmt.Sprintf("SELECT COUNT(*) as count FROM %s WHERE %s > '%s'", tableName, batchCol, lastCursor)
 	}
+
 	countRes, queryErr := w.databaseDriver.ExecuteQuery(ctx, db, countQuery)
 	if queryErr == nil && countRes != nil && len(countRes.Rows) > 0 {
 		if countVal, ok := countRes.Rows[0]["count"]; ok {
@@ -242,129 +324,123 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 				"total_rows", totalRows,
 			)
 			if totalRows == 0 && startBatch == 1 {
-				// Empty target rows -> mark applied without creating checkpoints
-				return w.handleSuccess(ctx, task, draft)
+				return &batchPlan{emptyTerminal: true}, nil
 			}
 		}
 	}
 
-	currentBatch := startBatch
-	cursor := lastCursor
-	tr := telemetry.Tracer("migration.worker")
+	return &batchPlan{
+		startBatch: startBatch,
+		lastCursor: lastCursor,
+		batchSize:  batchSize,
+	}, nil
+}
 
-	for {
+func (w *ExecutionWorker) executeChunkWithRetry(
+	ctx context.Context,
+	draft *domain.Draft,
+	db domain.Database,
+	currentBatch int,
+) (int64, trace.Span, error) {
+	tr := telemetry.Tracer("migration.worker")
+	chunkCtx, chunkSpan := tr.Start(ctx, "migration.batch_chunk",
+		trace.WithAttributes(
+			attribute.Int("migration.batch_number", currentBatch),
+			attribute.Int("migration.draft_id", int(draft.ID)),
+		),
+	)
+
+	var rowsAffected int64
+	var chunkErr error
+
+	for attempt := 0; attempt <= w.maxRetries; attempt++ {
 		select {
-		case <-ctx.Done():
-			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, ctx.Err().Error())
-			return ctx.Err()
+		case <-chunkCtx.Done():
+			chunkSpan.RecordError(chunkCtx.Err())
+			chunkSpan.SetStatus(codes.Error, chunkCtx.Err().Error())
+			chunkSpan.End()
+			return 0, nil, chunkCtx.Err()
 		default:
 		}
 
-		chunkCtx, chunkSpan := tr.Start(ctx, "migration.batch_chunk",
-			trace.WithAttributes(
-				attribute.Int("migration.batch_number", currentBatch),
-				attribute.Int("migration.draft_id", int(draft.ID)),
-			),
-		)
-
-		var rowsAffected int64
-		var chunkErr error
-		for attempt := 0; attempt <= w.maxRetries; attempt++ {
-			select {
-			case <-chunkCtx.Done():
-				chunkSpan.RecordError(chunkCtx.Err())
-				chunkSpan.SetStatus(codes.Error, chunkCtx.Err().Error())
-				chunkSpan.End()
-				w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, chunkCtx.Err().Error())
-				return chunkCtx.Err()
-			default:
+		res, cmdErr := w.databaseDriver.ExecuteCommand(chunkCtx, db, draft.SqlUp)
+		if cmdErr == nil {
+			if res != nil {
+				rowsAffected = res.RowsAffected
 			}
-
-			res, cmdErr := w.databaseDriver.ExecuteCommand(chunkCtx, db, draft.SqlUp)
-			if cmdErr == nil {
-				if res != nil {
-					rowsAffected = res.RowsAffected
-				}
-				chunkErr = nil
-				break
-			}
-			chunkErr = cmdErr
-			if !isTransientError(cmdErr) {
-				break
-			}
-			if attempt < w.maxRetries {
-				w.metrics.RecordRetry(ports.MetricOpExecute)
-				backoffDelay := w.backoffBase * time.Duration(1<<attempt)
-				slog.WarnContext(chunkCtx, "batch chunk execution transient error, retrying with backoff",
-					"event", "batch.chunk.retry",
-					"draft_id", draft.ID,
-					"batch_number", currentBatch,
-					"attempt", attempt+1,
-					"max_retries", w.maxRetries,
-					"backoff_ms", float64(backoffDelay.Nanoseconds())/1e6,
-					"error", cmdErr.Error(),
-				)
-				time.Sleep(backoffDelay)
-			}
+			return rowsAffected, chunkSpan, nil
 		}
 
-		if chunkErr != nil {
-			w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
-			chunkSpan.RecordError(chunkErr)
-			chunkSpan.SetStatus(codes.Error, chunkErr.Error())
-			chunkSpan.End()
-			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, chunkErr.Error())
-			return chunkErr
-		}
-
-		if rowsAffected == 0 && currentBatch > 1 {
-			chunkSpan.SetStatus(codes.Ok, "empty_chunk_terminal")
-			chunkSpan.End()
+		chunkErr = cmdErr
+		if !isTransientError(cmdErr) {
 			break
 		}
 
-		newCursor := fmt.Sprintf("%d", currentBatch*batchSize)
-		cp := &domain.DraftCheckpoint{
-			DraftID:      draft.ID,
-			ExecutionID:  task.ExecutionID,
-			BatchNumber:  currentBatch,
-			CursorLastID: newCursor,
-			RowsAffected: rowsAffected,
-			Status:       "committed",
-			CreatedAt:    time.Now(),
-		}
-		if _, saveErr := w.draftRepo.SaveCheckpoint(chunkCtx, cp); saveErr != nil {
-			w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
-			chunkSpan.RecordError(saveErr)
-			chunkSpan.SetStatus(codes.Error, saveErr.Error())
-			chunkSpan.End()
-			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, saveErr.Error())
-			return saveErr
-		}
-
-		chunkSpan.SetAttributes(attribute.Int64("migration.rows_affected", rowsAffected))
-		chunkSpan.SetStatus(codes.Ok, "committed")
-		chunkSpan.End()
-
-		w.metrics.RecordBatchChunk(ports.MetricStatusCommitted, rowsAffected, ports.MetricOpExecute)
-
-		slog.InfoContext(chunkCtx, "batch chunk committed",
-			"event", "batch.chunk.complete",
-			"draft_id", draft.ID,
-			"batch_number", currentBatch,
-			"rows_affected", rowsAffected,
-			"cursor_last_id", newCursor,
-		)
-
-		cursor = newCursor
-		currentBatch++
-
-		if rowsAffected < int64(batchSize) {
-			break
+		if attempt < w.maxRetries {
+			w.metrics.RecordRetry(ports.MetricOpExecute)
+			backoffDelay := w.backoffBase * time.Duration(1<<attempt)
+			slog.WarnContext(chunkCtx, "batch chunk execution transient error, retrying with backoff",
+				"event", "batch.chunk.retry",
+				"draft_id", draft.ID,
+				"batch_number", currentBatch,
+				"attempt", attempt+1,
+				"max_retries", w.maxRetries,
+				"backoff_ms", float64(backoffDelay.Nanoseconds())/1e6,
+				"error", cmdErr.Error(),
+			)
+			time.Sleep(backoffDelay)
 		}
 	}
 
-	return w.handleSuccess(ctx, task, draft)
+	w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
+	chunkSpan.RecordError(chunkErr)
+	chunkSpan.SetStatus(codes.Error, chunkErr.Error())
+	chunkSpan.End()
+	return 0, nil, chunkErr
+}
+
+func (w *ExecutionWorker) recordChunkCheckpoint(
+	ctx context.Context,
+	task ports.ExecutionTask,
+	draft *domain.Draft,
+	currentBatch int,
+	rowsAffected int64,
+	newCursor string,
+	chunkSpan trace.Span,
+) error {
+	cp := &domain.DraftCheckpoint{
+		DraftID:      draft.ID,
+		ExecutionID:  task.ExecutionID,
+		BatchNumber:  currentBatch,
+		CursorLastID: newCursor,
+		RowsAffected: rowsAffected,
+		Status:       "committed",
+		CreatedAt:    time.Now(),
+	}
+
+	if _, saveErr := w.draftRepo.SaveCheckpoint(ctx, cp); saveErr != nil {
+		w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
+		chunkSpan.RecordError(saveErr)
+		chunkSpan.SetStatus(codes.Error, saveErr.Error())
+		chunkSpan.End()
+		return saveErr
+	}
+
+	chunkSpan.SetAttributes(attribute.Int64("migration.rows_affected", rowsAffected))
+	chunkSpan.SetStatus(codes.Ok, "committed")
+	chunkSpan.End()
+
+	w.metrics.RecordBatchChunk(ports.MetricStatusCommitted, rowsAffected, ports.MetricOpExecute)
+
+	slog.InfoContext(ctx, "batch chunk committed",
+		"event", "batch.chunk.complete",
+		"draft_id", draft.ID,
+		"batch_number", currentBatch,
+		"rows_affected", rowsAffected,
+		"cursor_last_id", newCursor,
+	)
+
+	return nil
 }
 
 func (w *ExecutionWorker) handleBatchFailure(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, batchNum int, cursor string, errMsg string) {
@@ -429,13 +505,7 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 		return err
 	}
 
-	committed := make([]*domain.DraftCheckpoint, 0)
-	for i := len(checkpoints) - 1; i >= 0; i-- {
-		if checkpoints[i].Status == "committed" {
-			committed = append(committed, checkpoints[i])
-		}
-	}
-
+	committed := filterCommittedCheckpointsReverse(checkpoints)
 	slog.InfoContext(ctx, "batch revert execution started",
 		"event", "batch.revert.start",
 		"draft_id", draft.ID,
@@ -444,50 +514,81 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 	)
 
 	for _, cp := range committed {
-		var revertErr error
-		for attempt := 0; attempt <= w.maxRetries; attempt++ {
-			select {
-			case <-ctx.Done():
-				w.handleRevertFailure(context.Background(), task, draft, cp.BatchNumber, ctx.Err().Error())
-				return ctx.Err()
-			default:
-			}
-
-			sqlDown := draft.SqlDown
-			if sqlDown == "" {
-				sqlDown = "/* revert chunk */"
-			}
-			_, cmdErr := w.databaseDriver.ExecuteCommand(ctx, db, sqlDown)
-			if cmdErr == nil {
-				revertErr = nil
-				break
-			}
-			revertErr = cmdErr
-			if !isTransientError(cmdErr) {
-				break
-			}
-			if attempt < w.maxRetries {
-				time.Sleep(w.backoffBase * time.Duration(1<<attempt))
-			}
+		if err := w.revertSingleChunk(ctx, draft, db, cp); err != nil {
+			w.handleRevertFailure(context.Background(), task, draft, cp.BatchNumber, err.Error())
+			return err
 		}
-
-		if revertErr != nil {
-			w.handleRevertFailure(context.Background(), task, draft, cp.BatchNumber, revertErr.Error())
-			return revertErr
-		}
-
-		cp.Status = "reverted"
-		_, _ = w.draftRepo.UpdateCheckpoint(ctx, cp)
-
-		w.metrics.RecordBatchChunk(ports.MetricStatusReverted, 0, ports.MetricOpRevert)
-		slog.InfoContext(ctx, "batch chunk reverted",
-			"event", "batch.revert.chunk",
-			"draft_id", draft.ID,
-			"batch_number", cp.BatchNumber,
-			"status", "reverted",
-		)
 	}
 
+	return w.finalizeRevertSuccess(ctx, task, draft)
+}
+
+func filterCommittedCheckpointsReverse(checkpoints []*domain.DraftCheckpoint) []*domain.DraftCheckpoint {
+	committed := make([]*domain.DraftCheckpoint, 0)
+	for i := len(checkpoints) - 1; i >= 0; i-- {
+		if checkpoints[i].Status == "committed" {
+			committed = append(committed, checkpoints[i])
+		}
+	}
+	return committed
+}
+
+func (w *ExecutionWorker) revertSingleChunk(
+	ctx context.Context,
+	draft *domain.Draft,
+	db domain.Database,
+	cp *domain.DraftCheckpoint,
+) error {
+	sqlDown := draft.SqlDown
+	if sqlDown == "" {
+		sqlDown = "/* revert chunk */"
+	}
+
+	var revertErr error
+	for attempt := 0; attempt <= w.maxRetries; attempt++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		_, cmdErr := w.databaseDriver.ExecuteCommand(ctx, db, sqlDown)
+		if cmdErr == nil {
+			revertErr = nil
+			break
+		}
+		revertErr = cmdErr
+		if !isTransientError(cmdErr) {
+			break
+		}
+		if attempt < w.maxRetries {
+			time.Sleep(w.backoffBase * time.Duration(1<<attempt))
+		}
+	}
+
+	if revertErr != nil {
+		return revertErr
+	}
+
+	cp.Status = "reverted"
+	_, _ = w.draftRepo.UpdateCheckpoint(ctx, cp)
+
+	w.metrics.RecordBatchChunk(ports.MetricStatusReverted, 0, ports.MetricOpRevert)
+	slog.InfoContext(ctx, "batch chunk reverted",
+		"event", "batch.revert.chunk",
+		"draft_id", draft.ID,
+		"batch_number", cp.BatchNumber,
+		"status", "reverted",
+	)
+
+	return nil
+}
+
+func (w *ExecutionWorker) finalizeRevertSuccess(
+	ctx context.Context,
+	task ports.ExecutionTask,
+	draft *domain.Draft,
+) error {
 	now := time.Now()
 	draft.Status = domain.DraftStatusFailed
 	draft.UpdatedAt = now

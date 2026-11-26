@@ -80,39 +80,8 @@ func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraft
 		return nil, err
 	}
 
-	if input.IsBatch {
-		tbl, err := sqlutil.ValidateBatchDML(input.SqlUp)
-		if err != nil {
-			if errors.Is(err, sqlutil.ErrBatchContainsDDL) {
-				return nil, domain.ErrBatchContainsDDL
-			}
-			if errors.Is(err, sqlutil.ErrBatchMultipleUnrelatedTables) {
-				return nil, domain.ErrBatchMultipleUnrelatedTables
-			}
-			return nil, domain.ErrInvalidDraftInput
-		}
-		if s.databaseDriver != nil && s.databaseRepo != nil {
-			db, err := s.databaseRepo.FindWithCredentialByID(ctx, input.DatabaseID)
-			if err == nil {
-				meta, err := s.databaseDriver.GetDatabaseMetadata(ctx, db)
-				if err == nil && meta != nil && len(meta.Columns) > 0 {
-					foundTable := false
-					foundCol := false
-					for _, col := range meta.Columns {
-						if strings.EqualFold(col.Table, tbl) {
-							foundTable = true
-							if strings.EqualFold(col.Name, input.BatchColumn) {
-								foundCol = true
-								break
-							}
-						}
-					}
-					if foundTable && !foundCol {
-						return nil, domain.ErrBatchColumnNotFound
-					}
-				}
-			}
-		}
+	if err := s.validateBatchMetadata(ctx, input); err != nil {
+		return nil, err
 	}
 
 	if err := s.userGroupService.Authorize(ctx, input.UserID, input.DatabaseID, domain.AccessViewEdit); err != nil {
@@ -124,13 +93,85 @@ func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraft
 		return nil, err
 	}
 
+	draft := buildNewDraftEntity(input)
+
+	var savedDraft *domain.Draft
+	err = s.draftRepo.WithTransaction(ctx, func(txRepo ports.DraftRepository) error {
+		var saveErr error
+		savedDraft, saveErr = txRepo.Save(ctx, draft)
+		if saveErr != nil {
+			return saveErr
+		}
+
+		approvals, err := createInitialGroupApprovals(ctx, txRepo, savedDraft.ID, groups)
+		if err != nil {
+			return err
+		}
+		savedDraft.Approvals = approvals
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return savedDraft, nil
+}
+
+func (s *draftService) validateBatchMetadata(ctx context.Context, input domain.CreateDraftInput) error {
+	if !input.IsBatch {
+		return nil
+	}
+
+	tbl, err := sqlutil.ValidateBatchDML(input.SqlUp)
+	if err != nil {
+		if errors.Is(err, sqlutil.ErrBatchContainsDDL) {
+			return domain.ErrBatchContainsDDL
+		}
+		if errors.Is(err, sqlutil.ErrBatchMultipleUnrelatedTables) {
+			return domain.ErrBatchMultipleUnrelatedTables
+		}
+		return domain.ErrInvalidDraftInput
+	}
+
+	if s.databaseDriver == nil || s.databaseRepo == nil {
+		return nil
+	}
+
+	db, err := s.databaseRepo.FindWithCredentialByID(ctx, input.DatabaseID)
+	if err != nil {
+		return nil
+	}
+
+	meta, err := s.databaseDriver.GetDatabaseMetadata(ctx, db)
+	if err != nil || meta == nil || len(meta.Columns) == 0 {
+		return nil
+	}
+
+	foundTable := false
+	foundCol := false
+	for _, col := range meta.Columns {
+		if strings.EqualFold(col.Table, tbl) {
+			foundTable = true
+			if strings.EqualFold(col.Name, input.BatchColumn) {
+				foundCol = true
+				break
+			}
+		}
+	}
+	if foundTable && !foundCol {
+		return domain.ErrBatchColumnNotFound
+	}
+
+	return nil
+}
+
+func buildNewDraftEntity(input domain.CreateDraftInput) *domain.Draft {
 	isReversible := true
 	if input.IsReversible != nil {
 		isReversible = *input.IsReversible
 	}
 	now := time.Now()
-
-	draft := &domain.Draft{
+	return &domain.Draft{
 		DatabaseID:         input.DatabaseID,
 		UserID:             input.UserID,
 		SqlUp:              input.SqlUp,
@@ -145,43 +186,34 @@ func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraft
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
+}
 
-	var savedDraft *domain.Draft
-	err = s.draftRepo.WithTransaction(ctx, func(txRepo ports.DraftRepository) error {
-		var saveErr error
-		savedDraft, saveErr = txRepo.Save(ctx, draft)
-		if saveErr != nil {
-			return saveErr
+func createInitialGroupApprovals(
+	ctx context.Context,
+	txRepo ports.DraftRepository,
+	draftID uint,
+	groups []domain.Group,
+) ([]domain.DraftApproval, error) {
+	approvals := make([]domain.DraftApproval, 0, len(groups))
+	for _, grp := range groups {
+		var leaderID *uint
+		if grp.LeaderID != 0 {
+			lid := grp.LeaderID
+			leaderID = &lid
 		}
-
-		approvals := make([]domain.DraftApproval, 0, len(groups))
-		for _, grp := range groups {
-			var leaderID *uint
-			if grp.LeaderID != 0 {
-				lid := grp.LeaderID
-				leaderID = &lid
-			}
-			approval := &domain.DraftApproval{
-				DraftID:  savedDraft.ID,
-				GroupID:  grp.ID,
-				LeaderID: leaderID,
-				Status:   domain.ApprovalStatusPending,
-			}
-			savedApproval, err := txRepo.SaveApproval(ctx, approval)
-			if err != nil {
-				return err
-			}
-			approvals = append(approvals, *savedApproval)
+		approval := &domain.DraftApproval{
+			DraftID:  draftID,
+			GroupID:  grp.ID,
+			LeaderID: leaderID,
+			Status:   domain.ApprovalStatusPending,
 		}
-
-		savedDraft.Approvals = approvals
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		savedApproval, err := txRepo.SaveApproval(ctx, approval)
+		if err != nil {
+			return nil, err
+		}
+		approvals = append(approvals, *savedApproval)
 	}
-
-	return savedDraft, nil
+	return approvals, nil
 }
 
 func (s *draftService) GetDraftsByDatabaseID(
@@ -232,22 +264,15 @@ func (s *draftService) SubmitApproval(ctx context.Context, input domain.SubmitAp
 			return err
 		}
 
-		if draft.Status != domain.DraftStatusPendingApproval &&
-			draft.Status != domain.DraftStatusPartial &&
-			draft.Status != domain.DraftStatusPartiallyReverted {
+		if !isVotableDraftStatus(draft.Status) {
 			return domain.ErrInvalidDraftState
 		}
 
-		if s.userGroupService != nil {
-			if authErr := s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit); authErr != nil {
-				draft.Status = domain.DraftStatusInvalidated
-				draft.UpdatedAt = time.Now()
-				if _, updErr := txRepo.Update(ctx, draft); updErr != nil {
-					return updErr
-				}
-				invalidated = true
-				return nil
-			}
+		if inv, err := s.invalidateIfAuthorUnauthorized(ctx, txRepo, draft); err != nil {
+			return err
+		} else if inv {
+			invalidated = true
+			return nil
 		}
 
 		round := draft.CurrentRound
@@ -255,159 +280,30 @@ func (s *draftService) SubmitApproval(ctx context.Context, input domain.SubmitAp
 			round = 1
 		}
 
-		approvals, err := txRepo.FindApprovalsByDraftAndRound(ctx, draft.ID, round)
-		if err != nil || len(approvals) == 0 {
-			approvals, err = txRepo.FindApprovalsByDraftID(ctx, draft.ID)
-			if err != nil {
-				return err
-			}
+		approvals, err := fetchRoundApprovals(ctx, txRepo, draft.ID, round)
+		if err != nil {
+			return err
 		}
 
-		var matchedApprovals []*domain.DraftApproval
-		for _, app := range approvals {
-			if app.LeaderID != nil && *app.LeaderID == input.UserID {
-				matchedApprovals = append(matchedApprovals, app)
-			}
-		}
-
-		if len(matchedApprovals) == 0 {
-			return domain.ErrUnauthorized
-		}
-
-		vote := strings.ToLower(strings.TrimSpace(input.Vote))
-		if vote == "" {
-			vote = strings.ToLower(strings.TrimSpace(input.Status))
-		}
+		vote := normalizeVote(input.Vote, input.Status)
 		now := time.Now()
 
-		for _, app := range matchedApprovals {
-			app.Vote = vote
-			app.Status = vote
-			app.RespondedAt = &now
-			if _, err := txRepo.UpdateApproval(ctx, app); err != nil {
-				return err
-			}
+		if err := applyLeaderVote(ctx, txRepo, approvals, input.UserID, vote, now); err != nil {
+			return err
 		}
 
-		updatedApprovals, err := txRepo.FindApprovalsByDraftAndRound(ctx, draft.ID, round)
-		if err != nil || len(updatedApprovals) == 0 {
-			updatedApprovals, err = txRepo.FindApprovalsByDraftID(ctx, draft.ID)
-			if err != nil {
-				return err
-			}
+		updatedApprovals, err := fetchRoundApprovals(ctx, txRepo, draft.ID, round)
+		if err != nil {
+			return err
 		}
 
-		switch draft.Status {
-		case domain.DraftStatusPendingApproval:
-			if vote == domain.ApprovalStatusRejected {
-				draft.Status = domain.DraftStatusRejected
-				draft.UpdatedAt = now
-				updatedDraft, err := txRepo.Update(ctx, draft)
-				if err != nil {
-					return err
-				}
-				resultDraft = updatedDraft
-				return nil
-			}
-
-			allApproved := len(updatedApprovals) > 0
-			for _, app := range updatedApprovals {
-				v := strings.ToLower(strings.TrimSpace(app.Vote))
-				if v != domain.ApprovalStatusApproved && app.Status != domain.ApprovalStatusApproved {
-					allApproved = false
-					break
-				}
-			}
-
-			if allApproved {
-				draft.Status = domain.DraftStatusApproved
-				draft.UpdatedAt = now
-				updatedDraft, err := txRepo.Update(ctx, draft)
-				if err != nil {
-					return err
-				}
-				resultDraft = updatedDraft
-				return nil
-			}
-
-		case domain.DraftStatusPartial:
-			hasRevert := false
-			allResume := len(updatedApprovals) > 0
-			for _, app := range updatedApprovals {
-				v := strings.ToLower(strings.TrimSpace(app.Vote))
-				if v == domain.VoteRevert {
-					hasRevert = true
-				}
-				if v != domain.VoteResume {
-					allResume = false
-				}
-			}
-
-			if hasRevert {
-				draft.RecoveryAction = domain.VoteRevert
-				draft.UpdatedAt = now
-				updatedDraft, err := txRepo.Update(ctx, draft)
-				if err != nil {
-					return err
-				}
-				resultDraft = updatedDraft
-				return nil
-			} else if allResume {
-				draft.RecoveryAction = domain.VoteResume
-				draft.UpdatedAt = now
-				updatedDraft, err := txRepo.Update(ctx, draft)
-				if err != nil {
-					return err
-				}
-				resultDraft = updatedDraft
-				return nil
-			}
-
-		case domain.DraftStatusPartiallyReverted:
-			hasNo := false
-			allYes := len(updatedApprovals) > 0
-			for _, app := range updatedApprovals {
-				v := strings.ToLower(strings.TrimSpace(app.Vote))
-				if v == domain.VoteNo {
-					hasNo = true
-				}
-				if v != domain.VoteYes {
-					allYes = false
-				}
-			}
-
-			if hasNo {
-				draft.Status = domain.DraftStatusFailed
-				draft.RecoveryAction = "aborted"
-				draft.UpdatedAt = now
-				updatedDraft, err := txRepo.Update(ctx, draft)
-				if err != nil {
-					return err
-				}
-
-				if s.migrationRepo != nil {
-					mig := &domain.Migration{
-						DatabaseID:   draft.DatabaseID,
-						UserID:       input.UserID,
-						DraftID:      &draft.ID,
-						Status:       domain.MigrationStatusFail,
-						ErrorMessage: "[REVERT_ABORTED_BY_LEADER] Group leader voted to abort revert. Database left in intermediate state.",
-						MigratedAt:   now,
-					}
-					_, _ = s.migrationRepo.Save(ctx, mig)
-				}
-				resultDraft = updatedDraft
-				return nil
-			} else if allYes {
-				draft.RecoveryAction = domain.VoteRevert
-				draft.UpdatedAt = now
-				updatedDraft, err := txRepo.Update(ctx, draft)
-				if err != nil {
-					return err
-				}
-				resultDraft = updatedDraft
-				return nil
-			}
+		resolvedDraft, err := s.resolveConsensus(ctx, txRepo, draft, updatedApprovals, vote, input.UserID, now)
+		if err != nil {
+			return err
+		}
+		if resolvedDraft != nil {
+			resultDraft = resolvedDraft
+			return nil
 		}
 
 		draft.Approvals = make([]domain.DraftApproval, 0, len(updatedApprovals))
@@ -427,6 +323,215 @@ func (s *draftService) SubmitApproval(ctx context.Context, input domain.SubmitAp
 	return resultDraft, nil
 }
 
+func isVotableDraftStatus(status string) bool {
+	return status == domain.DraftStatusPendingApproval ||
+		status == domain.DraftStatusPartial ||
+		status == domain.DraftStatusPartiallyReverted
+}
+
+func normalizeVote(vote, fallback string) string {
+	v := strings.ToLower(strings.TrimSpace(vote))
+	if v == "" {
+		v = strings.ToLower(strings.TrimSpace(fallback))
+	}
+	return v
+}
+
+func (s *draftService) invalidateIfAuthorUnauthorized(
+	ctx context.Context,
+	repo ports.DraftRepository,
+	draft *domain.Draft,
+) (bool, error) {
+	if s.userGroupService == nil {
+		return false, nil
+	}
+	if authErr := s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit); authErr != nil {
+		draft.Status = domain.DraftStatusInvalidated
+		draft.UpdatedAt = time.Now()
+		if _, updErr := repo.Update(ctx, draft); updErr != nil {
+			return true, updErr
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func fetchRoundApprovals(ctx context.Context, repo ports.DraftRepository, draftID uint, round uint) ([]*domain.DraftApproval, error) {
+	approvals, err := repo.FindApprovalsByDraftAndRound(ctx, draftID, round)
+	if err != nil || len(approvals) == 0 {
+		approvals, err = repo.FindApprovalsByDraftID(ctx, draftID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return approvals, nil
+}
+
+func applyLeaderVote(
+	ctx context.Context,
+	repo ports.DraftRepository,
+	approvals []*domain.DraftApproval,
+	userID uint,
+	vote string,
+	now time.Time,
+) error {
+	var matched []*domain.DraftApproval
+	for _, app := range approvals {
+		if app.LeaderID != nil && *app.LeaderID == userID {
+			matched = append(matched, app)
+		}
+	}
+
+	if len(matched) == 0 {
+		return domain.ErrUnauthorized
+	}
+
+	for _, app := range matched {
+		app.Vote = vote
+		app.Status = vote
+		app.RespondedAt = &now
+		if _, err := repo.UpdateApproval(ctx, app); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *draftService) resolveConsensus(
+	ctx context.Context,
+	repo ports.DraftRepository,
+	draft *domain.Draft,
+	approvals []*domain.DraftApproval,
+	vote string,
+	userID uint,
+	now time.Time,
+) (*domain.Draft, error) {
+	switch draft.Status {
+	case domain.DraftStatusPendingApproval:
+		return resolvePendingApprovalConsensus(ctx, repo, draft, approvals, vote, now)
+	case domain.DraftStatusPartial:
+		return resolvePartialRecoveryConsensus(ctx, repo, draft, approvals, now)
+	case domain.DraftStatusPartiallyReverted:
+		return s.resolvePartiallyRevertedConsensus(ctx, repo, draft, approvals, userID, now)
+	default:
+		return nil, nil
+	}
+}
+
+func resolvePendingApprovalConsensus(
+	ctx context.Context,
+	repo ports.DraftRepository,
+	draft *domain.Draft,
+	approvals []*domain.DraftApproval,
+	vote string,
+	now time.Time,
+) (*domain.Draft, error) {
+	if vote == domain.ApprovalStatusRejected {
+		draft.Status = domain.DraftStatusRejected
+		draft.UpdatedAt = now
+		return repo.Update(ctx, draft)
+	}
+
+	allApproved := len(approvals) > 0
+	for _, app := range approvals {
+		v := strings.ToLower(strings.TrimSpace(app.Vote))
+		if v != domain.ApprovalStatusApproved && app.Status != domain.ApprovalStatusApproved {
+			allApproved = false
+			break
+		}
+	}
+
+	if allApproved {
+		draft.Status = domain.DraftStatusApproved
+		draft.UpdatedAt = now
+		return repo.Update(ctx, draft)
+	}
+
+	return nil, nil
+}
+
+func resolvePartialRecoveryConsensus(
+	ctx context.Context,
+	repo ports.DraftRepository,
+	draft *domain.Draft,
+	approvals []*domain.DraftApproval,
+	now time.Time,
+) (*domain.Draft, error) {
+	hasRevert := false
+	allResume := len(approvals) > 0
+	for _, app := range approvals {
+		v := strings.ToLower(strings.TrimSpace(app.Vote))
+		if v == domain.VoteRevert {
+			hasRevert = true
+		}
+		if v != domain.VoteResume {
+			allResume = false
+		}
+	}
+
+	if hasRevert {
+		draft.RecoveryAction = domain.VoteRevert
+		draft.UpdatedAt = now
+		return repo.Update(ctx, draft)
+	} else if allResume {
+		draft.RecoveryAction = domain.VoteResume
+		draft.UpdatedAt = now
+		return repo.Update(ctx, draft)
+	}
+
+	return nil, nil
+}
+
+func (s *draftService) resolvePartiallyRevertedConsensus(
+	ctx context.Context,
+	repo ports.DraftRepository,
+	draft *domain.Draft,
+	approvals []*domain.DraftApproval,
+	userID uint,
+	now time.Time,
+) (*domain.Draft, error) {
+	hasNo := false
+	allYes := len(approvals) > 0
+	for _, app := range approvals {
+		v := strings.ToLower(strings.TrimSpace(app.Vote))
+		if v == domain.VoteNo {
+			hasNo = true
+		}
+		if v != domain.VoteYes {
+			allYes = false
+		}
+	}
+
+	if hasNo {
+		draft.Status = domain.DraftStatusFailed
+		draft.RecoveryAction = "aborted"
+		draft.UpdatedAt = now
+		updatedDraft, err := repo.Update(ctx, draft)
+		if err != nil {
+			return nil, err
+		}
+
+		if s.migrationRepo != nil {
+			mig := &domain.Migration{
+				DatabaseID:   draft.DatabaseID,
+				UserID:       userID,
+				DraftID:      &draft.ID,
+				Status:       domain.MigrationStatusFail,
+				ErrorMessage: "[REVERT_ABORTED_BY_LEADER] Group leader voted to abort revert. Database left in intermediate state.",
+				MigratedAt:   now,
+			}
+			_, _ = s.migrationRepo.Save(ctx, mig)
+		}
+		return updatedDraft, nil
+	} else if allYes {
+		draft.RecoveryAction = domain.VoteRevert
+		draft.UpdatedAt = now
+		return repo.Update(ctx, draft)
+	}
+
+	return nil, nil
+}
+
 func (s *draftService) ValidateDraft(ctx context.Context, draftID uint) (*domain.Draft, error) {
 	if draftID == 0 {
 		return nil, domain.ErrInvalidDraftInput
@@ -441,10 +546,10 @@ func (s *draftService) ValidateDraft(ctx context.Context, draftID uint) (*domain
 		return draft, nil
 	}
 
-	if err := s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit); err != nil {
-		draft.Status = domain.DraftStatusInvalidated
-		draft.UpdatedAt = time.Now()
-		return s.draftRepo.Update(ctx, draft)
+	if inv, err := s.invalidateIfAuthorUnauthorized(ctx, s.draftRepo, draft); err != nil {
+		return nil, err
+	} else if inv {
+		return draft, nil
 	}
 
 	return draft, nil
@@ -471,40 +576,21 @@ func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID ui
 		return domain.ErrForbidden
 	}
 
-	if s.userGroupService != nil {
-		if authErr := s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit); authErr != nil {
-			draft.Status = domain.DraftStatusInvalidated
-			draft.UpdatedAt = time.Now()
-			_, _ = s.draftRepo.Update(ctx, draft)
-			return domain.ErrDraftNotApproved
-		}
+	if inv, _ := s.invalidateIfAuthorUnauthorized(ctx, s.draftRepo, draft); inv {
+		return domain.ErrDraftNotApproved
 	}
 
 	if draft.Status != domain.DraftStatusApproved {
 		return domain.ErrDraftNotApproved
 	}
 
-	if s.draftRepo != nil {
-		partiallyReverted, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, draft.DatabaseID, domain.DraftStatusPartiallyReverted)
-		if err == nil && partiallyReverted != nil && partiallyReverted.ID != 0 {
-			return domain.ErrDatabaseMustResolvePartiallyReverted
-		}
-
-		partialDraft, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, draft.DatabaseID, domain.DraftStatusPartial)
-		if err == nil && partialDraft != nil && partialDraft.ID != 0 {
-			return domain.ErrDatabaseMustResolvePartiallyReverted
-		}
-
-		executingDraft, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, draft.DatabaseID, domain.DraftStatusExecuting)
-		if err == nil && executingDraft != nil && executingDraft.ID != 0 {
-			return domain.ErrMigrationInProgress
-		}
+	if err := s.checkQuarantineConflicts(ctx, draft.DatabaseID); err != nil {
+		return err
 	}
 
-	val, _ := s.dbLocks.LoadOrStore(draft.DatabaseID, &dbLock{})
-	lock := val.(*dbLock)
-	if !lock.TryLock() {
-		return domain.ErrMigrationInProgress
+	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
+	if err != nil {
+		return err
 	}
 
 	var execID uint
@@ -517,32 +603,7 @@ func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID ui
 		execID = incID
 	}
 
-	draft.Status = domain.DraftStatusExecuting
-	draft.UpdatedAt = time.Now()
-	if _, err := s.draftRepo.Update(ctx, draft); err != nil {
-		lock.Unlock()
-		return err
-	}
-
-	if s.taskQueue != nil {
-		carrier := make(map[string]string)
-		telemetry.Inject(ctx, carrier)
-		task := ports.ExecutionTask{
-			DraftID:      draft.ID,
-			DatabaseID:   draft.DatabaseID,
-			ExecutionID:  execID,
-			UserID:       userID,
-			Operation:    "execute",
-			EnqueuedAt:   time.Now(),
-			TraceCarrier: carrier,
-		}
-		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
-			lock.Unlock()
-			return err
-		}
-	}
-
-	return nil
+	return s.dispatchExecutionTask(ctx, draft, "execute", execID, userID, lock)
 }
 
 func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uint) error {
@@ -569,10 +630,9 @@ func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uin
 		return domain.ErrInvalidDraftState
 	}
 
-	val, _ := s.dbLocks.LoadOrStore(draft.DatabaseID, &dbLock{})
-	lock := val.(*dbLock)
-	if !lock.TryLock() {
-		return domain.ErrMigrationInProgress
+	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
+	if err != nil {
+		return err
 	}
 
 	var execID uint
@@ -587,32 +647,7 @@ func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uin
 		}
 	}
 
-	draft.Status = domain.DraftStatusExecuting
-	draft.UpdatedAt = time.Now()
-	if _, err := s.draftRepo.Update(ctx, draft); err != nil {
-		lock.Unlock()
-		return err
-	}
-
-	if s.taskQueue != nil {
-		carrier := make(map[string]string)
-		telemetry.Inject(ctx, carrier)
-		task := ports.ExecutionTask{
-			DraftID:      draft.ID,
-			DatabaseID:   draft.DatabaseID,
-			ExecutionID:  execID,
-			UserID:       userID,
-			Operation:    "resume",
-			EnqueuedAt:   time.Now(),
-			TraceCarrier: carrier,
-		}
-		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
-			lock.Unlock()
-			return err
-		}
-	}
-
-	return nil
+	return s.dispatchExecutionTask(ctx, draft, "resume", execID, userID, lock)
 }
 
 func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uint) error {
@@ -639,10 +674,9 @@ func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uin
 		return domain.ErrInvalidDraftState
 	}
 
-	val, _ := s.dbLocks.LoadOrStore(draft.DatabaseID, &dbLock{})
-	lock := val.(*dbLock)
-	if !lock.TryLock() {
-		return domain.ErrMigrationInProgress
+	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
+	if err != nil {
+		return err
 	}
 
 	var newExecID uint
@@ -655,6 +689,43 @@ func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uin
 		newExecID = incID
 	}
 
+	return s.dispatchExecutionTask(ctx, draft, "revert", newExecID, userID, lock)
+}
+
+func (s *draftService) acquireDatabaseLock(databaseID uint) (*dbLock, error) {
+	val, _ := s.dbLocks.LoadOrStore(databaseID, &dbLock{})
+	lock := val.(*dbLock)
+	if !lock.TryLock() {
+		return nil, domain.ErrMigrationInProgress
+	}
+	return lock, nil
+}
+
+func (s *draftService) checkQuarantineConflicts(ctx context.Context, databaseID uint) error {
+	if s.draftRepo == nil {
+		return nil
+	}
+	for _, status := range []string{domain.DraftStatusPartiallyReverted, domain.DraftStatusPartial} {
+		d, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, databaseID, status)
+		if err == nil && d != nil && d.ID != 0 {
+			return domain.ErrDatabaseMustResolvePartiallyReverted
+		}
+	}
+	executing, err := s.draftRepo.FindDraftByStatusAndDatabaseID(ctx, databaseID, domain.DraftStatusExecuting)
+	if err == nil && executing != nil && executing.ID != 0 {
+		return domain.ErrMigrationInProgress
+	}
+	return nil
+}
+
+func (s *draftService) dispatchExecutionTask(
+	ctx context.Context,
+	draft *domain.Draft,
+	operation string,
+	execID uint,
+	userID uint,
+	lock *dbLock,
+) error {
 	draft.Status = domain.DraftStatusExecuting
 	draft.UpdatedAt = time.Now()
 	if _, err := s.draftRepo.Update(ctx, draft); err != nil {
@@ -668,9 +739,9 @@ func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uin
 		task := ports.ExecutionTask{
 			DraftID:      draft.ID,
 			DatabaseID:   draft.DatabaseID,
-			ExecutionID:  newExecID,
+			ExecutionID:  execID,
 			UserID:       userID,
-			Operation:    "revert",
+			Operation:    operation,
 			EnqueuedAt:   time.Now(),
 			TraceCarrier: carrier,
 		}
