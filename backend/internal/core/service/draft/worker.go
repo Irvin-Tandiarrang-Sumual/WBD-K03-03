@@ -3,11 +3,13 @@ package draft
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
 
@@ -51,6 +53,19 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 	if w.unlockDatabase != nil {
 		defer w.unlockDatabase(task.DatabaseID)
 	}
+
+	ctx, _ = logger.EnsureCorrelationID(ctx)
+	if task.UserID != 0 {
+		ctx = logger.WithActor(ctx, logger.Actor{UserID: task.UserID})
+	}
+
+	slog.InfoContext(ctx, "task execution started",
+		"event", "task.execution.start",
+		"draft_id", task.DraftID,
+		"database_id", task.DatabaseID,
+		"execution_id", task.ExecutionID,
+		"operation", task.Operation,
+	)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -100,11 +115,20 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 		}
 
 		if attempt < w.maxRetries {
+			backoffDelay := w.backoffBase * time.Duration(1<<attempt)
+			slog.WarnContext(ctx, "transient error during execution, retrying with backoff",
+				"event", "task.execution.retry",
+				"draft_id", task.DraftID,
+				"attempt", attempt+1,
+				"max_retries", w.maxRetries,
+				"backoff_ms", float64(backoffDelay.Nanoseconds())/1e6,
+				"error", cmdErr.Error(),
+			)
 			select {
 			case <-ctx.Done():
 				w.handleFailure(context.Background(), task, ctx.Err().Error())
 				return ctx.Err()
-			case <-time.After(w.backoffBase * time.Duration(1<<attempt)):
+			case <-time.After(backoffDelay):
 			}
 		}
 	}
@@ -114,6 +138,16 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 }
 
 func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, db domain.Database) error {
+	slog.InfoContext(ctx, "batch execution started",
+		"event", "batch.execution.start",
+		"draft_id", draft.ID,
+		"database_id", task.DatabaseID,
+		"execution_id", task.ExecutionID,
+		"batch_size", draft.BatchSize,
+		"batch_column", draft.BatchColumn,
+		"operation", task.Operation,
+	)
+
 	tableName, err := sqlutil.ValidateBatchDML(draft.SqlUp)
 	if err != nil {
 		w.handleFailure(ctx, task, err.Error())
@@ -128,6 +162,12 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 		if cpErr == nil && lastCp != nil {
 			startBatch = lastCp.BatchNumber + 1
 			lastCursor = lastCp.CursorLastID
+			slog.InfoContext(ctx, "resuming batch execution from checkpoint",
+				"event", "batch.execution.resume",
+				"draft_id", draft.ID,
+				"start_batch", startBatch,
+				"last_cursor", lastCursor,
+			)
 		}
 	}
 
@@ -157,6 +197,11 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 			case int:
 				totalRows = int64(v)
 			}
+			slog.InfoContext(ctx, "batch boundary scan completed",
+				"event", "batch.boundary_scan.complete",
+				"draft_id", draft.ID,
+				"total_rows", totalRows,
+			)
 			if totalRows == 0 && startBatch == 1 {
 				// Empty target rows -> mark applied without creating checkpoints
 				return w.handleSuccess(ctx, task, draft)
@@ -198,7 +243,17 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 				break
 			}
 			if attempt < w.maxRetries {
-				time.Sleep(w.backoffBase * time.Duration(1<<attempt))
+				backoffDelay := w.backoffBase * time.Duration(1<<attempt)
+				slog.WarnContext(ctx, "batch chunk execution transient error, retrying with backoff",
+					"event", "batch.chunk.retry",
+					"draft_id", draft.ID,
+					"batch_number", currentBatch,
+					"attempt", attempt+1,
+					"max_retries", w.maxRetries,
+					"backoff_ms", float64(backoffDelay.Nanoseconds())/1e6,
+					"error", cmdErr.Error(),
+				)
+				time.Sleep(backoffDelay)
 			}
 		}
 
@@ -226,6 +281,14 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 			return saveErr
 		}
 
+		slog.InfoContext(ctx, "batch chunk committed",
+			"event", "batch.chunk.complete",
+			"draft_id", draft.ID,
+			"batch_number", currentBatch,
+			"rows_affected", rowsAffected,
+			"cursor_last_id", newCursor,
+		)
+
 		cursor = newCursor
 		currentBatch++
 
@@ -238,6 +301,16 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 }
 
 func (w *ExecutionWorker) handleBatchFailure(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, batchNum int, cursor string, errMsg string) {
+	slog.ErrorContext(ctx, "batch chunk failed, entering quarantine",
+		"event", "batch.chunk.failed",
+		"draft_id", draft.ID,
+		"execution_id", task.ExecutionID,
+		"batch_number", batchNum,
+		"cursor", cursor,
+		"error", errMsg,
+		"quarantine_status", "partial",
+	)
+
 	now := time.Now()
 	cp := &domain.DraftCheckpoint{
 		DraftID:      draft.ID,
@@ -295,6 +368,13 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 		}
 	}
 
+	slog.InfoContext(ctx, "batch revert execution started",
+		"event", "batch.revert.start",
+		"draft_id", draft.ID,
+		"execution_id", task.ExecutionID,
+		"total_chunks_to_revert", len(committed),
+	)
+
 	for _, cp := range committed {
 		var revertErr error
 		for attempt := 0; attempt <= w.maxRetries; attempt++ {
@@ -330,6 +410,13 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 
 		cp.Status = "reverted"
 		_, _ = w.draftRepo.UpdateCheckpoint(ctx, cp)
+
+		slog.InfoContext(ctx, "batch chunk reverted",
+			"event", "batch.revert.chunk",
+			"draft_id", draft.ID,
+			"batch_number", cp.BatchNumber,
+			"status", "reverted",
+		)
 	}
 
 	now := time.Now()
@@ -350,10 +437,25 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 		_, _ = w.migrationRepo.Save(ctx, mig)
 	}
 
+	slog.InfoContext(ctx, "batch revert completed, quarantine lifted",
+		"event", "batch.revert.complete",
+		"draft_id", draft.ID,
+		"execution_id", task.ExecutionID,
+	)
+
 	return nil
 }
 
 func (w *ExecutionWorker) handleRevertFailure(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, batchNum int, errMsg string) {
+	slog.ErrorContext(ctx, "batch revert failed midway, entering partially_reverted quarantine",
+		"event", "batch.revert.failed",
+		"draft_id", draft.ID,
+		"execution_id", task.ExecutionID,
+		"batch_number", batchNum,
+		"error", errMsg,
+		"quarantine_status", "partially_reverted",
+	)
+
 	now := time.Now()
 	draft.Status = domain.DraftStatusPartiallyReverted
 	draft.CurrentRound++
@@ -387,6 +489,13 @@ func (w *ExecutionWorker) handleRevertFailure(ctx context.Context, task ports.Ex
 }
 
 func (w *ExecutionWorker) handleSuccess(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft) error {
+	slog.InfoContext(ctx, "migration execution completed successfully",
+		"event", "migration.execute.success",
+		"draft_id", draft.ID,
+		"database_id", task.DatabaseID,
+		"execution_id", task.ExecutionID,
+	)
+
 	now := time.Now()
 	migration := &domain.Migration{
 		DatabaseID:   task.DatabaseID,
@@ -414,6 +523,14 @@ func (w *ExecutionWorker) handleSuccess(ctx context.Context, task ports.Executio
 }
 
 func (w *ExecutionWorker) handleFailure(ctx context.Context, task ports.ExecutionTask, errMsg string) {
+	slog.ErrorContext(ctx, "migration execution failed",
+		"event", "migration.execute.failed",
+		"draft_id", task.DraftID,
+		"database_id", task.DatabaseID,
+		"execution_id", task.ExecutionID,
+		"error", errMsg,
+	)
+
 	now := time.Now()
 	migration := &domain.Migration{
 		DatabaseID:   task.DatabaseID,
