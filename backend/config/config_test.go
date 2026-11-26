@@ -14,6 +14,7 @@ func TestLoadConfig_NoEnvironmentVariablesSet_UsesDefaultValues(t *testing.T) {
 		"SERVER_HOST", "SERVER_PORT", "FRONTEND_ORIGIN",
 		"DATABASE_CREDENTIAL_KEY", "SESSION_COOKIE_SECURE",
 		"MIGRATION_WORKER_COUNT", "MIGRATION_QUEUE_CAPACITY",
+		"OTEL_SERVICE_NAME", "OTEL_TRACES_EXPORTER", "OTEL_EXPORTER_OTLP_ENDPOINT",
 	}
 	for _, key := range envKeys {
 		t.Setenv(key, "")
@@ -56,6 +57,18 @@ func TestLoadConfig_NoEnvironmentVariablesSet_UsesDefaultValues(t *testing.T) {
 	if cfg.Worker.QueueCapacity != 100 {
 		t.Fatalf("expected Worker.QueueCapacity default = 100, got %d", cfg.Worker.QueueCapacity)
 	}
+
+	if cfg.Telemetry.ServiceName != "migration-service" {
+		t.Fatalf("expected Telemetry.ServiceName default = 'migration-service', got %s", cfg.Telemetry.ServiceName)
+	}
+
+	if cfg.Telemetry.Exporter != "console" {
+		t.Fatalf("expected Telemetry.Exporter default = 'console', got %s", cfg.Telemetry.Exporter)
+	}
+
+	if cfg.Telemetry.Endpoint != "localhost:4317" {
+		t.Fatalf("expected Telemetry.Endpoint default = 'localhost:4317', got %s", cfg.Telemetry.Endpoint)
+	}
 }
 
 func TestLoadConfig_ValidEnvironmentVariablesSet_PopulatesConfigValues(t *testing.T) {
@@ -72,6 +85,9 @@ func TestLoadConfig_ValidEnvironmentVariablesSet_PopulatesConfigValues(t *testin
 	t.Setenv("SESSION_COOKIE_SECURE", "false")
 	t.Setenv("MIGRATION_WORKER_COUNT", "10")
 	t.Setenv("MIGRATION_QUEUE_CAPACITY", "250")
+	t.Setenv("OTEL_SERVICE_NAME", "custom-migration-service")
+	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector.internal:4317")
 
 	// Act
 	cfg, err := config.LoadConfig()
@@ -109,6 +125,18 @@ func TestLoadConfig_ValidEnvironmentVariablesSet_PopulatesConfigValues(t *testin
 
 	if cfg.Worker.QueueCapacity != 250 {
 		t.Fatalf("expected Worker.QueueCapacity = 250, got %d", cfg.Worker.QueueCapacity)
+	}
+
+	if cfg.Telemetry.ServiceName != "custom-migration-service" {
+		t.Fatalf("expected Telemetry.ServiceName = 'custom-migration-service', got %s", cfg.Telemetry.ServiceName)
+	}
+
+	if cfg.Telemetry.Exporter != "otlp" {
+		t.Fatalf("expected Telemetry.Exporter = 'otlp', got %s", cfg.Telemetry.Exporter)
+	}
+
+	if cfg.Telemetry.Endpoint != "collector.internal:4317" {
+		t.Fatalf("expected Telemetry.Endpoint = 'collector.internal:4317', got %s", cfg.Telemetry.Endpoint)
 	}
 }
 
