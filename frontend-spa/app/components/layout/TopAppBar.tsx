@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Bell, Check, Menu } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Bell, Menu } from 'lucide-react';
+import { Link } from 'react-router';
 import { useAuth } from '../../context/auth-context';
-import { APP_ROLES, type AppNotification, type AppRole } from '../../types';
+import type { AppNotification } from '../../types';
 
 export interface TopAppBarProps {
   onOpenMobileDrawer: () => void;
@@ -17,20 +17,10 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 }) => {
   const {
     user,
-    role,
-    switchRole,
     notifications,
     unreadNotifCount,
     markAllNotificationsRead,
   } = useAuth();
-
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const handleRoleSwitch = (nextRole: AppRole) => {
-    switchRole(nextRole);
-    navigate(resolveDefaultRoleRoute(nextRole));
-  };
 
   return (
     <header className="h-16 bg-[#FFFDF9]/85 backdrop-blur-md border-b border-[#D8C7A5] px-4 lg:px-6 flex items-center justify-between gap-2 sm:gap-3 sticky top-0 z-30">
@@ -39,7 +29,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           type="button"
           onClick={onOpenMobileDrawer}
           aria-label="Open navigation menu"
-          className="lg:hidden w-10 h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] flex items-center justify-center text-[#264D3B] cursor-pointer shrink-0 transition-colors"
+          className="lg:hidden w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] flex items-center justify-center text-[#264D3B] cursor-pointer shrink-0 transition-colors focus-visible:ring-2 focus-visible:ring-[#264D3B]"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -55,10 +45,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        <RoleSwitcherSegmented currentRole={role} onSelectRole={handleRoleSwitch} />
-
-        <QuickViewNavigator currentPath={location.pathname} onNavigate={navigate} />
-
         <NotificationBellDropdown
           notifications={notifications}
           unreadCount={unreadNotifCount}
@@ -69,69 +55,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   );
 };
 
-// --- Sub-Components & Technical Helpers (Stepdown Rule) ---
-
-interface RoleSwitcherSegmentedProps {
-  currentRole: AppRole;
-  onSelectRole: (role: AppRole) => void;
-}
-
-const RoleSwitcherSegmented: React.FC<RoleSwitcherSegmentedProps> = ({
-  currentRole,
-  onSelectRole,
-}) => (
-  <div
-    role="group"
-    aria-label="Active role switcher"
-    className="hidden md:inline-flex rounded-xl border border-[#D8C7A5] bg-[#F5EEDD]/80 p-0.5"
-  >
-    {APP_ROLES.map((role) => {
-      const isActive = currentRole === role;
-      const btnClass = isActive
-        ? 'bg-[#264D3B] text-[#F5EEDD] shadow-xs'
-        : 'text-[#3A241A] hover:bg-[#EFE5D1]';
-
-      return (
-        <button
-          key={role}
-          type="button"
-          onClick={() => onSelectRole(role)}
-          className={`h-8 px-3 rounded-[10px] text-xs font-semibold inline-flex items-center gap-1 transition-all cursor-pointer ${btnClass}`}
-        >
-          {isActive && <Check className="w-3.5 h-3.5" />}
-          <span>{role}</span>
-        </button>
-      );
-    })}
-  </div>
-);
-
-interface QuickViewNavigatorProps {
-  currentPath: string;
-  onNavigate: (path: string) => void;
-}
-
-const QuickViewNavigator: React.FC<QuickViewNavigatorProps> = ({
-  currentPath,
-  onNavigate,
-}) => (
-  <div className="relative">
-    <select
-      aria-label="Navigate to screen"
-      value={currentPath}
-      onChange={(e) => onNavigate(e.target.value)}
-      className="h-10 max-w-[138px] sm:max-w-[220px] rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] text-[#3A241A] text-xs font-semibold pl-2.5 sm:pl-3 pr-6 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
-    >
-      <option value="/login">00. Login Page</option>
-      <option value="/admin/databases">01. Admin · Databases</option>
-      <option value="/admin/users">02. Admin · Users</option>
-      <option value="/admin/groups">03. Admin · Groups</option>
-      <option value="/databases">05. Client DB Catalog</option>
-      <option value="/drafts">10. Database Drafts</option>
-      <option value="/approvals">12. Leader Approvals</option>
-    </select>
-  </div>
-);
+// --- Sub-Components (Notification Dropdown) ---
 
 interface NotificationBellDropdownProps {
   notifications: AppNotification[];
@@ -152,7 +76,7 @@ const NotificationBellDropdown: React.FC<NotificationBellDropdownProps> = ({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-label="Notifications"
-        className="w-10 h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] flex items-center justify-center text-[#3A241A] relative cursor-pointer transition-colors"
+        className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] flex items-center justify-center text-[#3A241A] relative cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-[#264D3B]"
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
@@ -213,9 +137,3 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onSel
     </div>
   </Link>
 );
-
-function resolveDefaultRoleRoute(role: AppRole): string {
-  if (role === 'Admin') return '/admin/databases';
-  if (role === 'Leader') return '/approvals';
-  return '/databases';
-}

@@ -6,13 +6,14 @@ import {
   LogOut,
   Server,
   Shield,
+  Terminal,
   Users,
   X,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router';
 import { GopherDipperCutout } from '../../assets/icons/GopherDipperCutout';
 import { useAuth } from '../../context/auth-context';
-import { APP_ROLES, type AppRole, type PlatformUser } from '../../types';
+import type { AppRole, PlatformUser } from '../../types';
 
 export interface SidebarProps {
   closeMobile?: () => void;
@@ -23,17 +24,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   closeMobile,
   pendingApprovalsCount = 1,
 }) => {
-  const { user, role, switchRole, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
-    if (closeMobile) closeMobile();
-  };
-
-  const handleRoleSwitch = (targetRole: AppRole) => {
-    switchRole(targetRole);
     if (closeMobile) closeMobile();
   };
 
@@ -52,10 +48,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="pt-4 mt-4 border-t border-[#F5EEDD]/15 space-y-3">
-        {closeMobile && (
-          <MobileRoleSwitcher currentRole={role} onSelectRole={handleRoleSwitch} />
-        )}
-
         <SidebarUserCard user={user} role={role} onLogout={handleLogout} />
       </div>
     </div>
@@ -90,7 +82,7 @@ const SidebarBrandHeader: React.FC<SidebarBrandHeaderProps> = ({ onCloseMobile }
         type="button"
         onClick={onCloseMobile}
         aria-label="Close navigation menu"
-        className="w-9 h-9 rounded-full flex items-center justify-center text-[#F5EEDD]/80 hover:text-white hover:bg-[#1B3B2B] cursor-pointer"
+        className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-[#F5EEDD]/80 hover:text-white hover:bg-[#1B3B2B] cursor-pointer focus-visible:ring-2 focus-visible:ring-[#F3B738]"
       >
         <X className="w-5 h-5" />
       </button>
@@ -121,6 +113,9 @@ const SidebarNavSections: React.FC<SidebarNavSectionsProps> = ({
         <div className="space-y-1">
           <SectionLabel text="Client Workspace" />
           <NavLinkItem label="Client DB Catalog" to="/databases" icon={<Database className="w-4 h-4" />} onClick={onItemClick} />
+          <NavLinkItem label="SQL Console" to="/console" icon={<Terminal className="w-4 h-4" />} onClick={onItemClick} />
+          <NavLinkItem label="Draft Proposals" to="/drafts" icon={<GitPullRequest className="w-4 h-4" />} onClick={onItemClick} />
+          <NavLinkItem label="Approvals" to="/approvals" icon={<Crown className="w-4 h-4" />} badgeCount={pendingApprovalsCount} onClick={onItemClick} />
         </div>
       </>
     );
@@ -131,6 +126,7 @@ const SidebarNavSections: React.FC<SidebarNavSectionsProps> = ({
       <div className="space-y-1">
         <SectionLabel text="Leader Workspace" />
         <NavLinkItem label="Client DB Catalog" to="/databases" icon={<Database className="w-4 h-4" />} onClick={onItemClick} />
+        <NavLinkItem label="SQL Console" to="/console" icon={<Terminal className="w-4 h-4" />} onClick={onItemClick} />
         <NavLinkItem label="Draft Proposals" to="/drafts" icon={<GitPullRequest className="w-4 h-4" />} onClick={onItemClick} />
         <NavLinkItem
           label="Approvals"
@@ -147,6 +143,7 @@ const SidebarNavSections: React.FC<SidebarNavSectionsProps> = ({
     <div className="space-y-1">
       <SectionLabel text="Workspace" />
       <NavLinkItem label="Client DB Catalog" to="/databases" icon={<Database className="w-4 h-4" />} onClick={onItemClick} />
+      <NavLinkItem label="SQL Console" to="/console" icon={<Terminal className="w-4 h-4" />} onClick={onItemClick} />
       <NavLinkItem label="Draft Proposals" to="/drafts" icon={<GitPullRequest className="w-4 h-4" />} onClick={onItemClick} />
     </div>
   );
@@ -171,7 +168,7 @@ const NavLinkItem: React.FC<NavLinkItemProps> = ({ label, to, icon, badgeCount, 
     to={to}
     onClick={onClick}
     className={({ isActive }) =>
-      `w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+      `w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[#F3B738] ${
         isActive
           ? 'bg-[#1B3B2B] text-[#F5EEDD] shadow-inner font-bold'
           : 'text-[#F5EEDD]/80 hover:text-white hover:bg-[#1B3B2B]/60'
@@ -188,38 +185,6 @@ const NavLinkItem: React.FC<NavLinkItemProps> = ({ label, to, icon, badgeCount, 
       </span>
     )}
   </NavLink>
-);
-
-interface MobileRoleSwitcherProps {
-  currentRole: AppRole;
-  onSelectRole: (role: AppRole) => void;
-}
-
-const MobileRoleSwitcher: React.FC<MobileRoleSwitcherProps> = ({ currentRole, onSelectRole }) => (
-  <div className="md:hidden">
-    <div className="text-[10px] font-semibold uppercase tracking-wider text-[#F5EEDD]/65 mb-1.5 px-1">
-      Active Role
-    </div>
-    <div className="grid grid-cols-3 gap-1 rounded-xl bg-[#1B3B2B] p-1 border border-[#F5EEDD]/15">
-      {APP_ROLES.map((role) => {
-        const isActive = currentRole === role;
-        const btnClass = isActive
-          ? 'bg-[#F5EEDD] text-[#264D3B]'
-          : 'text-[#F5EEDD]/75 hover:text-white';
-
-        return (
-          <button
-            key={role}
-            type="button"
-            onClick={() => onSelectRole(role)}
-            className={`h-8 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${btnClass}`}
-          >
-            {role}
-          </button>
-        );
-      })}
-    </div>
-  </div>
 );
 
 interface SidebarUserCardProps {
@@ -247,7 +212,7 @@ const SidebarUserCard: React.FC<SidebarUserCardProps> = ({ user, role, onLogout 
       onClick={onLogout}
       aria-label="Sign out"
       title="Sign out"
-      className="w-9 h-9 rounded-xl flex items-center justify-center text-[#F5EEDD]/75 hover:text-white hover:bg-[#264D3B] transition-colors cursor-pointer shrink-0"
+      className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-[#F5EEDD]/75 hover:text-white hover:bg-[#264D3B] transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-[#F3B738]"
     >
       <LogOut className="w-4 h-4" />
     </button>

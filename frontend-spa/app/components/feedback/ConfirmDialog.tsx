@@ -37,7 +37,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="h-10 px-4 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#F5EEDD] text-[#3A241A] text-xs font-semibold cursor-pointer disabled:opacity-50"
+            className="min-h-[44px] h-11 px-5 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#F5EEDD] text-[#3A241A] text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#264D3B]"
           >
             {cancelText}
           </button>
@@ -45,13 +45,16 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className={`h-10 px-5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors disabled:opacity-50 ${
+            className={`min-h-[44px] h-11 px-5 rounded-xl text-xs font-semibold inline-flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[#264D3B] ${
               isDestructive
                 ? 'bg-[#822433] hover:bg-[#681C28] text-white'
                 : 'bg-[#264D3B] hover:bg-[#1B3B2B] text-[#F5EEDD]'
             }`}
           >
-            {confirmText}
+            {isLoading && (
+              <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+            )}
+            <span>{confirmText}</span>
           </button>
         </>
       }

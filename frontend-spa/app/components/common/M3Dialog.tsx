@@ -52,7 +52,7 @@ export const M3Dialog: React.FC<M3DialogProps> = ({
             type="button"
             onClick={onClose}
             aria-label={`Close ${title}`}
-            className="w-10 h-10 -mr-1 rounded-full flex items-center justify-center text-[#6B5444] hover:text-[#3A241A] hover:bg-[#EFE5D1] transition-colors cursor-pointer shrink-0"
+            className="w-11 h-11 min-w-[44px] min-h-[44px] -mr-1.5 rounded-full flex items-center justify-center text-[#6B5444] hover:text-[#3A241A] hover:bg-[#EFE5D1] transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-[#264D3B]"
           >
             <X className="w-5 h-5" />
           </button>
