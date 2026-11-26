@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/auth-context';
 import { draftService } from '../services/draft_service';
 import type { DraftProposal, TargetDatabase } from '../types';
@@ -23,6 +23,44 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
 
   const isAuthor = user.id === draft.proposerId;
   const isAdmin = user.role === 'admin';
+
+  useEffect(() => {
+    if (!draft.batchConfig || draft.status !== 'executing') {
+      return;
+    }
+
+    const unsubscribe = draftService.streamBatchProgress(
+      draft.id,
+      (progress) => {
+        setDraft((prev) => {
+          if (!prev.batchConfig) return prev;
+          return {
+            ...prev,
+            status: (progress.status || prev.status) as any,
+            batchConfig: {
+              ...prev.batchConfig,
+              currentBatch: progress.current_batch,
+              totalBatches: progress.total_batches,
+              processedRows: progress.rows_processed,
+              totalRows: progress.total_rows,
+            },
+          };
+        });
+      },
+      async () => {
+        try {
+          const refreshed = await draftService.getDraftById(draft.id);
+          setDraft(refreshed);
+        } catch (err) {
+          console.error('[SSE] Failed to refresh draft after stream completion', err);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [draft.id, draft.status, !!draft.batchConfig]);
 
   const myPendingVote = draft.consensus.find(
     (c) =>

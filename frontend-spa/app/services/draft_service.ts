@@ -1,4 +1,4 @@
-import { api } from './api_client';
+import { api, getApiBaseUrl } from './api_client';
 import { databaseService } from './database_service';
 import { cleanEntityId } from '~/utils/formatters';
 import type { TargetDatabase } from '~/types/database';
@@ -218,5 +218,46 @@ export const draftService = {
   async getBatchProgress(draftId: string | number): Promise<BackendBatchProgress> {
     const rawId = cleanEntityId(draftId, 'DRF-');
     return await api.get<BackendBatchProgress>(`/drafts/${rawId}/progress`);
+  },
+
+  streamBatchProgress(
+    draftId: string | number,
+    onUpdate: (progress: BackendBatchProgress) => void,
+    onComplete?: () => void,
+    onError?: (err: any) => void
+  ): () => void {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+      return () => {};
+    }
+
+    const rawId = cleanEntityId(draftId, 'DRF-');
+    const url = `${getApiBaseUrl()}/drafts/${rawId}/progress/stream`;
+    const eventSource = new EventSource(url, { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data: BackendBatchProgress = JSON.parse(event.data);
+        onUpdate(data);
+
+        const isTerminal = ['applied', 'failed', 'partial', 'partially_reverted'].includes(
+          (data.status || '').toLowerCase()
+        );
+        if (isTerminal) {
+          eventSource.close();
+          if (onComplete) onComplete();
+        }
+      } catch (err) {
+        console.error('[SSE] Failed to parse batch progress event', err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      eventSource.close();
+      if (onError) onError(err);
+    };
+
+    return () => {
+      eventSource.close();
+    };
   },
 };
