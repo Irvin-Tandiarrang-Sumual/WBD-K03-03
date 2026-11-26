@@ -14,6 +14,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
 )
 
 type dbLock struct {
@@ -524,11 +525,16 @@ func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID ui
 	}
 
 	if s.taskQueue != nil {
+		carrier := make(map[string]string)
+		telemetry.Inject(ctx, carrier)
 		task := ports.ExecutionTask{
-			DraftID:     draft.ID,
-			DatabaseID:  draft.DatabaseID,
-			ExecutionID: execID,
-			UserID:      userID,
+			DraftID:      draft.ID,
+			DatabaseID:   draft.DatabaseID,
+			ExecutionID:  execID,
+			UserID:       userID,
+			Operation:    "execute",
+			EnqueuedAt:   time.Now(),
+			TraceCarrier: carrier,
 		}
 		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
 			lock.Unlock()
@@ -589,12 +595,16 @@ func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uin
 	}
 
 	if s.taskQueue != nil {
+		carrier := make(map[string]string)
+		telemetry.Inject(ctx, carrier)
 		task := ports.ExecutionTask{
-			DraftID:     draft.ID,
-			DatabaseID:  draft.DatabaseID,
-			ExecutionID: execID,
-			UserID:      userID,
-			Operation:   "resume",
+			DraftID:      draft.ID,
+			DatabaseID:   draft.DatabaseID,
+			ExecutionID:  execID,
+			UserID:       userID,
+			Operation:    "resume",
+			EnqueuedAt:   time.Now(),
+			TraceCarrier: carrier,
 		}
 		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
 			lock.Unlock()
@@ -653,12 +663,16 @@ func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uin
 	}
 
 	if s.taskQueue != nil {
+		carrier := make(map[string]string)
+		telemetry.Inject(ctx, carrier)
 		task := ports.ExecutionTask{
-			DraftID:     draft.ID,
-			DatabaseID:  draft.DatabaseID,
-			ExecutionID: newExecID,
-			UserID:      userID,
-			Operation:   "revert",
+			DraftID:      draft.ID,
+			DatabaseID:   draft.DatabaseID,
+			ExecutionID:  newExecID,
+			UserID:       userID,
+			Operation:    "revert",
+			EnqueuedAt:   time.Now(),
+			TraceCarrier: carrier,
 		}
 		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
 			lock.Unlock()

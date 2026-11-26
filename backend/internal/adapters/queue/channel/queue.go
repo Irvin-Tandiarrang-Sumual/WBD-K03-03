@@ -8,6 +8,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 )
 
 const (
@@ -79,6 +80,13 @@ func (q *ChannelQueue) worker() {
 }
 
 func (q *ChannelQueue) processTask(task ports.ExecutionTask) {
+	metrics.QueueJobs.WithLabelValues("waiting").Dec()
+	metrics.QueueJobs.WithLabelValues("running").Inc()
+	if !task.EnqueuedAt.IsZero() {
+		metrics.QueueWaitDuration.Observe(time.Since(task.EnqueuedAt).Seconds())
+	}
+	defer metrics.QueueJobs.WithLabelValues("running").Dec()
+
 	defer func() {
 		if r := recover(); r != nil {
 			// Panic recovery ensures unhandled panic inside task execution does not kill the worker pool.
@@ -106,10 +114,15 @@ func (q *ChannelQueue) Enqueue(ctx context.Context, task ports.ExecutionTask) er
 		return err
 	}
 
+	if task.EnqueuedAt.IsZero() {
+		task.EnqueuedAt = time.Now()
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case q.tasks <- task:
+		metrics.QueueJobs.WithLabelValues("waiting").Inc()
 		return nil
 	default:
 		return domain.ErrQueueFull
