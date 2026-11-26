@@ -88,6 +88,39 @@ func TestBatchMigration_GivenSparseKeysAndBatchFailure_WhenResumed_ThenCommitted
 	if err != nil || len(rows.Rows) != 5 {
 		t.Fatalf("expected five rows updated exactly once, got %+v, error %v", rows, err)
 	}
+	executeBatchFixture(t, stack, target, "INSERT INTO batch_resume_items VALUES (60, 7)")
+	traverseAppliedBatch(t, stack, database.ID, author, domain.DraftOperationRollback)
+	rows, err = stack.databaseDriver.ExecuteQuery(ctx, target, "SELECT id FROM batch_resume_items WHERE (id < 60 AND score = 0) OR (id = 60 AND score = 7)")
+	if err != nil || len(rows.Rows) != 6 {
+		t.Fatalf("rollback changed the wrong rows: %+v, error %v", rows, err)
+	}
+	traverseAppliedBatch(t, stack, database.ID, author, domain.DraftOperationForward)
+	rows, err = stack.databaseDriver.ExecuteQuery(ctx, target, "SELECT id FROM batch_resume_items WHERE (id < 60 AND score = 1) OR (id = 60 AND score = 7)")
+	if err != nil || len(rows.Rows) != 6 {
+		t.Fatalf("forward changed the wrong rows: %+v, error %v", rows, err)
+	}
+}
+
+func traverseAppliedBatch(t *testing.T, stack *testStack, databaseID uint, author testSession, operation string) {
+	t.Helper()
+	path := fmt.Sprintf("/api/v1/me/databases/%d/%s-draft", databaseID, operation)
+	proposal := executeRequest(stack.engine, http.MethodPost, path, nil, author.cookie, author.csrf)
+	if proposal.Code != http.StatusCreated {
+		t.Fatal(proposal.Body.String())
+	}
+	draft := parseResponseBody[handlers.MigrationDraftResponse](t, proposal).Data
+	path = fmt.Sprintf("/api/v1/drafts/%d", draft.ID)
+	approveTestDraft(t, stack, path, author)
+	execution := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, author.cookie, author.csrf)
+	if execution.Code != http.StatusAccepted {
+		t.Fatal(execution.Body.String())
+	}
+	job := parseResponseBody[handlers.DraftExecutionResponse](t, execution).Data
+	jobID, err := strconv.ParseUint(job.JobID, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForJobStatus(t, stack.db, uint(jobID), "done")
 }
 
 func TestBatchMigration_GivenCommittedKeys_WhenRevertedTwice_ThenOnlyOriginalAffectedRowsAreRestored(t *testing.T) {

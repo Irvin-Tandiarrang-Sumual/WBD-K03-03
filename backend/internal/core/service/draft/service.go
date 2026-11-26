@@ -86,6 +86,9 @@ func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraft
 	if err := s.validateBatchMetadata(ctx, input); err != nil {
 		return nil, err
 	}
+	if err := s.prepareDraftSQL(ctx, &input); err != nil {
+		return nil, err
+	}
 
 	groups, err := s.groupRepo.FindAllByDatabaseID(ctx, input.DatabaseID)
 	if err != nil {

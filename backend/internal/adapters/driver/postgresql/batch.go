@@ -59,6 +59,9 @@ func ensureBatchStorage(tx *gorm.DB) error {
 }
 
 func saveBatchScope(tx *gorm.DB, batch ports.BatchExecution) error {
+	if batch.SourceKey != "" {
+		return copyBatchScope(tx, batch)
+	}
 	var primaryKey bool
 	err := tx.Raw(`SELECT EXISTS (
 		SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
@@ -74,6 +77,24 @@ func saveBatchScope(tx *gorm.DB, batch ports.BatchExecution) error {
 	return tx.Exec(`INSERT INTO wbd_migration.batch_keys (plan_key, batch_no, row_key)
 		SELECT ?, (row_number() OVER (ORDER BY `+batch.Column+`) - 1) / ? + 1, `+batch.Column+
 		" FROM "+batch.Table, batch.Key, batch.Size).Error
+}
+
+func copyBatchScope(tx *gorm.DB, batch ports.BatchExecution) error {
+	var exists bool
+	if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM wbd_migration.batch_plans WHERE plan_key = ?)", batch.SourceKey).Scan(&exists).Error; err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrNoCheckpointToResume
+	}
+	order := "ASC"
+	if batch.Reverse {
+		order = "DESC"
+	}
+	return tx.Exec(`INSERT INTO wbd_migration.batch_keys (plan_key, batch_no, row_key)
+		SELECT ?, (row_number() OVER (ORDER BY row_key `+order+`) - 1) / ? + 1, row_key
+		FROM wbd_migration.batch_keys WHERE plan_key = ? AND affected`,
+		batch.Key, batch.Size, batch.SourceKey).Error
 }
 
 type batchReceiptRow struct {
@@ -132,6 +153,9 @@ func commitBatchKeys(tx *gorm.DB, batch ports.BatchExecution, number int, keys [
 	affected, err := updateBatchKeys(tx, batch, keys)
 	if err != nil {
 		return nil, err
+	}
+	if batch.SourceKey != "" && len(affected) != len(keys) {
+		return nil, errors.New("approved SQL did not change every original affected row")
 	}
 	if len(affected) > 0 {
 		if err := tx.Exec("UPDATE wbd_migration.batch_keys SET affected = true WHERE plan_key = ? AND row_key IN ?", batch.Key, affected).Error; err != nil {

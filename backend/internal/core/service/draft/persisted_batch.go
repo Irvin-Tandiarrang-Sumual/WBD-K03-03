@@ -58,6 +58,14 @@ func (w *ExecutionWorker) executePersistedBatch(ctx context.Context, task ports.
 		plan.audit.IrreversibleReason = "No batch SQL down was approved"
 	}
 	up.Resume = task.Operation == ports.MetricOpResume
+	if isRollbackOrForward(draft) {
+		source, err := w.batchTraversalSource(ctx, draft)
+		if err != nil {
+			return err
+		}
+		up.SourceKey = source.Key
+		up.Reverse = draft.Operation == domain.DraftOperationRollback
+	}
 	total, err := executor.PrepareBatch(ctx, db, up)
 	if err != nil {
 		if !up.Resume {
@@ -71,6 +79,21 @@ func (w *ExecutionWorker) executePersistedBatch(ctx context.Context, task ports.
 		return err
 	}
 	return w.finishExecution(ctx, task, draft, db, plan)
+}
+
+func (w *ExecutionWorker) batchTraversalSource(ctx context.Context, draft *domain.Draft) (ports.BatchExecution, error) {
+	node, err := w.migrationRepo.FindByIDAndDatabaseID(ctx, draft.TargetID, draft.DatabaseID)
+	if err != nil {
+		return ports.BatchExecution{}, err
+	}
+	if node.DraftID == nil {
+		return ports.BatchExecution{}, domain.ErrNoCheckpointToResume
+	}
+	original, err := w.draftRepo.FindByID(ctx, *node.DraftID)
+	if err != nil {
+		return ports.BatchExecution{}, err
+	}
+	return batchExecution(original, original.SqlUp)
 }
 
 func (w *ExecutionWorker) applyPersistedBatches(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, apply func(int) (*ports.BatchReceipt, error), count int) error {

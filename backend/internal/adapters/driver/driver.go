@@ -97,6 +97,13 @@ type DatabaseDriver struct {
 
 var _ ports.DatabaseDriver = (*DatabaseDriver)(nil)
 
+func (d *DatabaseDriver) ValidateMigrationSQL(ctx context.Context, db domain.Database, script string) error {
+	if db.Type == domain.DatabaseTypePostgreSQL {
+		return d.postgresqlExecutor.ValidateMigrationSQL(ctx, db, script)
+	}
+	return nil
+}
+
 func (d *DatabaseDriver) PrepareBatch(ctx context.Context, db domain.Database, batch ports.BatchExecution) (int64, error) {
 	if db.Type != domain.DatabaseTypePostgreSQL {
 		return 0, domain.ErrInvalidDraftInput

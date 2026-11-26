@@ -38,6 +38,15 @@ func (s *draftService) CreateAutoDraft(ctx context.Context, dbID, userID uint, o
 		if operation == domain.DraftOperationRollback {
 			draft.SqlUp, draft.SqlDown = draft.SqlDown, draft.SqlUp
 		}
+		if target.DraftID != nil {
+			source, err := s.draftRepo.FindByID(ctx, *target.DraftID)
+			if err != nil {
+				return err
+			}
+			draft.IsBatch = source.IsBatch
+			draft.BatchColumn = source.BatchColumn
+			draft.BatchSize = source.BatchSize
+		}
 		return repo.SaveDraft(ctx, draft)
 	})
 	if err != nil {

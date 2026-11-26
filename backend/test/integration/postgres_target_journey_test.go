@@ -178,12 +178,28 @@ func TestPostgresTarget_GivenUserWithReadWriteAccess_WhenApplySQLUpMigration_The
 	INSERT INTO pg_products (id, name, price) VALUES (1, 'Widget', 19.99);`
 
 	leader := signIn(t, stack, "pg-migrators-group-leader")
+	draftURL := fmt.Sprintf("/api/v1/databases/%d/drafts", createdDB.ID)
+	invalid := executeRequest(stack.engine, http.MethodPost, draftURL,
+		handlers.CreateDraftRequest{SqlUp: "CREATE TABLE ("}, sessionCookie, csrfToken)
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid SQL to be rejected before review: %s", invalid.Body.String())
+	}
 	migration := applyTestMigration(t, stack, createdDB.ID, testSession{sessionCookie, csrfToken},
 		sqlUp, "DROP TABLE pg_products", leader)
 
 	// Assert - Migration creation success
 	if migration.Status != domain.MigrationStatusSuccess || migration.Version == "" || len(migration.Snapshot) == 0 {
 		t.Fatalf("expected versioned migration with a snapshot, got %+v", migration)
+	}
+	reversible := true
+	destructive := executeRequest(stack.engine, http.MethodPost, draftURL,
+		handlers.CreateDraftRequest{SqlUp: "TRUNCATE pg_products", IsReversible: &reversible}, sessionCookie, csrfToken)
+	if destructive.Code != http.StatusCreated {
+		t.Fatalf("expected destructive draft to await approval: %s", destructive.Body.String())
+	}
+	destructiveDraft := parseResponseBody[handlers.DraftResponse](t, destructive).Data
+	if destructiveDraft.IsReversible || destructiveDraft.IrreversibleReason == "" {
+		t.Fatalf("expected a persisted irreversible draft, got %+v", destructiveDraft)
 	}
 
 	// Verify table physically exists in Target PostgreSQL

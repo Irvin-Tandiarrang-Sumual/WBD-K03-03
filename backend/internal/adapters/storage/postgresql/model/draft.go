@@ -11,7 +11,7 @@ type Draft struct {
 	UserID             uint   `gorm:"not null;index"`
 	SqlUp              string `gorm:"not null"`
 	SqlDown            string `gorm:"not null;default:''"`
-	IsReversible       bool   `gorm:"not null;default:true"`
+	IsReversible       bool   `gorm:"not null"`
 	IrreversibleReason string `gorm:"type:text;not null;default:''"`
 	IsBatch            bool   `gorm:"not null;default:false"`
 	BatchColumn        string `gorm:"type:varchar(100);not null;default:''"`

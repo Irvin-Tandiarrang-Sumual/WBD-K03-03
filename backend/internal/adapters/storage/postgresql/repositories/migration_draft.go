@@ -51,6 +51,10 @@ func (r *migrationRepository) SaveDraft(ctx context.Context, d *domain.Draft) er
 		SqlUp:           d.SqlUp,
 		SqlDown:         d.SqlDown,
 		Status:          d.Status,
+		IsReversible:    d.IsReversible,
+		IsBatch:         d.IsBatch,
+		BatchColumn:     d.BatchColumn,
+		BatchSize:       d.BatchSize,
 	}
 	tx := r.db.WithContext(ctx)
 	if err := tx.Create(&row).Error; err != nil {

@@ -76,6 +76,8 @@ type BatchExecution struct {
 	Statement string
 	Size int
 	Resume bool
+	SourceKey string
+	Reverse bool
 }
 
 type BatchReceipt struct {
@@ -87,6 +89,10 @@ type BatchReceipt struct {
 type BatchExecutor interface {
 	PrepareBatch(ctx context.Context, database domain.Database, batch BatchExecution) (int64, error)
 	ExecuteBatchChunk(ctx context.Context, database domain.Database, batch BatchExecution, number int, revert bool) (*BatchReceipt, error)
+}
+
+type MigrationValidator interface {
+	ValidateMigrationSQL(ctx context.Context, database domain.Database, script string) error
 }
 
 type DatabaseCredentialCipher interface {
