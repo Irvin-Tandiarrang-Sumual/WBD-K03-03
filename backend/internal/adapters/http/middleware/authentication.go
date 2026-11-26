@@ -3,6 +3,7 @@ package middleware
 import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
 
@@ -56,6 +57,9 @@ func (am *AuthMiddleware) Authenticate() gin.HandlerFunc {
 
 		SetUserContext(c, session.UserID, currentUser.Role)
 		SetSessionContext(c, session)
+		c.Request = c.Request.WithContext(logger.WithActor(c.Request.Context(), logger.Actor{
+			UserID: session.UserID, Role: currentUser.Role,
+		}))
 
 		c.Next()
 	}

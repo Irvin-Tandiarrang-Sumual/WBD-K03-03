@@ -3,11 +3,13 @@ package draft
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 )
 
@@ -73,7 +75,7 @@ func (w *ExecutionWorker) executePersistedBatch(ctx context.Context, task ports.
 		}
 		return err
 	}
-	if err := w.applyPersistedBatches(ctx, task, draft, func(number int) (*ports.BatchReceipt, error) {
+	if err := w.applyPersistedBatches(ctx, task, draft, func(ctx context.Context, number int) (*ports.BatchReceipt, error) {
 		return executor.ExecuteBatchChunk(ctx, db, up, number, false)
 	}, int((total+int64(up.Size)-1)/int64(up.Size))); err != nil {
 		return err
@@ -96,7 +98,7 @@ func (w *ExecutionWorker) batchTraversalSource(ctx context.Context, draft *domai
 	return batchExecution(original, original.SqlUp)
 }
 
-func (w *ExecutionWorker) applyPersistedBatches(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, apply func(int) (*ports.BatchReceipt, error), count int) error {
+func (w *ExecutionWorker) applyPersistedBatches(ctx context.Context, task ports.ExecutionTask, draft *domain.Draft, apply func(context.Context, int) (*ports.BatchReceipt, error), count int) error {
 	checkpoints, err := w.draftRepo.FindCheckpointsByDraftID(ctx, draft.ID)
 	if err != nil {
 		return err
@@ -113,7 +115,9 @@ func (w *ExecutionWorker) applyPersistedBatches(ctx context.Context, task ports.
 		if committed[number] {
 			continue
 		}
-		receipt, err := w.retryPersistedChunk(ctx, func() (*ports.BatchReceipt, error) { return apply(number) })
+		receipt, err := w.retryPersistedChunk(ctx, task.Operation, number, func(ctx context.Context) (*ports.BatchReceipt, error) {
+			return apply(ctx, number)
+		})
 		if err != nil {
 			if !outcomeUnknown(err) {
 				w.handleBatchFailure(context.WithoutCancel(ctx), task, draft, number, cursor, err.Error())
@@ -154,7 +158,7 @@ func (w *ExecutionWorker) revertPersistedBatch(ctx context.Context, task ports.E
 		return err
 	}
 	for _, checkpoint := range filterCommittedCheckpointsReverse(checkpoints) {
-		_, err := w.retryPersistedChunk(ctx, func() (*ports.BatchReceipt, error) {
+		_, err := w.retryPersistedChunk(ctx, task.Operation, checkpoint.BatchNumber, func(ctx context.Context) (*ports.BatchReceipt, error) {
 			return executor.ExecuteBatchChunk(ctx, db, down, checkpoint.BatchNumber, true)
 		})
 		if err != nil {
@@ -172,16 +176,21 @@ func (w *ExecutionWorker) revertPersistedBatch(ctx context.Context, task ports.E
 	return w.finalizeRevertSuccess(ctx, task, draft)
 }
 
-func (w *ExecutionWorker) retryPersistedChunk(ctx context.Context, run func() (*ports.BatchReceipt, error)) (*ports.BatchReceipt, error) {
+func (w *ExecutionWorker) retryPersistedChunk(ctx context.Context, operation string, batchNumber int, run func(context.Context) (*ports.BatchReceipt, error)) (*ports.BatchReceipt, error) {
 	for attempt := 0; ; attempt++ {
-		receipt, err := run()
+		attemptCtx := logger.WithAttempt(ctx, attempt+1)
+		receipt, err := run(attemptCtx)
 		if !isTransientError(err) || attempt >= w.maxRetries {
 			if err != nil && outcomeUnknown(err) {
 				return nil, fmt.Errorf("%w: %w", domain.ErrMigrationOutcomeUnknown, err)
 			}
 			return receipt, err
 		}
-		timer := time.NewTimer(w.backoffBase * time.Duration(1<<attempt))
+		backoff := w.backoffBase * time.Duration(1<<attempt)
+		w.metrics.RecordRetry(operation)
+		slog.WarnContext(attemptCtx, "batch chunk retry scheduled", "event", "batch.chunk.retry",
+			"status", "retrying", "batch_number", batchNumber, "backoff_ms", backoff.Milliseconds())
+		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

@@ -10,6 +10,7 @@ import (
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 type ConnectionTester struct{}
@@ -22,7 +23,7 @@ func NewConnectionTester() *ConnectionTester {
 
 func (t *ConnectionTester) Test(ctx context.Context, database domain.Database) error {
 	// First attempt: try connecting directly to the target database
-	db, err := gorm.Open(mysql.Open(buildDSN(database)), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(buildDSN(database)), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err == nil {
 		sqlDB, dbErr := db.DB()
 		if dbErr == nil {
@@ -39,7 +40,7 @@ func (t *ConnectionTester) Test(ctx context.Context, database domain.Database) e
 	}
 
 	// Verify connection to the new database
-	verifyDB, err := gorm.Open(mysql.Open(buildDSN(database)), &gorm.Config{})
+	verifyDB, err := gorm.Open(mysql.Open(buildDSN(database)), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err != nil {
 		return fmt.Errorf("open MySQL connection: %w", err)
 	}
@@ -95,7 +96,7 @@ func tryCreateDatabaseWithCredentials(ctx context.Context, host string, port uin
 		ParseTime: true,
 	}
 
-	serverDB, err := gorm.Open(mysql.Open(config.FormatDSN()), &gorm.Config{})
+	serverDB, err := gorm.Open(mysql.Open(config.FormatDSN()), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ func tryCreateAndGrantWithRoot(ctx context.Context, host string, port uint, root
 		ParseTime: true,
 	}
 
-	serverDB, err := gorm.Open(mysql.Open(config.FormatDSN()), &gorm.Config{})
+	serverDB, err := gorm.Open(mysql.Open(config.FormatDSN()), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err != nil {
 		return err
 	}

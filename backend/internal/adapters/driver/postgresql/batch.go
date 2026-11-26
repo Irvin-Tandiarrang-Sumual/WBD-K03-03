@@ -16,7 +16,7 @@ func (r *ExecutorRepository) PrepareBatch(ctx context.Context, db domain.Databas
 		return 0, err
 	}
 	var total int64
-	err = target.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = observedTransaction(ctx, target, db.ID, "batch.prepare", 0, func(tx *gorm.DB) error {
 		if err := ensureBatchStorage(tx); err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ func (r *ExecutorRepository) ExecuteBatchChunk(ctx context.Context, db domain.Da
 		return nil, err
 	}
 	var receipt *ports.BatchReceipt
-	err = target.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = observedTransaction(ctx, target, db.ID, "batch.chunk", number, func(tx *gorm.DB) error {
 		var applyErr error
 		receipt, applyErr = applyBatchChunk(tx, batch, number, revert)
 		return applyErr

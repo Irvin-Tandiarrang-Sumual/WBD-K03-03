@@ -11,7 +11,7 @@ var (
 			Namespace: "migration",
 			Subsystem: "queue",
 			Name:      "jobs",
-			Help:      "Current number of migration jobs in queue by status (waiting, running).",
+			Help:      "Number of durable migration jobs by status.",
 		},
 		[]string{"status"},
 	)
@@ -108,13 +108,12 @@ var (
 		[]string{"dialect"},
 	)
 
-	DBPoolWaitDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	DBPoolWaitDuration = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "db",
 			Subsystem: "pool",
 			Name:      "wait_duration_seconds",
-			Help:      "Total time waited for a new connection from the pool.",
-			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.5, 1, 2.5},
+			Help:      "Cumulative connection wait time across currently open pools.",
 		},
 		[]string{"dialect"},
 	)

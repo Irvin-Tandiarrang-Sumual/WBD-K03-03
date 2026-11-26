@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,7 +19,12 @@ import (
 )
 
 func Run() {
-	slog.SetDefault(logger.NewJSONLogger(os.Stdout, slog.LevelInfo))
+	logOutput, closeLog, err := applicationLogOutput(os.Getenv("APP_LOG_PATH"))
+	slog.SetDefault(logger.NewJSONLogger(logOutput, slog.LevelInfo))
+	if err != nil {
+		slog.Warn("failed to open application log file", "event", "logging.file.unavailable")
+	}
+	defer closeLog()
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -61,6 +67,17 @@ func Run() {
 	}
 }
 
+func applicationLogOutput(path string) (io.Writer, func(), error) {
+	if path == "" {
+		return os.Stdout, func() {}, nil
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		return os.Stdout, func() {}, err
+	}
+	return io.MultiWriter(os.Stdout, file), func() { _ = file.Close() }, nil
+}
+
 type application struct {
 	config      *config.Config
 	engine      *gin.Engine
@@ -100,7 +117,7 @@ func buildApplication(configuration *config.Config) (*application, error) {
 		configuration.Server.FrontendOrigin,
 	)
 
-	handlers := buildHandlers(configuration, services, systemDatabase)
+	handlers := buildHandlers(configuration, services, systemDatabase, targetDatabaseInfrastructure.poolManager)
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))

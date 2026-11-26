@@ -145,8 +145,6 @@ func (q *Queue) runJob(conn *gorm.DB, job model.MigrationJob) error {
 		return err
 	}
 	metrics.QueueWaitDuration.Observe(time.Since(job.CreatedAt).Seconds())
-	metrics.QueueJobs.WithLabelValues(jobRunning).Inc()
-	defer metrics.QueueJobs.WithLabelValues(jobRunning).Dec()
 	taskCtx, cancel := context.WithTimeout(context.Background(), q.timeout)
 	defer cancel()
 	return finishJob(conn, job, q.handler(taskCtx, task))

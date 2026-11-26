@@ -5,8 +5,14 @@ import (
 	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func Logger() gin.HandlerFunc {
@@ -25,6 +31,12 @@ func Logger() gin.HandlerFunc {
 		c.Set("correlation_id", correlationID)
 
 		ctx := logger.WithCorrelationID(c.Request.Context(), correlationID)
+		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(c.Request.Header))
+		ctx, span := telemetry.Tracer("http").Start(ctx, c.Request.Method+" "+c.FullPath(),
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attribute.String("http.route", c.FullPath())),
+		)
+		defer span.End()
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
@@ -44,14 +56,17 @@ func Logger() gin.HandlerFunc {
 
 		latency := time.Since(start)
 		statusCode := c.Writer.Status()
+		span.SetAttributes(attribute.Int("http.response.status_code", statusCode))
+		if statusCode >= 500 {
+			span.SetStatus(codes.Error, "HTTP request failed")
+		}
 
 		attrs := []slog.Attr{
 			slog.String("event", "http.request"),
-			slog.String("correlation_id", correlationID),
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),
 			slog.Int("status_code", statusCode),
-			slog.Float64("latency_ms", float64(latency.Nanoseconds()) / 1e6),
+			slog.Float64("latency_ms", float64(latency.Nanoseconds())/1e6),
 			slog.String("client_ip", c.ClientIP()),
 		}
 

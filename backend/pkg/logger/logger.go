@@ -18,7 +18,40 @@ type contextKey string
 const (
 	correlationIDKey contextKey = "correlation_id"
 	actorKey         contextKey = "actor"
+	executionKey     contextKey = "execution"
+	attemptKey       contextKey = "attempt"
 )
+
+type Execution struct {
+	JobID       uint
+	DraftID     uint
+	ExecutionID uint
+	Operation   string
+}
+
+const CorrelationHeader = "correlation_id"
+
+func WithExecution(ctx context.Context, execution Execution) context.Context {
+	return context.WithValue(ctx, executionKey, execution)
+}
+
+func WithAttempt(ctx context.Context, attempt int) context.Context {
+	return context.WithValue(ctx, attemptKey, attempt)
+}
+
+func ReadTransactionStarted(ctx context.Context, databaseID uint, rollback func() error) func() {
+	slog.InfoContext(ctx, "read transaction started",
+		"event", "sql.transaction.start", "status", "started", "database_id", databaseID)
+	return func() {
+		if err := rollback(); err != nil {
+			slog.WarnContext(ctx, "read transaction rollback could not be confirmed",
+				"event", "sql.transaction.rollback_unconfirmed", "status", "unconfirmed", "database_id", databaseID)
+			return
+		}
+		slog.InfoContext(ctx, "read transaction rolled back",
+			"event", "sql.transaction.rollback", "status", "rolled_back", "database_id", databaseID)
+	}
+}
 
 type Actor struct {
 	UserID    uint   `json:"user_id"`
@@ -85,6 +118,12 @@ func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 		if actor, ok := ActorFromContext(ctx); ok && actor.UserID != 0 {
 			r.Add("actor", actor)
 		}
+		if execution, ok := ctx.Value(executionKey).(Execution); ok {
+			addExecutionAttrs(&r, execution)
+		}
+		if attempt, ok := ctx.Value(attemptKey).(int); ok {
+			r.Add("attempt", attempt)
+		}
 		span := trace.SpanFromContext(ctx)
 		if sc := span.SpanContext(); sc.IsValid() {
 			r.Add("trace_id", sc.TraceID().String())
@@ -92,6 +131,24 @@ func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 	return h.Handler.Handle(ctx, r)
+}
+
+func addExecutionAttrs(record *slog.Record, execution Execution) {
+	record.Add("job_id", execution.JobID)
+	for _, attr := range []slog.Attr{
+		slog.Uint64("draft_id", uint64(execution.DraftID)),
+		slog.Uint64("execution_id", uint64(execution.ExecutionID)),
+		slog.String("operation", execution.Operation),
+	} {
+		present := false
+		record.Attrs(func(existing slog.Attr) bool {
+			present = existing.Key == attr.Key
+			return !present
+		})
+		if !present {
+			record.AddAttrs(attr)
+		}
+	}
 }
 
 func (h *ContextHandler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -113,6 +170,10 @@ func NewJSONLogger(w io.Writer, level slog.Level) *slog.Logger {
 	jsonHandler := slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			case "error", "raw_error", "cursor", "last_cursor", "cursor_last_id":
+				return slog.String(a.Key, "[redacted]")
+			}
 			if a.Key == slog.TimeKey {
 				if t, ok := a.Value.Any().(time.Time); ok {
 					return slog.String(slog.TimeKey, t.UTC().Format(time.RFC3339Nano))

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 )
 
 type ExecutorRepository struct {
@@ -156,7 +157,7 @@ func (r *ExecutorRepository) query(ctx context.Context, database domain.Database
 	if tx.Error != nil {
 		return nil, fmt.Errorf("begin transaction: %w", tx.Error)
 	}
-	defer tx.Rollback()
+	defer logger.ReadTransactionStarted(ctx, database.ID, func() error { return tx.Rollback().Error })()
 
 	rows, err := tx.Raw(query).Rows()
 	if err != nil {

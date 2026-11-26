@@ -246,7 +246,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(migration_retries_total[1m])) by (operation)",
+          "expr": "sum(increase(migration_retry_total[1m])) by (operation)",
           "legendFormat": "Retries ({{operation}})",
           "refId": "B"
         }
@@ -312,6 +312,55 @@
         }
       ],
       "title": "Database Connection Pool Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "db_pool_wait_duration_seconds",
+          "legendFormat": "{{dialect}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Connection Pool Wait Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum(increase(migration_batch_rows_processed_total[1m])) by (operation)",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Batch Rows Processed (1m window)",
       "type": "timeseries"
     }
   ],

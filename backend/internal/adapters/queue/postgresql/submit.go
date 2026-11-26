@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"strconv"
+	"time"
 
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
+	"go.opentelemetry.io/otel/codes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -22,7 +27,12 @@ func (q *Queue) Submit(ctx context.Context, task ports.ExecutionTask) (string, e
 	if err := q.ctx.Err(); err != nil {
 		return "", err
 	}
-	carrier, err := json.Marshal(task.TraceCarrier)
+	ctx, span := telemetry.Tracer("migration.queue").Start(ctx, "queue.submit")
+	defer span.End()
+	traceCarrier := make(map[string]string, len(task.TraceCarrier))
+	maps.Copy(traceCarrier, task.TraceCarrier)
+	telemetry.Inject(ctx, traceCarrier)
+	carrier, err := json.Marshal(traceCarrier)
 	if err != nil {
 		return "", err
 	}
@@ -34,6 +44,7 @@ func (q *Queue) Submit(ctx context.Context, task ports.ExecutionTask) (string, e
 		return q.saveSubmission(tx, &job)
 	})
 	if err != nil {
+		span.SetStatus(codes.Error, "job submission failed")
 		return "", err
 	}
 	return strconv.FormatUint(uint64(job.ID), 10), nil
@@ -79,7 +90,15 @@ func (q *Queue) saveSubmission(tx *gorm.DB, job *model.MigrationJob) error {
 }
 
 func (q *Queue) checkCapacity(tx *gorm.DB) error {
-	if err := tx.Exec("SELECT pg_advisory_xact_lock(148122, 0)").Error; err != nil {
+	ctx, span := telemetry.Tracer("migration.queue").Start(tx.Statement.Context, "queue.lock")
+	start := time.Now()
+	err := tx.WithContext(ctx).Exec("SELECT pg_advisory_xact_lock(148122, 0)").Error
+	metrics.LockWaitDuration.WithLabelValues("postgresql").Observe(time.Since(start).Seconds())
+	if err != nil {
+		span.SetStatus(codes.Error, "queue lock failed")
+	}
+	span.End()
+	if err != nil {
 		return err
 	}
 	var waiting int64

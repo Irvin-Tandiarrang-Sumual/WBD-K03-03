@@ -5,15 +5,27 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  filelog:
+    include: [/var/log/wbd/app.jsonl]
+    start_at: beginning
 
 processors:
   batch:
     timeout: 1s
     send_batch_size: 256
+  resource:
+    attributes:
+      - key: service.name
+        value: wbd-backend
+        action: upsert
 
 exporters:
-  debug:
-    verbosity: detailed
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
   prometheus:
     endpoint: 0.0.0.0:8889
     namespace: migration
@@ -23,11 +35,15 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [otlp/jaeger]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug, prometheus]
+      exporters: [prometheus]
+    logs:
+      receivers: [filelog]
+      processors: [resource, batch]
+      exporters: [otlphttp/loki]
   telemetry:
     logs:
       level: info

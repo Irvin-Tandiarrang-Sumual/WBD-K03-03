@@ -3,6 +3,7 @@ package draft
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -153,5 +154,13 @@ func (w *ExecutionWorker) finishExecution(ctx context.Context, task ports.Execut
 	defer cancel()
 	plan.audit.MigratedAt = time.Now()
 	captureAppliedSnapshot(finishCtx, w.databaseDriver, db, plan.audit)
-	return w.migrationRepo.FinishDraft(finishCtx, task.DraftID, plan.audit, plan.head, plan.parent, plan.forward)
+	if err := w.migrationRepo.FinishDraft(finishCtx, task.DraftID, plan.audit, plan.head, plan.parent, plan.forward); err != nil {
+		return err
+	}
+	slog.InfoContext(finishCtx, "migration history recorded",
+		"event", "migration.history.recorded", "status", plan.audit.Status,
+		"database_id", db.ID, "migration_id", plan.audit.ID,
+		"version", plan.audit.Version, "action", draft.Operation, "review_round", draft.CurrentRound,
+	)
+	return nil
 }

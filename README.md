@@ -88,6 +88,40 @@ docker compose down -v
 
 ---
 
+## Observability
+
+From the repository root, start the application and observability stack together. Set `OBSERVABILITY_CONFIG_DIR=./deploy/observability` and use backend port `8080` for the default Prometheus target.
+
+```bash
+export OBSERVABILITY_CONFIG_DIR=./deploy/observability
+docker compose -f docker-compose.yml -f deploy/observability/docker-compose.yaml -f deploy/observability/app.override.yaml up --build -d
+```
+
+In PowerShell, set the variable with `$env:OBSERVABILITY_CONFIG_DIR = './deploy/observability'`. Open Grafana at `http://localhost:3001` to view the migration dashboard. In Explore, use Loki with `{service_name="wbd-backend"} | json` to find application logs and follow a trace ID into Jaeger. Jaeger is also available at `http://localhost:16686`, and Prometheus at `http://localhost:9090`.
+
+The backend writes JSON to stdout and copies it to a shared volume when `APP_LOG_PATH` is set. The Collector forwards those records to Loki and sends application traces to Jaeger. SQL audit records contain the operation and execution metadata while redacting the statement contents and parameter values.
+
+An observed PostgreSQL demo run processed 20 rows in three batches. This excerpt from Loki is for the last batch.
+
+```json
+{
+  "event": "sql.batch.chunk.complete",
+  "status": "success",
+  "correlation_id": "wbd-demo-logging-1795736006689804900-execute",
+  "trace_id": "2d871c5c8a4bf49c87f479caa88d2dcf",
+  "span_id": "5deeb60f818c6532",
+  "job_id": 1,
+  "batch_number": 3,
+  "attempt": 1,
+  "rows": 6,
+  "query": "UPDATE [redacted]"
+}
+```
+
+The same trace ID in Jaeger contained the execute request, `queue.submit`, `queue.lock`, `worker.execute_task`, `db.batch.prepare`, and three `db.batch.chunk` spans. Prometheus reported `migration_queue_jobs{status="done"} = 1`, `migration_batch_rows_processed_total{operation="execute"} = 20`, and `db_pool_connections_idle{dialect="postgresql"} = 1`.
+
+---
+
 ## API Endpoints
 
 PostgreSQL batch migrations support a single `UPDATE` with a single-column integer primary key as its batch column. End SQL up and SQL down with a predicate such as `AND id BETWEEN ? AND ?` or `WHERE id BETWEEN ? AND ?`. The worker binds the exact keys for each batch and stores commit evidence alongside the target changes. Revert uses the approved SQL down in reverse batch order and limits it to keys actually changed by SQL up.

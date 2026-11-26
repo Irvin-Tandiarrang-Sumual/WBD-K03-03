@@ -92,7 +92,7 @@ func TestLogger_IncomingRequestWithCorrelationID_PreservesHeader(t *testing.T) {
 	}
 }
 
-func TestLogger_RequestWithInternalError_LogsAtErrorLevelWithRawError(t *testing.T) {
+func TestLogger_RequestWithInternalError_LogsAtErrorLevelAndRedactsError(t *testing.T) {
 	// Arrange
 	gin.SetMode(gin.TestMode)
 	var logBuf bytes.Buffer
@@ -130,7 +130,7 @@ func TestLogger_RequestWithInternalError_LogsAtErrorLevelWithRawError(t *testing
 	if logEntry["status_code"] != float64(500) {
 		t.Fatalf("expected status_code 500, got %v", logEntry["status_code"])
 	}
-	if logEntry["raw_error"] != "unhandled database failure: pq connection timeout" {
-		t.Fatalf("expected raw_error in log, got %v", logEntry["raw_error"])
+	if logEntry["raw_error"] != "[redacted]" {
+		t.Fatalf("expected redacted error in log, got %v", logEntry["raw_error"])
 	}
 }

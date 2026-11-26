@@ -72,10 +72,15 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 	}
 
 	ctx = telemetry.Extract(ctx, task.TraceCarrier)
+	ctx = logger.WithCorrelationID(ctx, task.TraceCarrier[logger.CorrelationHeader])
+	ctx = logger.WithExecution(ctx, logger.Execution{
+		JobID: task.JobID, DraftID: task.DraftID, ExecutionID: task.ExecutionID, Operation: task.Operation,
+	})
 	tr := telemetry.Tracer("migration.worker")
 	ctx, span := tr.Start(ctx, "worker.execute_task",
 		trace.WithAttributes(
 			attribute.Int("migration.draft_id", int(task.DraftID)),
+			attribute.Int("migration.job_id", int(task.JobID)),
 			attribute.Int("migration.database_id", int(task.DatabaseID)),
 			attribute.Int("migration.execution_id", int(task.ExecutionID)),
 			attribute.String("migration.operation", task.Operation),
@@ -91,8 +96,7 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 		duration := time.Since(start).Seconds()
 		if err != nil {
 			w.metrics.RecordExecution(op, ports.MetricStatusFailed, duration)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			span.SetStatus(codes.Error, "migration execution failed")
 		} else {
 			w.metrics.RecordExecution(op, ports.MetricStatusSuccess, duration)
 			span.SetStatus(codes.Ok, "success")
@@ -189,7 +193,7 @@ func (w *ExecutionWorker) executeSingleMigrationWithRetry(
 		default:
 		}
 
-		_, cmdErr := w.databaseDriver.ExecuteCommand(ctx, db, draft.SqlUp)
+		_, cmdErr := w.databaseDriver.ExecuteCommand(logger.WithAttempt(ctx, attempt+1), db, draft.SqlUp)
 		if cmdErr == nil {
 			return w.finishExecution(ctx, task, draft, db, plan)
 		}
@@ -203,6 +207,7 @@ func (w *ExecutionWorker) executeSingleMigrationWithRetry(
 		}
 
 		if attempt < w.maxRetries {
+			w.metrics.RecordRetry(task.Operation)
 			backoffDelay := w.backoffBase * time.Duration(1<<attempt)
 			slog.WarnContext(ctx, "transient error during execution, retrying with backoff",
 				"event", "task.execution.retry",
@@ -399,8 +404,7 @@ func (w *ExecutionWorker) executeChunkWithRetry(
 	for attempt := 0; attempt <= w.maxRetries; attempt++ {
 		select {
 		case <-chunkCtx.Done():
-			chunkSpan.RecordError(chunkCtx.Err())
-			chunkSpan.SetStatus(codes.Error, chunkCtx.Err().Error())
+			chunkSpan.SetStatus(codes.Error, "migration execution failed")
 			chunkSpan.End()
 			return 0, nil, chunkCtx.Err()
 		default:
@@ -436,8 +440,7 @@ func (w *ExecutionWorker) executeChunkWithRetry(
 	}
 
 	w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
-	chunkSpan.RecordError(chunkErr)
-	chunkSpan.SetStatus(codes.Error, chunkErr.Error())
+	chunkSpan.SetStatus(codes.Error, "migration execution failed")
 	chunkSpan.End()
 	return 0, nil, chunkErr
 }
@@ -463,8 +466,7 @@ func (w *ExecutionWorker) recordChunkCheckpoint(
 
 	if _, saveErr := w.draftRepo.SaveCheckpoint(ctx, cp); saveErr != nil {
 		w.metrics.RecordBatchChunk(ports.MetricStatusFailed, 0, ports.MetricOpExecute)
-		chunkSpan.RecordError(saveErr)
-		chunkSpan.SetStatus(codes.Error, saveErr.Error())
+		chunkSpan.SetStatus(codes.Error, "migration execution failed")
 		chunkSpan.End()
 		return saveErr
 	}

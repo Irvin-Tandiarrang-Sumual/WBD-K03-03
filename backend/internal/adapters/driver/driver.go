@@ -3,19 +3,14 @@ package driver
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"regexp"
-	"time"
 
 	mysqldriver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver/mysql"
 	postgresqldriver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver/postgresql"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
+	mysqlclient "github.com/go-sql-driver/mysql"
 )
 
 type DatabaseConnectionTester struct {
@@ -73,16 +68,18 @@ func (m *DatabasePoolManager) CloseAll() error {
 
 func (m *DatabasePoolManager) CollectMetrics() {
 	if m.postgresqlPoolManager != nil {
-		active, idle, open, _ := m.postgresqlPoolManager.CollectStats()
+		active, idle, open, wait := m.postgresqlPoolManager.CollectStats()
 		metrics.DBPoolConnectionsActive.WithLabelValues("postgresql").Set(float64(active))
 		metrics.DBPoolConnectionsIdle.WithLabelValues("postgresql").Set(float64(idle))
 		metrics.DBPoolConnectionsOpen.WithLabelValues("postgresql").Set(float64(open))
+		metrics.DBPoolWaitDuration.WithLabelValues("postgresql").Set(wait)
 	}
 	if m.mysqlPoolManager != nil {
-		active, idle, open, _ := m.mysqlPoolManager.CollectStats()
+		active, idle, open, wait := m.mysqlPoolManager.CollectStats()
 		metrics.DBPoolConnectionsActive.WithLabelValues("mysql").Set(float64(active))
 		metrics.DBPoolConnectionsIdle.WithLabelValues("mysql").Set(float64(idle))
 		metrics.DBPoolConnectionsOpen.WithLabelValues("mysql").Set(float64(open))
+		metrics.DBPoolWaitDuration.WithLabelValues("mysql").Set(wait)
 	}
 }
 
@@ -99,7 +96,10 @@ var _ ports.DatabaseDriver = (*DatabaseDriver)(nil)
 
 func (d *DatabaseDriver) ValidateMigrationSQL(ctx context.Context, db domain.Database, script string) error {
 	if db.Type == domain.DatabaseTypePostgreSQL {
-		return d.postgresqlExecutor.ValidateMigrationSQL(ctx, db, script)
+		_, err := observeSQL(ctx, db, "validate", script, func(ctx context.Context) (struct{}, int64, error) {
+			return struct{}{}, 0, d.postgresqlExecutor.ValidateMigrationSQL(ctx, db, script)
+		})
+		return err
 	}
 	return nil
 }
@@ -108,14 +108,23 @@ func (d *DatabaseDriver) PrepareBatch(ctx context.Context, db domain.Database, b
 	if db.Type != domain.DatabaseTypePostgreSQL {
 		return 0, domain.ErrInvalidDraftInput
 	}
-	return d.postgresqlExecutor.PrepareBatch(ctx, db, batch)
+	return observeSQL(ctx, db, "batch.prepare", batch.Statement, func(ctx context.Context) (int64, int64, error) {
+		count, err := d.postgresqlExecutor.PrepareBatch(ctx, db, batch)
+		return count, count, err
+	})
 }
 
 func (d *DatabaseDriver) ExecuteBatchChunk(ctx context.Context, db domain.Database, batch ports.BatchExecution, number int, revert bool) (*ports.BatchReceipt, error) {
 	if db.Type != domain.DatabaseTypePostgreSQL {
 		return nil, domain.ErrInvalidDraftInput
 	}
-	return d.postgresqlExecutor.ExecuteBatchChunk(ctx, db, batch, number, revert)
+	return observeSQL(ctx, db, "batch.chunk", batch.Statement, func(ctx context.Context) (*ports.BatchReceipt, int64, error) {
+		receipt, err := d.postgresqlExecutor.ExecuteBatchChunk(ctx, db, batch, number, revert)
+		if err != nil || receipt == nil {
+			return receipt, 0, err
+		}
+		return receipt, receipt.Rows, nil
+	}, "batch_number", number, "revert", revert)
 }
 
 func NewDatabaseDriver(poolManager *DatabasePoolManager) *DatabaseDriver {
@@ -133,153 +142,37 @@ func NewDatabaseDriver(poolManager *DatabasePoolManager) *DatabaseDriver {
 }
 
 func (d *DatabaseDriver) ExecuteQuery(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
-	tr := telemetry.Tracer("db.driver")
-	ctx, span := tr.Start(ctx, "db.query",
-		trace.WithAttributes(
-			attribute.String("db.system", database.Type),
-			attribute.Int("db.id", int(database.ID)),
-		),
-	)
-	defer span.End()
-
-	slog.DebugContext(ctx, "SQL query started",
-		"event", "sql.query.start",
-		"database_id", database.ID,
-		"database_dialect", database.Type,
-		"query", query,
-	)
-
-	start := time.Now()
-	executor, err := d.executorForType(database.Type)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		slog.ErrorContext(ctx, "SQL query failed: unsupported database type",
-			"event", "sql.query.failed",
-			"database_id", database.ID,
-			"database_dialect", database.Type,
-			"duration_ms", float64(time.Since(start).Nanoseconds())/1e6,
-			"error", err.Error(),
-		)
-		return nil, err
-	}
-
-	result, err := executor.ExecuteQuery(ctx, database, query)
-	durationMs := float64(time.Since(start).Nanoseconds()) / 1e6
-
-	if err != nil {
-		sqlState := extractSQLState(err)
-		span.RecordError(err)
-		if sqlState != "" {
-			span.SetAttributes(attribute.String("db.response.status_code", sqlState))
+	return observeSQL(ctx, database, "query", query, func(ctx context.Context) (*ports.DatabaseQueryResult, int64, error) {
+		executor, err := d.executorForType(database.Type)
+		if err != nil {
+			return nil, 0, err
 		}
-		span.SetStatus(codes.Error, err.Error())
-		slog.ErrorContext(ctx, "SQL query failed",
-			"event", "sql.query.failed",
-			"database_id", database.ID,
-			"database_dialect", database.Type,
-			"duration_ms", durationMs,
-			"query", query,
-			"error", err.Error(),
-			"sqlstate", sqlState,
-		)
-		return nil, err
-	}
-
-	rowCount := 0
-	if result != nil {
-		rowCount = len(result.Rows)
-	}
-	span.SetAttributes(attribute.Int("db.rows_returned", rowCount))
-	span.SetStatus(codes.Ok, "success")
-
-	slog.InfoContext(ctx, "SQL query completed",
-		"event", "sql.query.complete",
-		"database_id", database.ID,
-		"database_dialect", database.Type,
-		"duration_ms", durationMs,
-		"query", query,
-		"rows_returned", rowCount,
-	)
-	if d.poolManager != nil {
-		d.poolManager.CollectMetrics()
-	}
-	return result, nil
+		result, err := executor.ExecuteQuery(ctx, database, query)
+		if err != nil || result == nil {
+			return result, 0, err
+		}
+		if d.poolManager != nil {
+			d.poolManager.CollectMetrics()
+		}
+		return result, int64(len(result.Rows)), nil
+	})
 }
 
 func (d *DatabaseDriver) ExecuteCommand(ctx context.Context, database domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-	tr := telemetry.Tracer("db.driver")
-	ctx, span := tr.Start(ctx, "db.command",
-		trace.WithAttributes(
-			attribute.String("db.system", database.Type),
-			attribute.Int("db.id", int(database.ID)),
-		),
-	)
-	defer span.End()
-
-	slog.DebugContext(ctx, "SQL command started",
-		"event", "sql.command.start",
-		"database_id", database.ID,
-		"database_dialect", database.Type,
-		"query", command,
-	)
-
-	start := time.Now()
-	executor, err := d.executorForType(database.Type)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		slog.ErrorContext(ctx, "SQL command failed: unsupported database type",
-			"event", "sql.command.failed",
-			"database_id", database.ID,
-			"database_dialect", database.Type,
-			"duration_ms", float64(time.Since(start).Nanoseconds())/1e6,
-			"error", err.Error(),
-		)
-		return nil, err
-	}
-
-	result, err := executor.ExecuteCommand(ctx, database, command)
-	durationMs := float64(time.Since(start).Nanoseconds()) / 1e6
-
-	if err != nil {
-		sqlState := extractSQLState(err)
-		span.RecordError(err)
-		if sqlState != "" {
-			span.SetAttributes(attribute.String("db.response.status_code", sqlState))
+	return observeSQL(ctx, database, "command", command, func(ctx context.Context) (*ports.DatabaseCommandResult, int64, error) {
+		executor, err := d.executorForType(database.Type)
+		if err != nil {
+			return nil, 0, err
 		}
-		span.SetStatus(codes.Error, err.Error())
-		slog.ErrorContext(ctx, "SQL command failed",
-			"event", "sql.command.failed",
-			"database_id", database.ID,
-			"database_dialect", database.Type,
-			"duration_ms", durationMs,
-			"query", command,
-			"error", err.Error(),
-			"sqlstate", sqlState,
-		)
-		return nil, err
-	}
-
-	rowsAffected := int64(0)
-	if result != nil {
-		rowsAffected = result.RowsAffected
-	}
-	span.SetAttributes(attribute.Int64("db.rows_affected", rowsAffected))
-	span.SetStatus(codes.Ok, "success")
-
-	slog.InfoContext(ctx, "SQL command completed",
-		"event", "sql.command.complete",
-		"database_id", database.ID,
-		"database_dialect", database.Type,
-		"duration_ms", durationMs,
-		"query", command,
-		"rows_affected", rowsAffected,
-	)
-	if d.poolManager != nil {
-		d.poolManager.CollectMetrics()
-	}
-	return result, nil
+		result, err := executor.ExecuteCommand(ctx, database, command)
+		if err != nil || result == nil {
+			return result, 0, err
+		}
+		if d.poolManager != nil {
+			d.poolManager.CollectMetrics()
+		}
+		return result, result.RowsAffected, nil
+	})
 }
 
 var sqlStateRegex = regexp.MustCompile(`(?i)(?:SQLSTATE|code)\s*[:=]?\s*([0-9A-Z]{5})`)
@@ -300,6 +193,10 @@ func extractSQLState(err error) string {
 	if errors.As(err, &sh) {
 		return sh.SQLState()
 	}
+	var myErr *mysqlclient.MySQLError
+	if errors.As(err, &myErr) && myErr.SQLState != [5]byte{} {
+		return string(myErr.SQLState[:])
+	}
 	var ch codeHolder
 	if errors.As(err, &ch) {
 		return ch.Code()
@@ -311,19 +208,37 @@ func extractSQLState(err error) string {
 }
 
 func (d *DatabaseDriver) Explain(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
-	executor, err := d.executorForType(database.Type)
-	if err != nil {
-		return nil, err
-	}
-	return executor.Explain(ctx, database, query)
+	return observeSQL(ctx, database, "explain", query, func(ctx context.Context) (*ports.DatabaseQueryResult, int64, error) {
+		executor, err := d.executorForType(database.Type)
+		if err != nil {
+			return nil, 0, err
+		}
+		result, err := executor.Explain(ctx, database, query)
+		if err != nil || result == nil {
+			return result, 0, err
+		}
+		if d.poolManager != nil {
+			d.poolManager.CollectMetrics()
+		}
+		return result, int64(len(result.Rows)), nil
+	})
 }
 
 func (d *DatabaseDriver) ExplainAnalyze(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
-	executor, err := d.executorForType(database.Type)
-	if err != nil {
-		return nil, err
-	}
-	return executor.ExplainAnalyze(ctx, database, query)
+	return observeSQL(ctx, database, "explain_analyze", query, func(ctx context.Context) (*ports.DatabaseQueryResult, int64, error) {
+		executor, err := d.executorForType(database.Type)
+		if err != nil {
+			return nil, 0, err
+		}
+		result, err := executor.ExplainAnalyze(ctx, database, query)
+		if err != nil || result == nil {
+			return result, 0, err
+		}
+		if d.poolManager != nil {
+			d.poolManager.CollectMetrics()
+		}
+		return result, int64(len(result.Rows)), nil
+	})
 }
 
 func (d *DatabaseDriver) GetDatabaseMetadata(ctx context.Context, database domain.Database) (*ports.DatabaseMetadata, error) {

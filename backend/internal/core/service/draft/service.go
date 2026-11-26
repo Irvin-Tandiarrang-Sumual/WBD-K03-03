@@ -12,6 +12,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/sqlutil"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
@@ -806,6 +807,7 @@ func (s *draftService) acquireDatabaseLock(databaseID uint) (*dbLock, error) {
 func submitPersistentTask(ctx context.Context, queue ports.PersistentTaskQueue, draft *domain.Draft, operation string, userID uint) (string, error) {
 	carrier := make(map[string]string)
 	telemetry.Inject(ctx, carrier)
+	carrier[logger.CorrelationHeader] = logger.CorrelationIDFromContext(ctx)
 	return queue.Submit(ctx, ports.ExecutionTask{
 		DraftID: draft.ID, DatabaseID: draft.DatabaseID, UserID: userID,
 		Operation: operation, TraceCarrier: carrier,
@@ -848,6 +850,7 @@ func (s *draftService) dispatchExecutionTask(
 	if s.taskQueue != nil {
 		carrier := make(map[string]string)
 		telemetry.Inject(ctx, carrier)
+		carrier[logger.CorrelationHeader] = logger.CorrelationIDFromContext(ctx)
 		task := ports.ExecutionTask{
 			DraftID:      draft.ID,
 			DatabaseID:   draft.DatabaseID,

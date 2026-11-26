@@ -1,8 +1,12 @@
 package app
 
 import (
+	"context"
+
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers"
+	queuepostgres "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/postgresql"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +23,7 @@ type applicationHandlers struct {
 	metrics        *handlers.MetricsHandler
 }
 
-func buildHandlers(configuration *config.Config, services *applicationServices, systemDatabase *gorm.DB) *applicationHandlers {
+func buildHandlers(configuration *config.Config, services *applicationServices, systemDatabase *gorm.DB, pools *driver.DatabasePoolManager) *applicationHandlers {
 	return &applicationHandlers{
 		auth:           handlers.NewAuthHandler(services.auth, configuration.Session.CookieSecure, services.user),
 		user:           handlers.NewUserHandler(services.user),
@@ -30,6 +34,9 @@ func buildHandlers(configuration *config.Config, services *applicationServices, 
 		migration:      handlers.NewMigrationHandler(services.migration),
 		draft:          handlers.NewDraftHandler(services.draft),
 		health:         handlers.NewHealthHandler(systemDatabase),
-		metrics:        handlers.NewMetricsHandler(),
+		metrics: handlers.NewMetricsHandler(func(ctx context.Context) error {
+			pools.CollectMetrics()
+			return queuepostgres.CollectMetrics(ctx, systemDatabase)
+		}),
 	}
 }
