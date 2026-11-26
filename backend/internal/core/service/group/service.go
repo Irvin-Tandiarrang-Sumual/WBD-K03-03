@@ -119,9 +119,7 @@ func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.Up
 		}
 
 		if !isMember {
-			if err := s.userGroups.AddUser(ctx, id, *input.LeaderID); err != nil {
-				return domain.Group{}, err
-			}
+			return domain.Group{}, domain.ErrLeaderMustBeGroupMember
 		}
 
 		current.LeaderID = *input.LeaderID
