@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestMaskDSN_URLFormatWithPassword_MasksPassword(t *testing.T) {
@@ -117,5 +118,44 @@ func TestNewJSONLogger_ContextWithCorrelationAndActor_OutputsStructuredJSON(t *t
 	}
 	if actor["session_id"] != "sess_***1234" {
 		t.Fatalf("expected masked session_id 'sess_***1234', got %v", actor["session_id"])
+	}
+}
+
+func TestNewJSONLogger_ContextWithActiveSpan_IncludesTraceAndSpanID(t *testing.T) {
+	// Arrange
+	var buf bytes.Buffer
+	log := logger.NewJSONLogger(&buf, slog.LevelInfo)
+
+	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	if err != nil {
+		t.Fatalf("failed to parse trace ID: %v", err)
+	}
+	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
+	if err != nil {
+		t.Fatalf("failed to parse span ID: %v", err)
+	}
+
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), sc)
+
+	// Act
+	log.InfoContext(ctx, "worker processing task")
+
+	// Assert
+	output := buf.String()
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("expected valid JSON output, got error: %v, raw: %s", err, output)
+	}
+
+	if parsed["trace_id"] != "4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Errorf("expected trace_id 4bf92f3577b34da6a3ce929d0e0e4736, got %v", parsed["trace_id"])
+	}
+	if parsed["span_id"] != "00f067aa0ba902b7" {
+		t.Errorf("expected span_id 00f067aa0ba902b7, got %v", parsed["span_id"])
 	}
 }

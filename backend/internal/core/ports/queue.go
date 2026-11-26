@@ -1,13 +1,18 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type ExecutionTask struct {
-	DraftID     uint
-	DatabaseID  uint
-	ExecutionID uint
-	UserID      uint
-	Operation   string
+	DraftID      uint
+	DatabaseID   uint
+	ExecutionID  uint
+	UserID       uint
+	Operation    string
+	EnqueuedAt   time.Time
+	TraceCarrier map[string]string
 }
 
 type TaskQueue interface {

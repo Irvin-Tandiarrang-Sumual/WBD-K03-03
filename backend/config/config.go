@@ -6,11 +6,18 @@ import (
 )
 
 type Config struct {
-	Database DBConfig
-	Server   ServerConfig
-	Security SecurityConfig
-	Session  SessionConfig
-	Worker   WorkerConfig
+	Database  DBConfig
+	Server    ServerConfig
+	Security  SecurityConfig
+	Session   SessionConfig
+	Worker    WorkerConfig
+	Telemetry TelemetryConfig
+}
+
+type TelemetryConfig struct {
+	ServiceName string
+	Exporter    string
+	Endpoint    string
 }
 
 type WorkerConfig struct {
@@ -70,6 +77,12 @@ func LoadConfig() (*Config, error) {
 		Worker: WorkerConfig{
 			Count:         getEnvAsIntValue("MIGRATION_WORKER_COUNT", 5),
 			QueueCapacity: getEnvAsIntValue("MIGRATION_QUEUE_CAPACITY", 100),
+		},
+
+		Telemetry: TelemetryConfig{
+			ServiceName: getEnv("OTEL_SERVICE_NAME", "migration-service"),
+			Exporter:    getEnv("OTEL_TRACES_EXPORTER", "console"),
+			Endpoint:    getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
 		},
 	}
 

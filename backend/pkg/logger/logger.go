@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type contextKey string
@@ -83,6 +84,11 @@ func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 		if actor, ok := ActorFromContext(ctx); ok && actor.UserID != 0 {
 			r.Add("actor", actor)
+		}
+		span := trace.SpanFromContext(ctx)
+		if sc := span.SpanContext(); sc.IsValid() {
+			r.Add("trace_id", sc.TraceID().String())
+			r.Add("span_id", sc.SpanID().String())
 		}
 	}
 	return h.Handler.Handle(ctx, r)

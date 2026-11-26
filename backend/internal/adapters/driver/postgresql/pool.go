@@ -80,6 +80,21 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*gorm.
 	return pool, nil
 }
 
+func (m *PoolManager) CollectStats() (active int, idle int, open int, waitSec float64) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, p := range m.pools {
+		if sqlDB, err := p.DB(); err == nil {
+			st := sqlDB.Stats()
+			active += st.InUse
+			idle += st.Idle
+			open += st.OpenConnections
+			waitSec += st.WaitDuration.Seconds()
+		}
+	}
+	return
+}
+
 func (m *PoolManager) Invalidate(databaseID uint) error {
 	m.mu.Lock()
 

@@ -14,6 +14,7 @@ import (
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
 	usergroupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user_group"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 	"gorm.io/gorm"
 )
 
@@ -84,6 +85,7 @@ func buildServices(
 	)
 
 	var draftSvc ports.DraftService
+	migrationMetrics := metrics.NewPrometheusMigrationMetrics()
 	worker := draftservice.NewExecutionWorker(
 		draftRepository,
 		databaseRepository,
@@ -95,6 +97,7 @@ func buildServices(
 				draftSvc.UnlockDatabase(databaseID)
 			}
 		},
+		migrationMetrics,
 	)
 
 	taskQueue := channel.NewChannelQueue(

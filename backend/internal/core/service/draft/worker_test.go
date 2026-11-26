@@ -65,7 +65,7 @@ func TestExecutionWorker_Execute_Success_RecordsSuccessMigrationAndMarksDraftApp
 		unlocked = true
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, unlockFn)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, unlockFn, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -135,7 +135,7 @@ func TestExecutionWorker_Execute_TransientError_RetriesAndSucceeds(t *testing.T)
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 	worker.SetRetryPolicy(3, 1*time.Millisecond)
 
 	// Act
@@ -200,7 +200,7 @@ func TestExecutionWorker_Execute_TransientErrorExceedsMaxRetries_RecordsFailMigr
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 	worker.SetRetryPolicy(2, 1*time.Millisecond)
 
 	// Act
@@ -258,7 +258,7 @@ func TestExecutionWorker_Execute_TargetDBUnreachable_RecordsFailMigrationAndMark
 	}
 
 	driver := &testutil.DatabaseDriver{}
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -319,7 +319,7 @@ func TestExecutionWorker_Execute_ContextTimeout_AbortsAndRecordsFailMigration(t 
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 	worker.SetRetryPolicy(0, time.Millisecond)
 
 	// Act
@@ -379,7 +379,7 @@ func TestExecutionWorker_Execute_WorkerPanics_RecoversGracefullyAndMarksDraftFai
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -468,7 +468,7 @@ func TestDraftService_ProcessBatchChunk_AllChunksSucceed_RecordsCheckpointsAndMa
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -551,7 +551,7 @@ func TestDraftService_ProcessBatchChunk_EmptyTargetRows_MarksAppliedWithoutCheck
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -637,7 +637,7 @@ func TestDraftService_ProcessBatchChunk_ChunkFails_RollsBackChunkTransitionsToPa
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, groupRepo, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, groupRepo, nil, nil)
 	worker.SetRetryPolicy(0, time.Millisecond)
 
 	// Act
@@ -738,7 +738,7 @@ func TestDraftService_ResumeBatch_FailsAgain_AdvancesCheckpointKeepsPartialState
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, groupRepo, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, groupRepo, nil, nil)
 	worker.SetRetryPolicy(0, time.Millisecond)
 
 	// Act
@@ -840,7 +840,7 @@ func TestDraftService_ResumeBatch_AllRemainingChunksSucceed_MarksApplied(t *test
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -921,7 +921,7 @@ func TestDraftService_RevertBatch_Success_RevertsCommittedChunksInReverseOrderAn
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -1003,7 +1003,7 @@ func TestDraftService_RevertBatch_FailsMidway_TransitionsToPartiallyRevertedAndI
 		},
 	}
 
-	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, groupRepo, nil)
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, groupRepo, nil, nil)
 
 	// Act
 	err := worker.Execute(ctx, task)
@@ -1024,5 +1024,141 @@ func TestDraftService_RevertBatch_FailsMidway_TransitionsToPartiallyRevertedAndI
 	}
 	if createdRoundApprovals[0].Phase != domain.ApprovalPhaseRevertFailure || createdRoundApprovals[0].Round != 3 {
 		t.Fatalf("unexpected approval phase or round: %+v", createdRoundApprovals[0])
+	}
+}
+
+type mockWorkerMetrics struct {
+	executionCalls []string
+	chunkCalls     []string
+	retryCalls     []string
+}
+
+func (m *mockWorkerMetrics) RecordExecution(op, status string, sec float64) {
+	m.executionCalls = append(m.executionCalls, op+":"+status)
+}
+
+func (m *mockWorkerMetrics) RecordBatchChunk(status string, rows int64, op string) {
+	m.chunkCalls = append(m.chunkCalls, status)
+}
+
+func (m *mockWorkerMetrics) RecordRetry(op string) {
+	m.retryCalls = append(m.retryCalls, op)
+}
+
+func TestExecutionWorker_Execute_WithMetrics_RecordsMetrics(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	task := ports.ExecutionTask{
+		DraftID:     1,
+		DatabaseID:  2,
+		ExecutionID: 10,
+		Operation:   ports.MetricOpExecute,
+	}
+
+	draftObj := &domain.Draft{
+		ID:         1,
+		DatabaseID: 2,
+		Status:     domain.DraftStatusExecuting,
+		SqlUp:      "CREATE TABLE test (id INT);",
+	}
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return draftObj, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			return d, nil
+		},
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindWithCredentialByIDFunc: func(ctx context.Context, id uint) (domain.Database, error) {
+			return domain.Database{ID: 2, Type: "postgresql"}, nil
+		},
+	}
+	driver := &testutil.DatabaseDriver{
+		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
+			return &ports.DatabaseCommandResult{RowsAffected: 1}, nil
+		},
+	}
+	mockMetrics := &mockWorkerMetrics{}
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, nil, nil, mockMetrics)
+
+	// Act
+	err := worker.Execute(ctx, task)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(mockMetrics.executionCalls) != 1 {
+		t.Fatalf("expected 1 execution metric record, got %d", len(mockMetrics.executionCalls))
+	}
+	if mockMetrics.executionCalls[0] != "execute:success" {
+		t.Errorf("expected 'execute:success', got %s", mockMetrics.executionCalls[0])
+	}
+}
+
+func TestExecutionWorker_ProcessBatchChunk_ChunkFails_RecordsQuarantineMetric(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	task := ports.ExecutionTask{
+		DraftID:     1,
+		DatabaseID:  2,
+		ExecutionID: 10,
+		Operation:   ports.MetricOpExecute,
+	}
+
+	draftObj := &domain.Draft{
+		ID:         1,
+		DatabaseID: 2,
+		Status:     domain.DraftStatusExecuting,
+		IsBatch:    true,
+		BatchSize:  100,
+		SqlUp:      "UPDATE users SET active = 1 WHERE id > 0",
+	}
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(ctx context.Context, id uint) (*domain.Draft, error) {
+			return draftObj, nil
+		},
+		UpdateFunc: func(ctx context.Context, d *domain.Draft) (*domain.Draft, error) {
+			return d, nil
+		},
+		SaveCheckpointFunc: func(ctx context.Context, cp *domain.DraftCheckpoint) (*domain.DraftCheckpoint, error) {
+			return cp, nil
+		},
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindWithCredentialByIDFunc: func(ctx context.Context, id uint) (domain.Database, error) {
+			return domain.Database{ID: 2, Type: "postgresql"}, nil
+		},
+	}
+	driver := &testutil.DatabaseDriver{
+		ExecuteQueryFunc: func(ctx context.Context, db domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+			return &ports.DatabaseQueryResult{Rows: []map[string]any{{"count": int64(100)}}}, nil
+		},
+		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
+			return nil, errors.New("deadlock detected")
+		},
+	}
+	mockMetrics := &mockWorkerMetrics{}
+	worker := draft.NewExecutionWorker(draftRepo, dbRepo, nil, driver, nil, nil, mockMetrics)
+	worker.SetRetryPolicy(0, 0)
+
+	// Act
+	err := worker.Execute(ctx, task)
+
+	// Assert
+	if err == nil {
+		t.Fatalf("expected error from failed chunk, got nil")
+	}
+
+	quarantinedFound := false
+	for _, call := range mockMetrics.chunkCalls {
+		if call == ports.MetricStatusQuarantined {
+			quarantinedFound = true
+			break
+		}
+	}
+	if !quarantinedFound {
+		t.Errorf("expected %q chunk metric to be recorded, got: %v", ports.MetricStatusQuarantined, mockMetrics.chunkCalls)
 	}
 }

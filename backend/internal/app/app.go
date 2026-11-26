@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	httpmiddleware "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/telemetry"
 	"github.com/gin-gonic/gin"
 
 	_ "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/docs"
@@ -18,7 +20,28 @@ import (
 func Run() {
 	slog.SetDefault(logger.NewJSONLogger(os.Stdout, slog.LevelInfo))
 
-	application, err := buildApplication()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		slog.Error("failed to load configuration", "error", err.Error())
+		os.Exit(1)
+	}
+
+	shutdownTracer, err := telemetry.InitTracer(context.Background(), telemetry.Config{
+		ServiceName: cfg.Telemetry.ServiceName,
+		Exporter:    cfg.Telemetry.Exporter,
+		Endpoint:    cfg.Telemetry.Endpoint,
+	})
+	if err != nil {
+		slog.Warn("failed to initialize tracer provider", "error", err.Error())
+	} else if shutdownTracer != nil {
+		defer func() {
+			if err := shutdownTracer(context.Background()); err != nil {
+				slog.Error("failed to shutdown tracer provider", "error", err.Error())
+			}
+		}()
+	}
+
+	application, err := buildApplication(cfg)
 	if err != nil {
 		slog.Error("failed to build application", "error", err.Error())
 		os.Exit(1)
@@ -50,11 +73,7 @@ func (a *application) close() {
 	}
 }
 
-func buildApplication() (*application, error) {
-	configuration, err := config.LoadConfig()
-	if err != nil {
-		return nil, err
-	}
+func buildApplication(configuration *config.Config) (*application, error) {
 
 	systemDatabase, closeSystemDatabase, err := buildSystemDatabase(configuration)
 	if err != nil {
@@ -90,12 +109,14 @@ func buildApplication() (*application, error) {
 			"status":  "ok",
 			"swagger": "/swagger/index.html",
 			"health":  "/health",
+			"metrics": "/metrics",
 		})
 	})
 	engine.GET("/swagger", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "/swagger/index.html")
 	})
 	engine.GET("/health", handlers.health.Check)
+	engine.GET("/metrics", handlers.metrics.GetMetrics)
 	router.SetupRouter(
 		engine,
 		middlewares.authMiddleware,
