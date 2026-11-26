@@ -10,7 +10,7 @@ Web-based database management platform to dynamically manage database connection
 
 ## Tech Stack
 
-- **Backend**: Go 1.23, Gin Web Framework, GORM, PostgreSQL (`pgx`), MySQL (`go-sql-driver/mysql`), Swagger/OpenAPI.
+- **Backend**: Go 1.25.5, Gin Web Framework, GORM, PostgreSQL (`pgx`), MySQL (`go-sql-driver/mysql`), Swagger/OpenAPI.
 - **Frontend**: React 19, React Router v7 (SPA Mode), Vite, Tailwind CSS, TypeScript.
 - **Database Storage**:
   - `internal_db`: PostgreSQL 15 (platform metadata, users, groups, and migration history).
@@ -49,10 +49,10 @@ Wait until all containers are healthy. Access the services at:
 
 | Username | Password | Role | Group & Access Level | Testing Scenario |
 |---|---|---|---|---|
-| `admin` | `admin123` | **Admin** | `admin` (`view_edit`) | Full access: user management, group RBAC, database connections, and direct execution. |
+| `admin` | `admin123` | **Admin** | `admin` (`view_edit`) | User management, group RBAC, database connections, and execution of approved drafts. |
 | `leader` | `leader123` | **User** | `engineering` (Leader) | Voting rights for migration proposals (engineering group consensus). |
 | `user` | `user123` | **User** | `engineering` (Member) | Regular developer: submit drafts and query team databases. |
-| `leader_qa` | `leaderqa123` | **User** | `qa-team` (Leader) | Second voting leader for multi-group consensus validation. |
+| `leader_qa` | `qa123` | **User** | `qa-team` (Leader) | Second voting leader for multi-group consensus validation. |
 | `auditor_lead` | `auditor123` | **User** | `auditors` (Leader) | `view_only` access (read & explain queries, restricted from schema edits). |
 
 ### 5. Demo Target Databases
@@ -121,6 +121,43 @@ An observed PostgreSQL demo run processed 20 rows in three batches. This excerpt
 The same trace ID in Jaeger contained the execute request, `queue.submit`, `queue.lock`, `worker.execute_task`, `db.batch.prepare`, and three `db.batch.chunk` spans. Prometheus reported `migration_queue_jobs{status="done"} = 1`, `migration_batch_rows_processed_total{operation="execute"} = 20`, and `db_pool_connections_idle{dialect="postgresql"} = 1`.
 
 ---
+
+## Performance Testing
+
+Run these tests against a freshly seeded local demo stack. The script creates and approves its own drafts using the demo accounts. Run the stress test before the large dataset benchmark so both measurements use an otherwise idle queue.
+
+```bash
+k6 run -e BASE_URL=http://localhost:8080 backend/test/stress/migrations.js
+```
+
+Each phase lasts 14 seconds. Two virtual users establish the baseline, the peak ramps to 12, and recovery brings the load back to two. At each level k6 submits three approved drafts together, two for one PostgreSQL database and one for another. It retries expected HTTP 409 responses and counts a job as complete when its draft reaches `applied`. The thresholds are API p95 below 500 ms, unexpected errors below 1%, and three completed jobs per phase.
+
+### Observed k6 run
+
+The API figures cover database-list requests and job submissions. Request throughput uses the 14-second phase window. Job throughput uses the time from submission to the last observed completion in each group. Mean queue wait and worker duration come from application metrics.
+
+| Phase | API p50 | API p95 | Requests/s | Unexpected errors | Mean queue wait | Mean worker duration | Jobs completed/s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline, 2 VUs | 21.90 ms | 41.48 ms | 11.64 | 0% | 53.62 ms | 217.58 ms | 3.51 |
+| Peak, ramp to 12 VUs | 14.78 ms | 41.20 ms | 60.14 | 0% | 53.47 ms | 230.02 ms | 2.77 |
+| Recovery, ramp to 2 VUs | 14.99 ms | 43.72 ms | 23.07 | 0% | 58.65 ms | 188.50 ms | 4.97 |
+
+API p95 stayed within 3 ms across phases. At peak, request throughput was about five times the baseline and jobs took slightly longer. Recovery includes the ramp down, which accounts for some of the extra requests compared with the baseline. All nine jobs finished, with five expected HTTP 409 responses before retry. Each group contains only three jobs, so job throughput describes this run.
+
+### Large batch migration benchmark
+
+On a fresh demo database, load the dataset and time the full-table UPDATE. The script rolls back that UPDATE so the batch uses the same rows and starting values.
+
+```bash
+docker compose exec -T demo_postgres psql -U demo_user -d db1_pg -v rows=200000 < backend/test/stress/batch_dataset.sql
+k6 run -e BASE_URL=http://localhost:8080 -e BENCHMARK_ROWS=200000 backend/test/stress/migrations.js
+```
+
+On Docker Desktop with 12 available CPUs and about 7.5 GiB of RAM, the full-table UPDATE of 200,000 rows took **5.46 s**. The worker processed the same rows in **20 committed batches** of 10,000 in **22.82 s**. A database query confirmed that all 200,000 rows ended with `score = 1`. Batching took longer in this run and recorded progress after every commit. The plain UPDATE measurement excludes commit. A separate 700,000-row run also finished, with a 19.65 s full-table UPDATE and 147.05 s from queue submission to job completion.
+
+## Static Analysis
+
+The [CodeQL workflow](.github/workflows/codeql.yml) scans Go and JavaScript/TypeScript when GitHub Actions runs it on `main` or `develop`, their pull requests, or via manual dispatch. CodeQL scan evidence is pending the first run on a repository with code scanning enabled. Use the Actions run and Security alerts to record the rule, severity, location, impact, and decision for each finding. For fixes, record the commit and the rerun result.
 
 ## API Endpoints
 
