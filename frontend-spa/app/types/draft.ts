@@ -3,12 +3,20 @@ export type DraftStatus =
   | 'approved'
   | 'applied'
   | 'executing'
+  | 'partial'
   | 'partially_reverted'
   | 'rejected'
   | 'failed'
   | 'invalidated';
 
-export type LeaderVoteStatus = 'pending' | 'approved' | 'rejected';
+export type LeaderVoteStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'resume'
+  | 'revert'
+  | 'yes'
+  | 'no';
 
 export interface LeaderConsensusVote {
   leaderId: string;
@@ -18,6 +26,8 @@ export interface LeaderConsensusVote {
   votedAt?: string;
   vetoReason?: string;
   reason?: string;
+  round?: number;
+  phase?: string;
 }
 
 export type ConsensusVote = LeaderConsensusVote;
@@ -49,6 +59,8 @@ export interface DraftProposal {
   consensus: LeaderConsensusVote[];
   updatedRelative: string;
   failureMessage?: string;
+  currentRound?: number;
+  recoveryAction?: string;
 }
 
 export interface DraftFormInput {
