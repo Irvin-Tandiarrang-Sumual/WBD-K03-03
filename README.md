@@ -1,6 +1,6 @@
 # Database Management Platform (WBD-K03-03)
 
-Platform manajemen database berbasis web untuk mengelola koneksi database secara dinamis, mengontrol hak akses pengguna berbasis grup (*Role-Based Access Control*), mengeksekusi migrasi skema dengan konsensus persetujuan multi-grup, analisis rencana eksekusi query (*EXPLAIN / EXPLAIN ANALYZE*), serta pemulihan batch DML (*quarantine auto-recovery*).
+Web-based database management platform to dynamically manage database connections, enforce group-based Role-Based Access Control (RBAC), execute schema migrations with multi-group consensus approval, analyze query execution plans (*EXPLAIN / EXPLAIN ANALYZE*), and recover batch DML executions (*quarantine auto-recovery*).
 
 <p align="center">
   <img src="assets/images/oogway-quotes.jpg" alt="Master Oogway" width="250" align="center"/>
@@ -8,141 +8,147 @@ Platform manajemen database berbasis web untuk mengelola koneksi database secara
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Backend**: Go 1.23, Gin Web Framework, GORM, PostgreSQL (`pgx`), MySQL (`go-sql-driver/mysql`), Swagger/OpenAPI.
 - **Frontend**: React 19, React Router v7 (SPA Mode), Vite, Tailwind CSS, TypeScript.
 - **Database Storage**:
-  - `internal_db`: PostgreSQL 15 (metadata platform, user, grup, dan riwayat migrasi).
-  - `demo_postgres`: Engine PostgreSQL 15 (database target: `db1_pg`, `db3_analytics`, `db4_billing`).
-  - `demo_mysql`: Engine MySQL 8.4 (database target: `db2_mysql`).
-- **Infrastruktur**: Docker & Docker Compose.
+  - `internal_db`: PostgreSQL 15 (platform metadata, users, groups, and migration history).
+  - `demo_postgres`: PostgreSQL 15 engine (target databases: `db1_pg`, `db3_analytics`, `db4_billing`).
+  - `demo_mysql`: MySQL 8.4 engine (target database: `db2_mysql`).
+- **Infrastructure**: Docker & Docker Compose.
 
 ---
 
-## Usage
+## Usage Guide
 
-### 1. Prasyarat
+### 1. Prerequisites
 - Docker Engine / Docker Desktop & Docker Compose v2+.
 
-### 2. Konfigurasi Lingkungan & Data Seeding
-Salin file konfigurasi `.env` di root direktori proyek:
+### 2. Environment Configuration & Data Seeding
+Copy the environment template in the project root:
 ```bash
 cp .env.example .env
 ```
-> **Pengaturan Seeding Otomatis di Startup Docker:**
-> Di dalam file `.env`, terdapat variabel `SEED_TEST_DATA`:
-> - `SEED_TEST_DATA=true` *(default)*: Backend akan otomatis menjalankan migrasi skema sekaligus mengisi (*seeding*) data uji coba (user, grup, koneksi database demo, riwayat migrasi, dan draft konsensus).
-> - `SEED_TEST_DATA=false`: Backend hanya akan menjalankan migrasi skema tabel internal tanpa data uji coba awal (database bersih).
+> **Automatic Seeding on Docker Startup:**
+> In `.env`, the `SEED_TEST_DATA` variable controls startup behavior:
+> - `SEED_TEST_DATA=true` *(default)*: Backend automatically runs schema migrations and seeds test data (users, groups, demo database connections, migration history, and consensus drafts).
+> - `SEED_TEST_DATA=false`: Backend only runs internal schema migrations without seeding mock test data (clean database).
 
-### 3. Menjalankan Aplikasi
-Jalankan seluruh service dari direktori root:
+### 3. Running the Application
+Start all services from the root directory:
 ```bash
 docker compose up --build -d
 ```
-Tunggu hingga semua kontainer berstatus *healthy*. Akses service di:
+Wait until all containers are healthy. Access the services at:
 - **Frontend Web Console**: [http://localhost:3000](http://localhost:3000)
 - **Backend API Server**: [http://localhost:8080](http://localhost:8080)
 - **Interactive Swagger Docs**: [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
 
-### 4. Akun Pengujian Bawaan (Seed Data)
+### 4. Default Seed Accounts
 
-| Username | Password | Role | Group & Hak Akses | Deskripsi Skenario Uji |
+| Username | Password | Role | Group & Access Level | Testing Scenario |
 |---|---|---|---|---|
-| `admin` | `admin123` | **Admin** | `admin` (`view_edit`) | Akses penuh: manajemen user, grup, koneksi database, dan eksekusi langsung. |
-| `leader` | `leader123` | **User** | `engineering` (Leader) | Hak voting proposal migrasi (konsensus grup engineering). |
-| `user` | `user123` | **User** | `engineering` (Member) | Pengguna reguler untuk mengajukan draft & query database tim. |
-| `leader_qa` | `leaderqa123` | **User** | `qa-team` (Leader) | Hak voting kedua untuk validasi multi-group consensus. |
-| `auditor_lead` | `auditor123` | **User** | `auditors` (Leader) | Hak akses `view_only` (read & explain query, tidak bisa edit skema). |
+| `admin` | `admin123` | **Admin** | `admin` (`view_edit`) | Full access: user management, group RBAC, database connections, and direct execution. |
+| `leader` | `leader123` | **User** | `engineering` (Leader) | Voting rights for migration proposals (engineering group consensus). |
+| `user` | `user123` | **User** | `engineering` (Member) | Regular developer: submit drafts and query team databases. |
+| `leader_qa` | `leaderqa123` | **User** | `qa-team` (Leader) | Second voting leader for multi-group consensus validation. |
+| `auditor_lead` | `auditor123` | **User** | `auditors` (Leader) | `view_only` access (read & explain queries, restricted from schema edits). |
 
-### 5. Basis Data Target Demo
+### 5. Demo Target Databases
 
-| Database | Engine | Status Awal di Seed | Skenario Pengujian |
+| Database | Engine | Initial Seed State | Testing Scenario |
 |---|---|---|---|
-| `db1_pg` | PostgreSQL | Normal (`v3_applied`) | Riwayat migrasi reversibel (bisa rollback aman). |
-| `db2_mysql` | MySQL | Normal (`v3_applied`) | Migrasi ireversibel (destructive drop column). |
-| `db3_analytics`| PostgreSQL | Post-Rollback (`v1`) | Memiliki pointer `Forward` aktif untuk uji Re-apply / Redo. |
-| `db4_billing` | PostgreSQL | **Quarantined (423)** | Batch DML gagal parsial, siap diuji untuk Resume atau Revert batch. |
+| `db1_pg` | PostgreSQL | Normal (`v3_applied`) | Reversible migration history (eligible for safe rollback). |
+| `db2_mysql` | MySQL | Normal (`v3_applied`) | Irreversible migration (destructive column drop). |
+| `db3_analytics`| PostgreSQL | Post-Rollback (`v1`) | Active `Forward` pointer for Re-apply / Redo testing. |
+| `db4_billing` | PostgreSQL | **Quarantined (423)** | Partial batch DML failure, ready for Resume or Revert batch recovery. |
 
-### 6. Perintah Operasional Penting
+### 6. Key Commands
 
 ```bash
-make migrate        # atau: cd backend && go run ./cmd/migrate
+# Run internal database schema migration
+make migrate        # or: cd backend && go run ./cmd/migrate
 
-make seed           # atau: cd backend && go run ./cmd/seed
+# Re-run data seeding
+make seed           # or: cd backend && go run ./cmd/seed
 
-make test           # atau: cd backend && go test ./...
+# Run backend unit tests
+make test           # or: cd backend && go test ./...
 
+# Run frontend typecheck
 cd frontend-spa && npx tsc --noEmit
 
+# Stop containers
 docker compose down
 
+# Stop containers and wipe database volumes
 docker compose down -v
 ```
 
 ---
 
-## Daftar Endpoint API
+## API Endpoints
 
-Semua endpoint dilindungi cookie sesi (`session=<token>`) dan validasi header CSRF, kecuali `/api/v1/health` dan `/api/v1/auth/login`.
+All protected endpoints require session cookie (`session=<token>`) and CSRF validation headers, except `/api/v1/health` and `/api/v1/auth/login`.
 
-### 1. Autentikasi (`/auth`)
-| Method | Endpoint | Deskripsi |
+### 1. Authentication (`/auth`)
+| Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/v1/auth/login` | Login user, set cookie sesi & token CSRF |
-| `POST` | `/api/v1/auth/logout` | Mengakhiri sesi aktif |
-| `GET` | `/api/v1/auth/me` | Profil pengguna saat ini |
+| `POST` | `/api/v1/auth/login` | User login, set session cookie & CSRF token |
+| `POST` | `/api/v1/auth/logout` | Terminate active user session |
+| `GET` | `/api/v1/auth/me` | Get current user profile |
 
-### 2. Panel Admin (`/admin`)
-| Method | Endpoint | Deskripsi |
+### 2. Admin Panel (`/admin`)
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/admin/users` | List seluruh user (paginated) |
-| `POST` | `/api/v1/admin/users` | Buat user baru |
-| `GET` / `PATCH` / `DELETE` | `/api/v1/admin/users/:id` | Detail, update, atau hapus user |
-| `PATCH` | `/api/v1/admin/users/:id/role` | Ubah role user (`admin` / `user`) |
-| `GET` / `POST` | `/api/v1/admin/groups` | List atau buat access group baru |
-| `GET` / `PATCH` / `DELETE` | `/api/v1/admin/groups/:id` | Detail, update akses database, atau hapus grup |
-| `POST` / `DELETE` | `/api/v1/admin/groups/:id/users/:user_id` | Tambah atau keluarkan user dari grup |
-| `GET` / `POST` | `/api/v1/admin/databases` | List database terdaftar atau daftarkan DB baru |
-| `GET` / `DELETE` | `/api/v1/admin/databases/:id` | Detail atau hapus koneksi database |
+| `GET` | `/api/v1/admin/users` | List all users (paginated) |
+| `POST` | `/api/v1/admin/users` | Create new user |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/admin/users/:id` | Get detail, update, or delete user |
+| `PATCH` | `/api/v1/admin/users/:id/role` | Update user role (`admin` / `user`) |
+| `GET` / `POST` | `/api/v1/admin/groups` | List or create access group |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/admin/groups/:id` | Get detail, update database access, or delete group |
+| `POST` / `DELETE` | `/api/v1/admin/groups/:id/users/:user_id` | Add or remove user from group |
+| `GET` / `POST` | `/api/v1/admin/databases` | List registered databases or register new database |
+| `GET` / `DELETE` | `/api/v1/admin/databases/:id` | Get detail or delete database connection |
 
-### 3. Eksplorasi Database & Query Pengguna (`/me/databases`)
-| Method | Endpoint | Hak Akses | Deskripsi |
+### 3. Database Exploration & Queries (`/me/databases`)
+| Method | Endpoint | Access Level | Description |
 |---|---|---|---|
-| `GET` | `/api/v1/me/databases` | — | Daftar database yang diizinkan untuk user |
-| `GET` | `/api/v1/me/databases/:database_id` | `view_only` | Detail & metadata skema tabel database |
-| `POST` | `/api/v1/me/databases/:database_id/query` | `view_only` | Eksekusi kustom query SQL |
-| `POST` | `/api/v1/me/databases/:database_id/explain` | `view_only` | Analisis query plan (`EXPLAIN`) |
-| `POST` | `/api/v1/me/databases/:database_id/explain-analyze` | `view_only` | Analisis query plan aktual (`EXPLAIN ANALYZE`) |
+| `GET` | `/api/v1/me/databases` | — | List databases accessible to current user |
+| `GET` | `/api/v1/me/databases/:database_id` | `view_only` | Get database detail & table schema metadata |
+| `POST` | `/api/v1/me/databases/:database_id/query` | `view_only` | Execute custom SQL query |
+| `POST` | `/api/v1/me/databases/:database_id/explain` | `view_only` | Analyze query execution plan (`EXPLAIN`) |
+| `POST` | `/api/v1/me/databases/:database_id/explain-analyze` | `view_only` | Analyze actual query execution plan (`EXPLAIN ANALYZE`) |
 
-### 4. Manajemen Migrasi & Draft Konsensus (`/me/databases` & `/me/drafts`)
-| Method | Endpoint | Hak Akses | Deskripsi |
+### 4. Migration Management & Consensus Drafts (`/me/databases` & `/me/drafts`)
+| Method | Endpoint | Access Level | Description |
 |---|---|---|---|
-| `GET` | `/api/v1/me/databases/:database_id/migrations` | `view_only` | Riwayat versi migrasi database |
-| `GET` | `/api/v1/me/databases/:database_id/migrations/:id` | `view_only` | Detail satu versi migrasi |
-| `GET` | `/api/v1/me/databases/:database_id/migrations/compare` | `view_only` | Perbandingan dua versi migrasi (*Schema Diff*) |
-| `POST` | `/api/v1/me/databases/:database_id/migrations` | `view_edit` | Eksekusi langsung migrasi skema |
-| `POST` | `/api/v1/me/databases/:database_id/drafts` | `view_edit` | Ajukan proposal draft migrasi baru |
-| `GET` | `/api/v1/me/databases/:database_id/drafts` | `view_only` | Daftar proposal draft pada database |
-| `POST` | `/api/v1/me/databases/:database_id/rollback-draft` | `view_edit` | Buat draft proposal untuk rollback |
-| `POST` | `/api/v1/me/databases/:database_id/forward-draft` | `view_edit` | Buat draft proposal untuk re-apply / forward |
-| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/vote` | Leader | Berikan suara (*approve* / *reject*) pada proposal draft |
-| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/execute` | `view_edit` | Eksekusi draft yang telah disetujui konsensus |
+| `GET` | `/api/v1/me/databases/:database_id/migrations` | `view_only` | Database migration version history |
+| `GET` | `/api/v1/me/databases/:database_id/migrations/:id` | `view_only` | Get single migration detail |
+| `GET` | `/api/v1/me/databases/:database_id/migrations/compare` | `view_only` | Compare two migration versions (*Schema Diff*) |
+| `POST` | `/api/v1/me/databases/:database_id/migrations` | `view_edit` | Directly execute schema migration |
+| `POST` | `/api/v1/me/databases/:database_id/drafts` | `view_edit` | Submit new migration draft proposal |
+| `GET` | `/api/v1/me/databases/:database_id/drafts` | `view_only` | List draft proposals for database |
+| `POST` | `/api/v1/me/databases/:database_id/rollback-draft` | `view_edit` | Create draft proposal for rollback |
+| `POST` | `/api/v1/me/databases/:database_id/forward-draft` | `view_edit` | Create draft proposal for forward / re-apply |
+| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/vote` | Leader | Vote (*approve* / *reject*) on draft proposal |
+| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/execute` | `view_edit` | Execute approved consensus draft |
 
-### 5. Pemulihan Batch DML & Quarantine Recovery (`/me/drafts`)
-| Method | Endpoint | Hak Akses | Deskripsi |
+### 5. Batch DML Recovery & Quarantine Recovery (`/me/drafts`)
+| Method | Endpoint | Access Level | Description |
 |---|---|---|---|
-| `GET` | `/api/v1/me/drafts/:id` | `view_only` | Ambil detail status draft & isolasi karantina |
-| `POST` | `/api/v1/me/drafts/:id/resume` | `view_edit` | Lanjutkan eksekusi batch DML yang sempat terhenti |
-| `POST` | `/api/v1/me/drafts/:id/revert-batch` | `view_edit` | Batalkan dan pulihkan batch DML yang telah berjalan |
-| `GET` | `/api/v1/me/drafts/:id/progress` | `view_only` | Ambil status progres eksekusi batch saat ini |
-| `GET` | `/api/v1/me/drafts/:id/progress/stream` | `view_only` | Server-Sent Events (SSE) realtime stream progres batch |
+| `GET` | `/api/v1/me/drafts/:id` | `view_only` | Get draft status & quarantine isolation details |
+| `POST` | `/api/v1/me/drafts/:id/resume` | `view_edit` | Resume interrupted batch DML execution |
+| `POST` | `/api/v1/me/drafts/:id/revert-batch` | `view_edit` | Revert and rollback executed batch DML |
+| `GET` | `/api/v1/me/drafts/:id/progress` | `view_only` | Get current batch execution progress |
+| `GET` | `/api/v1/me/drafts/:id/progress/stream` | `view_only` | Server-Sent Events (SSE) real-time stream of batch progress |
 
 ---
 
-## Kontributor
+## Contributors
 
-| NIM | Nama |
+| NIM | Name |
 |---|---|
 | 13524006 | Gabriella Botimada Lubis |
 | 13524030 | Irvin Tandiarrang Sumual |
