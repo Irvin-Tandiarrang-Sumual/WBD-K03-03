@@ -28,6 +28,7 @@ func TestMySQLTarget_GivenUserWithReadOnlyAccess_WhenExecuteSelectQuery_ThenRetu
 	// Create Group with AccessViewOnly
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "mysql-analysts-group",
+		LeaderID: createMigrationLeader(t, stack, "mysql-analysts-group-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewOnly},
 		},
@@ -70,6 +71,7 @@ func TestMySQLTarget_GivenUserWithReadOnlyAccess_WhenExecuteMutatingCommand_Then
 
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "mysql-readonly-enforcement",
+		LeaderID: createMigrationLeader(t, stack, "mysql-readonly-enforcement-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewOnly},
 		},
@@ -107,6 +109,7 @@ func TestMySQLTarget_GivenUserWithReadWriteAccess_WhenExecuteExplain_ThenReturnV
 
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "mysql-devs-group",
+		LeaderID: createMigrationLeader(t, stack, "mysql-devs-group-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewEdit},
 		},
@@ -142,6 +145,7 @@ func TestMySQLTarget_GivenUserWithReadWriteAccess_WhenApplySQLUpMigration_ThenSc
 
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "mysql-migrators-group",
+		LeaderID: createMigrationLeader(t, stack, "mysql-migrators-group-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewEdit},
 		},

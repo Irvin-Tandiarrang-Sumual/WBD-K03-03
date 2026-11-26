@@ -35,7 +35,7 @@ jobs:
   backend-integration-test:
     name: be integration tests
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.base_ref == 'main' || github.base_ref == 'develop'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -48,6 +48,8 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       - name: Run Integration Tests
+        env:
+          REQUIRE_INTEGRATION_CONTAINERS: 'true'
         run: |
           cd backend
           go test -tags=integration -v ./test/integration/... -count=1

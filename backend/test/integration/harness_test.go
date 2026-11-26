@@ -15,6 +15,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/channel"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
@@ -23,6 +24,7 @@ import (
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
 	databasedriverservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_driver"
+	draftservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/draft"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
@@ -155,6 +157,7 @@ func setupTestStack(t *testing.T) *testStack {
 	databaseHandler := handlers.NewDatabaseHandler(databaseService)
 	databaseDriverHandler := handlers.NewDatabaseDriverHandler(databaseDriverService)
 	migrationHandler := handlers.NewMigrationHandler(migrationService)
+	draftHandler := newTestDraftHandler(t, db, databaseRepo, groupRepo, migrationRepo, databaseDriver, userGroupService)
 	healthHandler := handlers.NewHealthHandler(db)
 
 	router.SetupRouter(
@@ -167,6 +170,7 @@ func setupTestStack(t *testing.T) *testStack {
 		databaseHandler,
 		databaseDriverHandler,
 		migrationHandler,
+		draftHandler,
 		healthHandler,
 		sessionService,
 		userService,
@@ -195,44 +199,64 @@ func setupTestStack(t *testing.T) *testStack {
 	}
 }
 
+func newTestDraftHandler(
+	t *testing.T,
+	db *gorm.DB,
+	databaseRepo ports.DatabaseRepository,
+	groupRepo ports.GroupRepository,
+	migrationRepo ports.MigrationRepository,
+	databaseDriver ports.DatabaseDriver,
+	userGroupService ports.UserGroupService,
+) *handlers.DraftHandler {
+	t.Helper()
+	draftRepo := repositories.NewDraftRepository(db)
+	var service ports.DraftService
+	worker := draftservice.NewExecutionWorker(
+		draftRepo, databaseRepo, migrationRepo, databaseDriver, groupRepo,
+		func(databaseID uint) { service.UnlockDatabase(databaseID) },
+		ports.NoopMigrationMetrics{},
+	)
+	queue := channel.NewChannelQueue(worker.Execute, 2, 16, channel.DefaultTaskTimeout)
+	t.Cleanup(queue.Close)
+	service = draftservice.NewDraftService(draftRepo, groupRepo, userGroupService, databaseRepo, queue, migrationRepo, databaseDriver)
+	return handlers.NewDraftHandler(service)
+}
+
 func createAdminUser(t *testing.T, stack *testStack, username, password string) domain.User {
 	t.Helper()
-	hashed, err := hasher.HashPassword(password)
+	return createUserWithOwnGroup(t, stack, username, password, domain.RoleAdmin, "admin_group_"+username)
+}
+
+func createUserWithOwnGroup(t *testing.T, stack *testStack, username, password, role, groupName string) domain.User {
+	t.Helper()
+	user := insertTestUser(t, stack, username, password, role)
+	saveTestGroup(t, stack, groupName, user.ID)
+	return domain.User{ID: user.ID, Username: user.Username, Role: role}
+}
+
+func createTestGroup(t *testing.T, stack *testStack, name string) domain.Group {
+	t.Helper()
+	leader := createMigrationLeader(t, stack, "leader_"+name)
+	return saveTestGroup(t, stack, name, leader.ID)
+}
+
+func saveTestGroup(t *testing.T, stack *testStack, name string, leaderID uint) domain.Group {
+	t.Helper()
+	group, err := stack.groupRepo.Save(context.Background(), domain.Group{Name: name, LeaderID: leaderID})
 	if err != nil {
-		t.Fatalf("failed to hash password: %v", err)
+		t.Fatalf("failed to create group %s: %v", name, err)
 	}
-	adminGroup, err := stack.groupRepo.Save(context.Background(), domain.Group{
-		Name: "admin_group_" + username,
-	})
-	if err != nil {
-		t.Fatalf("failed to create admin group: %v", err)
-	}
-	user := domain.User{
-		Username: username,
-		Password: hashed,
-		Role:     domain.RoleAdmin,
-	}
-	created, err := stack.userRepo.Save(context.Background(), user, []uint{adminGroup.ID})
-	if err != nil {
-		t.Fatalf("failed to create admin user: %v", err)
-	}
-	return created
+	return group
 }
 
 func createRegularUser(t *testing.T, stack *testStack, username, password string, groupIDs []uint) domain.User {
 	t.Helper()
+	if len(groupIDs) == 0 {
+		return createUserWithOwnGroup(t, stack, username, password, domain.RoleUser, "default_group_"+username)
+	}
 	hashed, err := hasher.HashPassword(password)
 	if err != nil {
 		t.Fatalf("failed to hash password: %v", err)
-	}
-	if len(groupIDs) == 0 {
-		defaultGroup, err := stack.groupRepo.Save(context.Background(), domain.Group{
-			Name: "default_group_" + username,
-		})
-		if err != nil {
-			t.Fatalf("failed to create default group: %v", err)
-		}
-		groupIDs = []uint{defaultGroup.ID}
 	}
 	user := domain.User{
 		Username: username,
@@ -345,11 +369,16 @@ func parseResponseBody[T any](t *testing.T, rec *httptest.ResponseRecorder) resp
 
 func createMigrationLeader(t *testing.T, stack *testStack, username string) model.User {
 	t.Helper()
-	hash, err := hasher.HashPassword("password123")
+	return insertTestUser(t, stack, username, "password123", domain.RoleUser)
+}
+
+func insertTestUser(t *testing.T, stack *testStack, username, password, role string) model.User {
+	t.Helper()
+	hash, err := hasher.HashPassword(password)
 	if err != nil {
 		t.Fatal(err)
 	}
-	leader := model.User{Username: username, Password: hash, Role: "user"}
+	leader := model.User{Username: username, Password: hash, Role: role}
 	if err := stack.db.Session(&gorm.Session{SkipHooks: true}).Create(&leader).Error; err != nil {
 		t.Fatal(err)
 	}

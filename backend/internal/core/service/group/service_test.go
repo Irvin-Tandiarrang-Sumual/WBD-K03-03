@@ -431,16 +431,11 @@ func TestCreateGroup_ValidInput_ReturnsCreatedGroup(t *testing.T) {
 			{DatabaseID: 1, AccessType: domain.AccessViewOnly},
 		},
 	}
-	addedLeaderToGroup := false
+	var savedLeaderID uint
 	groupRepo := &testutil.GroupRepository{
-		SaveFunc: func(_ context.Context, _ domain.Group) (domain.Group, error) {
+		SaveFunc: func(_ context.Context, group domain.Group) (domain.Group, error) {
+			savedLeaderID = group.LeaderID
 			return expectedGroup, nil
-		},
-		AddUserFunc: func(_ context.Context, groupID uint, userID uint) error {
-			if groupID == 12 && userID == 10 {
-				addedLeaderToGroup = true
-			}
-			return nil
 		},
 	}
 	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, dbRepo, &testutil.SessionService{})
@@ -459,8 +454,8 @@ func TestCreateGroup_ValidInput_ReturnsCreatedGroup(t *testing.T) {
 	if !reflect.DeepEqual(created, expectedGroup) {
 		t.Fatalf("expected group %+v, got %+v", expectedGroup, created)
 	}
-	if !addedLeaderToGroup {
-		t.Fatalf("expected leader to be added to group membership")
+	if savedLeaderID != input.LeaderID {
+		t.Fatalf("expected saved leader %d, got %d", input.LeaderID, savedLeaderID)
 	}
 }
 

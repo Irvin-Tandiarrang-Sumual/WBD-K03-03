@@ -39,14 +39,22 @@ func TestMain(m *testing.M) {
 	defer cancel()
 
 	// 1. Try spinning up Testcontainers if Docker is available
+	requireContainers := os.Getenv("REQUIRE_INTEGRATION_CONTAINERS") == "true"
 	err := setupTestcontainers(ctx)
 	if err != nil {
 		log.Printf("[TestMain] Testcontainers setup skipped/failed: %v", err)
-		log.Println("[TestMain] Attempting fallback to environment variable DSNs...")
-		setupEnvironmentDSNs()
+		if !requireContainers {
+			log.Println("[TestMain] Attempting fallback to environment variable DSNs...")
+			setupEnvironmentDSNs()
+		}
 	}
 
-	code := m.Run()
+	code := 1
+	if err != nil && requireContainers {
+		log.Printf("[TestMain] Required testcontainers could not start: %v", err)
+	} else {
+		code = m.Run()
+	}
 
 	// 2. Teardown Testcontainers
 	teardownCtx, teardownCancel := context.WithTimeout(context.Background(), 30*time.Second)

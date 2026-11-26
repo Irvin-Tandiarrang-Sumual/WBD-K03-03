@@ -29,6 +29,7 @@ func TestAdminRBACJourney_GivenAdminUser_WhenCreateUserAndGroup_ThenPersistedInP
 	// Act 1 - Create Group as Admin
 	createGroupReq := handlers.CreateGroupRequest{
 		Name: "finance_auditors",
+		LeaderID: adminUser.ID,
 		DatabaseAccesses: []handlers.DatabaseAccessRequest{
 			{DatabaseID: targetDB.ID, AccessType: string(domain.AccessViewOnly)},
 		},
@@ -40,6 +41,12 @@ func TestAdminRBACJourney_GivenAdminUser_WhenCreateUserAndGroup_ThenPersistedInP
 		t.Fatalf("expected 201 Created on group creation, got %d: %s", recGroup.Code, recGroup.Body.String())
 	}
 	groupRes := parseResponseBody[handlers.GroupResponse](t, recGroup)
+	leaderMembership, err := stack.userGroupRepo.FindAllUserIDsByGroupID(ctx, groupRes.Data.ID)
+	if err != nil || groupRes.Data.LeaderID != adminUser.ID ||
+		len(leaderMembership) != 1 || leaderMembership[0] != adminUser.ID {
+		t.Fatalf("expected admin to be the sole member and leader, got leader=%d, members=%v, err=%v",
+			groupRes.Data.LeaderID, leaderMembership, err)
+	}
 
 	// Act 2 - Create User as Admin assigned to the new group
 	createUserReq := handlers.CreateUserRequest{
@@ -117,6 +124,7 @@ func TestAdminRBACJourney_GivenAdminUser_WhenAssignUserToGroupWithDatabaseAccess
 	// Step 2: Create Group with AccessViewOnly to the target DB
 	createGroupReq := handlers.CreateGroupRequest{
 		Name: "analytics_read_group",
+		LeaderID: adminUser.ID,
 		DatabaseAccesses: []handlers.DatabaseAccessRequest{
 			{DatabaseID: targetDB.ID, AccessType: string(domain.AccessViewOnly)},
 		},
@@ -179,19 +187,21 @@ func TestAdminRBACJourney_GivenActiveUserSession_WhenAdminRevokesGroupAccess_The
 	adminUser := createAdminUser(t, stack, "rbac_admin_4", "adminpass123")
 	adminCookie, adminCSRF := loginUser(t, stack.engine, adminUser.Username, "adminpass123")
 
-	targetDB, _ := stack.databaseRepo.Save(ctx, &targetConfig)
-	group, _ := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
+	targetDB, err := stack.databaseRepo.Save(ctx, &targetConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "temporary_access_group",
+		LeaderID: adminUser.ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: targetDB.ID, AccessType: domain.AccessViewOnly},
 		},
 	})
-	fallbackGroup, err := stack.groupRepo.Save(ctx, domain.Group{
-		Name: "fallback_worker_group",
-	})
 	if err != nil {
-		t.Fatalf("failed to create fallback group: %v", err)
+		t.Fatalf("failed to create access group: %v", err)
 	}
+	fallbackGroup := createTestGroup(t, stack, "fallback_worker_group")
 	user := createRegularUser(t, stack, "temp_worker", "workerpass123", []uint{group.ID, fallbackGroup.ID})
 
 	// User logs in and acquires active session cookie

@@ -30,6 +30,7 @@ func TestPostgresTarget_GivenUserWithReadOnlyAccess_WhenExecuteSelectQuery_ThenR
 	// Create Group with AccessViewOnly
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "pg-analysts-group",
+		LeaderID: createMigrationLeader(t, stack, "pg-analysts-group-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewOnly},
 		},
@@ -73,6 +74,7 @@ func TestPostgresTarget_GivenUserWithReadOnlyAccess_WhenExecuteMutatingCommand_T
 
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "pg-readonly-enforcement",
+		LeaderID: createMigrationLeader(t, stack, "pg-readonly-enforcement-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewOnly},
 		},
@@ -110,6 +112,7 @@ func TestPostgresTarget_GivenUserWithReadWriteAccess_WhenExecuteExplainAndExplai
 
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "pg-devs-group",
+		LeaderID: createMigrationLeader(t, stack, "pg-devs-group-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewEdit},
 		},
@@ -154,6 +157,7 @@ func TestPostgresTarget_GivenUserWithReadWriteAccess_WhenApplySQLUpMigration_The
 
 	group, err := stack.groupService.CreateGroup(ctx, domain.CreateGroupInput{
 		Name: "pg-migrators-group",
+		LeaderID: createMigrationLeader(t, stack, "pg-migrators-group-leader").ID,
 		DatabaseAccesses: []domain.DatabaseAccess{
 			{DatabaseID: createdDB.ID, AccessType: domain.AccessViewEdit},
 		},

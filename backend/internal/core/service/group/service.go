@@ -67,20 +67,11 @@ func (s *groupService) CreateGroup(ctx context.Context, input domain.CreateGroup
 		return domain.Group{}, err
 	}
 
-	created, err := s.groups.Save(ctx, domain.Group{
+	return s.groups.Save(ctx, domain.Group{
 		Name:             name,
 		LeaderID:         input.LeaderID,
 		DatabaseAccesses: accesses,
 	})
-	if err != nil {
-		return domain.Group{}, err
-	}
-
-	if err := s.userGroups.AddUser(ctx, created.ID, input.LeaderID); err != nil {
-		return domain.Group{}, err
-	}
-
-	return created, nil
 }
 
 func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.UpdateGroupInput) (domain.Group, error) {
