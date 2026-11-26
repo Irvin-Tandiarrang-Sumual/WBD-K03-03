@@ -3,6 +3,9 @@ package driver
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"regexp"
+	"time"
 
 	mysqldriver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver/mysql"
 	postgresqldriver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver/postgresql"
@@ -87,19 +90,135 @@ func NewDatabaseDriver(poolManager *DatabasePoolManager) *DatabaseDriver {
 }
 
 func (d *DatabaseDriver) ExecuteQuery(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
+	slog.DebugContext(ctx, "SQL query started",
+		"event", "sql.query.start",
+		"database_id", database.ID,
+		"database_dialect", database.Type,
+		"query", query,
+	)
+
+	start := time.Now()
 	executor, err := d.executorForType(database.Type)
 	if err != nil {
+		slog.ErrorContext(ctx, "SQL query failed: unsupported database type",
+			"event", "sql.query.failed",
+			"database_id", database.ID,
+			"database_dialect", database.Type,
+			"duration_ms", float64(time.Since(start).Nanoseconds())/1e6,
+			"error", err.Error(),
+		)
 		return nil, err
 	}
-	return executor.ExecuteQuery(ctx, database, query)
+
+	result, err := executor.ExecuteQuery(ctx, database, query)
+	durationMs := float64(time.Since(start).Nanoseconds()) / 1e6
+
+	if err != nil {
+		slog.ErrorContext(ctx, "SQL query failed",
+			"event", "sql.query.failed",
+			"database_id", database.ID,
+			"database_dialect", database.Type,
+			"duration_ms", durationMs,
+			"query", query,
+			"error", err.Error(),
+			"sqlstate", extractSQLState(err),
+		)
+		return nil, err
+	}
+
+	rowCount := 0
+	if result != nil {
+		rowCount = len(result.Rows)
+	}
+	slog.InfoContext(ctx, "SQL query completed",
+		"event", "sql.query.complete",
+		"database_id", database.ID,
+		"database_dialect", database.Type,
+		"duration_ms", durationMs,
+		"query", query,
+		"rows_returned", rowCount,
+	)
+	return result, nil
 }
 
 func (d *DatabaseDriver) ExecuteCommand(ctx context.Context, database domain.Database, command string) (*ports.DatabaseCommandResult, error) {
+	slog.DebugContext(ctx, "SQL command started",
+		"event", "sql.command.start",
+		"database_id", database.ID,
+		"database_dialect", database.Type,
+		"query", command,
+	)
+
+	start := time.Now()
 	executor, err := d.executorForType(database.Type)
 	if err != nil {
+		slog.ErrorContext(ctx, "SQL command failed: unsupported database type",
+			"event", "sql.command.failed",
+			"database_id", database.ID,
+			"database_dialect", database.Type,
+			"duration_ms", float64(time.Since(start).Nanoseconds())/1e6,
+			"error", err.Error(),
+		)
 		return nil, err
 	}
-	return executor.ExecuteCommand(ctx, database, command)
+
+	result, err := executor.ExecuteCommand(ctx, database, command)
+	durationMs := float64(time.Since(start).Nanoseconds()) / 1e6
+
+	if err != nil {
+		slog.ErrorContext(ctx, "SQL command failed",
+			"event", "sql.command.failed",
+			"database_id", database.ID,
+			"database_dialect", database.Type,
+			"duration_ms", durationMs,
+			"query", command,
+			"error", err.Error(),
+			"sqlstate", extractSQLState(err),
+		)
+		return nil, err
+	}
+
+	rowsAffected := int64(0)
+	if result != nil {
+		rowsAffected = result.RowsAffected
+	}
+	slog.InfoContext(ctx, "SQL command completed",
+		"event", "sql.command.complete",
+		"database_id", database.ID,
+		"database_dialect", database.Type,
+		"duration_ms", durationMs,
+		"query", command,
+		"rows_affected", rowsAffected,
+	)
+	return result, nil
+}
+
+var sqlStateRegex = regexp.MustCompile(`(?i)(?:SQLSTATE|code)\s*[:=]?\s*([0-9A-Z]{5})`)
+
+type sqlStateHolder interface {
+	SQLState() string
+}
+
+type codeHolder interface {
+	Code() string
+}
+
+func extractSQLState(err error) string {
+	if err == nil {
+		return ""
+	}
+	var sh sqlStateHolder
+	if errors.As(err, &sh) {
+		return sh.SQLState()
+	}
+	var ch codeHolder
+	if errors.As(err, &ch) {
+		return ch.Code()
+	}
+	if match := sqlStateRegex.FindStringSubmatch(err.Error()); len(match) > 1 {
+		return match[1]
+	}
+	return ""
 }
 
 func (d *DatabaseDriver) Explain(ctx context.Context, database domain.Database, query string) (*ports.DatabaseQueryResult, error) {
