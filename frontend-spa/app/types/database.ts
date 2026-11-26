@@ -14,5 +14,13 @@ export interface TargetDatabase {
   quarantined: boolean;
   quarantineDraftId?: string;
   headVersion: number;
-  redoStack: number[];
+  redoStack?: number[];
+  permission?: DbPermission;
+  groupName?: string;
+}
+
+export interface DatabaseQueryResult {
+  columns: string[];
+  rows: Record<string, any>[];
+  latencyMs?: number;
 }

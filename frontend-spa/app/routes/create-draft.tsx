@@ -3,11 +3,11 @@ import { useLoaderData, useParams, Link } from 'react-router';
 import { Check, Send } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { useCreateDraft } from '../hooks/useCreateDraft';
-import { fetchDatabases } from '../services/dummy_databases';
+import { databaseService } from '../services/database_service';
 import type { DraftFormInput, DraftProposalMode, TargetDatabase } from '../types';
 
 export async function clientLoader() {
-  const databases = await fetchDatabases();
+  const databases = await databaseService.getAccessibleDatabases();
   return { databases };
 }
 
@@ -136,14 +136,14 @@ const DraftProposalForm: React.FC<DraftProposalFormProps> = ({
     <div className="pt-3 border-t border-[#EFE5D1] flex items-center justify-end gap-3">
       <Link
         to="/drafts"
-        className="h-10 px-4 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#EFE5D1] text-[#3A241A] text-xs font-semibold inline-flex items-center cursor-pointer"
+        className="min-h-[44px] h-11 px-5 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#EFE5D1] text-[#3A241A] text-xs font-semibold inline-flex items-center cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-[#264D3B]"
       >
         Cancel
       </Link>
       <button
         type="submit"
         disabled={isSubmitting}
-        className="h-10 px-5 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] disabled:opacity-50 text-[#F5EEDD] text-xs font-semibold inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+        className="min-h-[44px] h-11 px-6 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] disabled:opacity-50 text-[#F5EEDD] text-xs font-semibold inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#264D3B]"
       >
         <Send className="w-4 h-4" />
         <span>{isSubmitting ? 'Submitting Proposal...' : 'Submit Draft for Quorum'}</span>

@@ -52,7 +52,7 @@ export const ColumnsDropdown: React.FC<ColumnsDropdownProps> = ({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Toggle visible columns"
-        className="h-10 px-3.5 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] hover:bg-[#F5EEDD] text-[#3A241A] text-xs font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
+        className="min-h-[44px] h-11 px-4 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:border-[#1E6B8C] hover:bg-[#F5EEDD] text-[#3A241A] text-xs font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#264D3B]"
       >
         <Columns3 className="w-4 h-4 text-[#1E6B8C]" />
         <span>Columns</span>
@@ -65,7 +65,7 @@ export const ColumnsDropdown: React.FC<ColumnsDropdownProps> = ({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-52 rounded-2xl bg-[#FFFDF9]/98 backdrop-blur-md border border-[#D8C7A5] shadow-xl py-2 z-40"
+          className="absolute right-0 mt-2 w-52 rounded-2xl bg-[#FFFDF9] backdrop-blur-md border border-[#D8C7A5] shadow-2xl py-2 z-50"
         >
           <div className="px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#6B5444] border-b border-[#EFE5D1]">
             Visible Columns
@@ -82,7 +82,7 @@ export const ColumnsDropdown: React.FC<ColumnsDropdownProps> = ({
                   aria-checked={checked}
                   disabled={isLast}
                   onClick={() => onToggle(col.key)}
-                  className={`w-full px-3.5 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors ${
+                  className={`w-full min-h-[44px] px-4 py-2.5 text-left text-xs flex items-center justify-between gap-2 transition-colors focus-visible:ring-2 focus-visible:ring-[#264D3B] ${
                     isLast
                       ? 'opacity-50 cursor-not-allowed'
                       : 'hover:bg-[#F5EEDD] cursor-pointer text-[#3A241A]'

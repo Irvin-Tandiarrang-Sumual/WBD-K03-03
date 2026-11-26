@@ -1,19 +1,33 @@
 import React, { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import { redirect, useNavigate } from 'react-router';
 import { GopherDipperCutout } from '../assets/icons/GopherDipperCutout';
 import { useAuth } from '../context/auth-context';
+import { authService } from '../services/auth_service';
 import { APP_ROLES, type AppRole } from '../types';
 
+export async function clientLoader() {
+  try {
+    const user = await authService.getMe();
+    if (user) {
+      return redirect('/databases');
+    }
+  } catch {
+    // Unauthenticated, stay on login page
+  }
+  return null;
+}
+
 export default function LoginPage() {
-  const [username, setUsername] = useState('irvin');
-  const [password, setPassword] = useState('••••••••••••');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin123');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login, switchRole } = useAuth();
   const navigate = useNavigate();
 
-  const handleLoginSubmit = (event: React.FormEvent) => {
+  const handleLoginSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmedUsername = username.trim();
 
@@ -22,17 +36,25 @@ export default function LoginPage() {
       return;
     }
 
-    const isLoginSuccess = login(trimmedUsername);
-    if (!isLoginSuccess) {
-      setErrorMessage(`User "${trimmedUsername}" not found. Try 'irvin', 'leader_alice', or 'wendy'.`);
+    if (!password) {
+      setErrorMessage('Password is required.');
       return;
     }
 
-    navigate('/databases');
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await login(trimmedUsername, password);
+      navigate('/databases');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleQuickLogin = (role: AppRole) => {
-    executeRoleQuickLogin(role, login, switchRole, navigate);
+    executeRoleQuickLogin(role, login, switchRole, navigate, setUsername, setPassword);
   };
 
   return (
@@ -52,8 +74,9 @@ export default function LoginPage() {
               setUsername(e.target.value);
               if (errorMessage) setErrorMessage('');
             }}
-            placeholder="irvin"
-            className="w-full h-12 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] placeholder-[#8A7361] text-sm px-3.5 focus:outline-none focus:border-[#1E6B8C] focus:ring-2 focus:ring-[#1E6B8C]/20 transition-colors"
+            placeholder="admin"
+            disabled={isSubmitting}
+            className="w-full h-12 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] placeholder-[#8A7361] text-sm px-3.5 focus:outline-none focus:border-[#1E6B8C] focus:ring-2 focus:ring-[#1E6B8C]/20 transition-colors disabled:opacity-60"
           />
         </div>
 
@@ -65,9 +88,13 @@ export default function LoginPage() {
             id="login-password"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (errorMessage) setErrorMessage('');
+            }}
             placeholder="••••••••••••"
-            className="w-full h-12 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] placeholder-[#8A7361] text-sm px-3.5 focus:outline-none focus:border-[#1E6B8C] focus:ring-2 focus:ring-[#1E6B8C]/20 transition-colors"
+            disabled={isSubmitting}
+            className="w-full h-12 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] placeholder-[#8A7361] text-sm px-3.5 focus:outline-none focus:border-[#1E6B8C] focus:ring-2 focus:ring-[#1E6B8C]/20 transition-colors disabled:opacity-60"
           />
         </div>
 
@@ -79,14 +106,24 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          className="w-full h-12 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-white font-semibold text-sm shadow-md transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+          disabled={isSubmitting}
+          className="w-full h-12 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-white font-semibold text-sm shadow-md transition-colors cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-70"
         >
-          <span>Enter Console</span>
-          <ArrowRight className="w-4 h-4" />
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Authenticating...</span>
+            </>
+          ) : (
+            <>
+              <span>Enter Console</span>
+              <ArrowRight className="w-4 h-4" />
+            </>
+          )}
         </button>
       </form>
 
-      <QuickTestLogin onQuickLogin={handleQuickLogin} />
+      <QuickTestLogin onQuickLogin={handleQuickLogin} disabled={isSubmitting} />
     </div>
   );
 }
@@ -110,9 +147,10 @@ const LoginBrandingHeader = () => (
 
 interface QuickTestLoginProps {
   onQuickLogin: (role: AppRole) => void;
+  disabled?: boolean;
 }
 
-const QuickTestLogin: React.FC<QuickTestLoginProps> = ({ onQuickLogin }) => (
+const QuickTestLogin: React.FC<QuickTestLoginProps> = ({ onQuickLogin, disabled }) => (
   <div className="mt-6 pt-5 border-t border-[#EFE5D1]">
     <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B5444] text-center mb-3">
       Quick Test Login
@@ -122,8 +160,9 @@ const QuickTestLogin: React.FC<QuickTestLoginProps> = ({ onQuickLogin }) => (
         <button
           key={role}
           type="button"
+          disabled={disabled}
           onClick={() => onQuickLogin(role)}
-          className="h-11 rounded-xl border border-[#D8C7A5] bg-[#F5EEDD]/70 hover:bg-[#264D3B] hover:text-[#F5EEDD] hover:border-[#264D3B] text-[#3A241A] text-xs font-semibold transition-colors cursor-pointer"
+          className="h-11 rounded-xl border border-[#D8C7A5] bg-[#F5EEDD]/70 hover:bg-[#264D3B] hover:text-[#F5EEDD] hover:border-[#264D3B] text-[#3A241A] text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60"
         >
           {role}
         </button>
@@ -132,27 +171,48 @@ const QuickTestLogin: React.FC<QuickTestLoginProps> = ({ onQuickLogin }) => (
   </div>
 );
 
-function executeRoleQuickLogin(
+async function executeRoleQuickLogin(
   role: AppRole,
-  login: (username: string) => boolean,
+  login: (username: string, password?: string) => Promise<boolean>,
   switchRole: (role: AppRole) => void,
-  navigate: (to: string) => void
-): void {
+  navigate: (to: string) => void,
+  setUsername: (u: string) => void,
+  setPassword: (p: string) => void
+): Promise<void> {
   if (role === 'Admin') {
-    login('wendy');
-    switchRole('Admin');
-    navigate('/admin/databases');
+    setUsername('admin');
+    setPassword('admin123');
+    try {
+      await login('admin', 'admin123');
+      navigate('/admin/databases');
+    } catch {
+      // Keep credentials in form so user sees error
+    }
     return;
   }
 
   if (role === 'Leader') {
-    login('leader_alice');
-    switchRole('Leader');
-    navigate('/approvals');
+    setUsername('leader');
+    setPassword('leader123');
+    try {
+      await login('leader', 'leader123');
+      switchRole('Leader');
+      navigate('/approvals');
+    } catch {
+      // Keep credentials in form so user sees error
+    }
     return;
   }
 
-  login('irvin');
-  switchRole('User');
-  navigate('/databases');
+  const u = 'user';
+  const p = 'user123';
+  setUsername(u);
+  setPassword(p);
+  try {
+    await login(u, p);
+    switchRole('User');
+    navigate('/databases');
+  } catch {
+    // Keep credentials in form so user sees error
+  }
 }

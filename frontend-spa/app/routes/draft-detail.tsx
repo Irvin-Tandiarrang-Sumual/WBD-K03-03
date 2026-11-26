@@ -13,21 +13,21 @@ import {
 import { SqlCodeViewer } from '../components/code/SqlCodeViewer';
 import { PageHeader } from '../components/common/PageHeader';
 import { useDraftDetail } from '../hooks/useDraftDetail';
-import { fetchDatabases } from '../services/dummy_databases';
-import { fetchDraftById, fetchDrafts } from '../services/dummy_drafts';
-import type { ConsensusVote, DraftProposal, TargetDatabase } from '../types';
+import { databaseService } from '../services/database_service';
+import { draftService } from '../services/draft_service';
+import type { ConsensusVote, DraftProposal, DraftStatus, TargetDatabase } from '../types';
 
 export async function clientLoader({ params }: { params: { id?: string } }) {
-  const draftId = params.id || 'DRF-2026-002';
-  const [draft, databases, allDrafts] = await Promise.all([
-    fetchDraftById(draftId),
-    fetchDatabases(),
-    fetchDrafts(),
-  ]);
-
-  if (!draft) {
+  const draftId = params.id || '1';
+  let draft: DraftProposal | null = null;
+  try {
+    draft = await draftService.getDraftById(draftId);
+  } catch {
     throw new Response('Draft Proposal Not Found', { status: 404 });
   }
+
+  const databases = await databaseService.getAccessibleDatabases();
+  const allDrafts = await draftService.getAllDraftsAcrossDatabases(databases);
 
   return { draft, databases, allDrafts };
 }
@@ -77,7 +77,14 @@ export default function DraftDetailPage() {
           />
 
           {d.showNormalExecuteBar && (
-            <ExecutionStatusBar isExecuting={d.isExecuting} onExecute={d.handleExecuteNormal} />
+            <ExecutionStatusBar
+              isExecuting={d.isExecuting}
+              onExecute={d.handleExecuteNormal}
+              approvedCount={d.draft.consensus.filter((c) => c.status === 'approved').length}
+              totalCount={d.draft.consensus.length}
+              canExecute={d.canExecute}
+              proposerName={d.draft.proposerName}
+            />
           )}
 
           <ExecutionErrorAlert message={d.draft.failureMessage} />
@@ -94,7 +101,12 @@ export default function DraftDetailPage() {
         </div>
 
         <div className="space-y-5">
-          <ConsensusQuorumPanel votes={d.draft.consensus} />
+          <ConsensusQuorumPanel
+            votes={d.draft.consensus}
+            draftStatus={d.draft.status}
+            myPendingVote={d.myPendingVote}
+            onVote={d.handleVote}
+          />
         </div>
       </div>
     </section>
@@ -177,15 +189,30 @@ const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
                 Batch failure occurred. Rollback available.
               </span>
             )}
-            {isPartiallyReverted && (
+            {draft.status === 'partial' && (
               <span className="text-[#8A5A00] font-bold">
-                Rollback in progress. Step backward to revert.
+                {draft.recoveryAction === 'resume'
+                  ? 'Consensus reached: Resume. Click Resume Batch to continue execution.'
+                  : draft.recoveryAction === 'revert'
+                  ? 'Consensus reached: Revert. Click Rollback Step to revert committed batches.'
+                  : 'Batch execution paused on error. Awaiting leader consensus vote (Resume vs Revert).'}
+              </span>
+            )}
+            {isPartiallyReverted && (
+              <span className="text-[#822433] font-bold">
+                {draft.recoveryAction === 'revert'
+                  ? 'Consensus reached: Continue Revert. Click Rollback Step to retry.'
+                  : draft.recoveryAction === 'aborted'
+                  ? 'Rollback aborted by leader vote. Database left in intermediate state.'
+                  : 'Rollback failed midway. Awaiting leader consensus vote (Continue Revert: Yes vs No).'}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            {(draft.status === 'failed' || isPartiallyReverted) && (
+            {(draft.status === 'failed' ||
+              (draft.status === 'partial' && draft.recoveryAction === 'revert') ||
+              (isPartiallyReverted && draft.recoveryAction === 'revert')) && (
               <button
                 type="button"
                 disabled={isExecuting || currentBatch === 0}
@@ -197,7 +224,8 @@ const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
               </button>
             )}
 
-            {isApprovedOrExecuting && (
+            {(isApprovedOrExecuting ||
+              (draft.status === 'partial' && draft.recoveryAction === 'resume')) && (
               <button
                 type="button"
                 disabled={isExecuting || currentBatch >= totalBatches}
@@ -209,7 +237,7 @@ const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
                 ) : (
                   <Play className="w-3.5 h-3.5" />
                 )}
-                <span>{actionButtonLabel}</span>
+                <span>{draft.status === 'partial' ? 'Resume Batch' : actionButtonLabel}</span>
               </button>
             )}
           </div>
@@ -219,8 +247,15 @@ const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
   );
 };
 
-const ConsensusQuorumPanel: React.FC<{ votes: ConsensusVote[] }> = ({ votes }) => {
-  const approvedCount = votes.filter((c) => c.status === 'approved').length;
+const ConsensusQuorumPanel: React.FC<{
+  votes: ConsensusVote[];
+  draftStatus: DraftStatus;
+  myPendingVote?: ConsensusVote;
+  onVote: (status: string) => void;
+}> = ({ votes, draftStatus, myPendingVote, onVote }) => {
+  const approvedCount = votes.filter(
+    (c) => c.status === 'approved' || c.status === 'resume' || c.status === 'yes'
+  ).length;
 
   return (
     <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs p-5 space-y-4">
@@ -230,7 +265,7 @@ const ConsensusQuorumPanel: React.FC<{ votes: ConsensusVote[] }> = ({ votes }) =
           <span>Consensus Quorum</span>
         </span>
         <span className="font-mono text-xs font-bold text-[#264D3B]">
-          {approvedCount}/{votes.length} Approved
+          {approvedCount}/{votes.length} Decided
         </span>
       </div>
 
@@ -248,7 +283,7 @@ const ConsensusQuorumPanel: React.FC<{ votes: ConsensusVote[] }> = ({ votes }) =
                 )}`}
               >
                 <VoteStatusIcon status={vote.status} />
-                <span>{vote.status}</span>
+                <span>{vote.status.toUpperCase()}</span>
               </span>
             </div>
             <div className="text-[11px] font-mono text-[#6B5444]">Group: {vote.groupName}</div>
@@ -260,27 +295,105 @@ const ConsensusQuorumPanel: React.FC<{ votes: ConsensusVote[] }> = ({ votes }) =
           </div>
         ))}
       </div>
+
+      {myPendingVote && (
+        <div className="pt-3 border-t border-[#EFE5D1] space-y-2">
+          <div className="text-xs font-semibold text-[#3A241A]">
+            {draftStatus === 'partial'
+              ? 'Recovery voting requested (Resume execution vs Rollback batch):'
+              : draftStatus === 'partially_reverted'
+              ? 'Rollback failure decision (Continue revert: Yes vs No):'
+              : 'Your leader consensus vote is requested:'}
+          </div>
+          <div className="flex items-center gap-2">
+            {draftStatus === 'partial' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onVote('resume')}
+                  className="flex-1 h-9 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-white text-xs font-semibold inline-flex items-center justify-center gap-1 shadow-xs cursor-pointer transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Resume</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onVote('revert')}
+                  className="flex-1 h-9 rounded-xl border border-[#822433] text-[#822433] hover:bg-[#822433]/10 text-xs font-semibold inline-flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Revert</span>
+                </button>
+              </>
+            ) : draftStatus === 'partially_reverted' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onVote('yes')}
+                  className="flex-1 h-9 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-white text-xs font-semibold inline-flex items-center justify-center gap-1 shadow-xs cursor-pointer transition-colors"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Yes (Lanjut)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onVote('no')}
+                  className="flex-1 h-9 rounded-xl border border-[#822433] text-[#822433] hover:bg-[#822433]/10 text-xs font-semibold inline-flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>No (Batal)</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onVote('approved')}
+                  className="flex-1 h-9 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-white text-xs font-semibold inline-flex items-center justify-center gap-1 shadow-xs cursor-pointer transition-colors"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Approve</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onVote('rejected')}
+                  className="flex-1 h-9 rounded-xl border border-[#822433] text-[#822433] hover:bg-[#822433]/10 text-xs font-semibold inline-flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Reject</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-const ExecutionStatusBar: React.FC<{ isExecuting: boolean; onExecute: () => void }> = ({
-  isExecuting,
-  onExecute,
-}) => (
-  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs px-5 py-4 flex items-center justify-between gap-3">
+const ExecutionStatusBar: React.FC<{
+  isExecuting: boolean;
+  onExecute: () => void;
+  approvedCount: number;
+  totalCount: number;
+  canExecute: boolean;
+  proposerName: string;
+}> = ({ isExecuting, onExecute, approvedCount, totalCount, canExecute, proposerName }) => (
+  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs px-5 py-4 flex flex-wrap items-center justify-between gap-3">
     <span className="text-xs font-bold text-[#264D3B]">
-      Consensus quorum reached (2/2) · Ready to execute on target database
+      Consensus quorum reached ({approvedCount}/{totalCount}) · {canExecute ? 'Ready to execute on target database' : `Awaiting author (${proposerName}) to execute`}
     </span>
-    <button
-      type="button"
-      disabled={isExecuting}
-      onClick={onExecute}
-      className="h-10 px-5 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-[#F5EEDD] text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-    >
-      <Play className="w-4 h-4" />
-      <span>Execute Migration</span>
-    </button>
+    {canExecute && (
+      <button
+        type="button"
+        disabled={isExecuting}
+        onClick={onExecute}
+        className="h-10 px-5 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-[#F5EEDD] text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+      >
+        <Play className="w-4 h-4" />
+        <span>Execute Migration</span>
+      </button>
+    )}
   </div>
 );
 
@@ -303,9 +416,14 @@ const ExecutionErrorAlert: React.FC<{ message?: string }> = ({ message }) => {
 function getVoteBadgeStyle(status: ConsensusVote['status']): string {
   switch (status) {
     case 'approved':
+    case 'resume':
+    case 'yes':
       return 'bg-[#264D3B]/15 text-[#264D3B]';
     case 'rejected':
+    case 'no':
       return 'bg-[#822433]/15 text-[#822433]';
+    case 'revert':
+      return 'bg-[#F3B738]/25 text-[#6E4900] border border-[#F3B738]/70';
     case 'pending':
     default:
       return 'bg-[#F3B738]/25 text-[#6E4900]';
@@ -313,7 +431,14 @@ function getVoteBadgeStyle(status: ConsensusVote['status']): string {
 }
 
 function VoteStatusIcon({ status }: { status: ConsensusVote['status'] }) {
-  if (status === 'approved') return <CheckCircle2 className="w-3 h-3" />;
-  if (status === 'rejected') return <XCircle className="w-3 h-3" />;
+  if (status === 'approved' || status === 'resume' || status === 'yes') {
+    return <CheckCircle2 className="w-3 h-3" />;
+  }
+  if (status === 'rejected' || status === 'no') {
+    return <XCircle className="w-3 h-3" />;
+  }
+  if (status === 'revert') {
+    return <RotateCcw className="w-3 h-3" />;
+  }
   return <Clock className="w-3 h-3" />;
 }

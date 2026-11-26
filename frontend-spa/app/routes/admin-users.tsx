@@ -5,12 +5,15 @@ import { PageHeader } from '../components/common/PageHeader';
 import { SearchInput } from '../components/common/SearchInput';
 import { AddUserModal } from '../components/modals/AddUserModal';
 import { useAdminUsers } from '../hooks/useAdminUsers';
-import { fetchGroups } from '../services/dummy_groups';
-import { fetchUsers } from '../services/dummy_users';
+import { groupService } from '../services/group_service';
+import { userService } from '../services/user_service';
 import type { AccessGroup, PlatformUser } from '../types';
 
 export async function clientLoader() {
-  const [users, groups] = await Promise.all([fetchUsers(), fetchGroups()]);
+  const [users, groups] = await Promise.all([
+    userService.getUsers(),
+    groupService.getGroups(),
+  ]);
   return { users, groups };
 }
 
@@ -76,8 +79,8 @@ const AdminUsersTable: React.FC<AdminUsersTableProps> = ({
   roleFilter,
   onRoleFilterChange,
 }) => (
-  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs overflow-hidden">
-    <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3">
+  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs">
+    <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3 rounded-t-2xl relative z-20">
       <SearchInput
         value={search}
         onChange={onSearchChange}
@@ -96,7 +99,7 @@ const AdminUsersTable: React.FC<AdminUsersTableProps> = ({
       </select>
     </div>
 
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-b-2xl">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-[#EFE5D1] text-[11px] font-bold uppercase tracking-wider text-[#6B5444] bg-[#F5EEDD]/40">

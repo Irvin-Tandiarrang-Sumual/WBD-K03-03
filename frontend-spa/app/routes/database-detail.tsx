@@ -7,6 +7,7 @@ import {
   Plus,
   RotateCcw,
   RotateCw,
+  Terminal,
   XCircle,
 } from 'lucide-react';
 import { ColumnsDropdown } from '../components/common/ColumnsDropdown';
@@ -17,29 +18,39 @@ import { QuarantineBanner } from '../components/feedback/QuarantineBanner';
 import { MigrationDetailModal } from '../components/modals/MigrationDetailModal';
 import { SchemaDiffModal } from '../components/modals/SchemaDiffModal';
 import { useDatabaseDetail } from '../hooks/useDatabaseDetail';
-import { fetchDatabaseById, fetchDatabases } from '../services/dummy_databases';
-import { fetchGroups } from '../services/dummy_groups';
-import { fetchMigrationsByDatabaseId } from '../services/dummy_migrations';
+import { databaseService } from '../services/database_service';
+import { groupService } from '../services/group_service';
+import { migrationService } from '../services/migration_service';
 import { formatMigrationVersion } from '../utils/formatters';
 import type {
   AccessGroup,
-  MigrationDirectionFilter,
   MigrationRecord,
   MigrationStatusFilter,
   TargetDatabase,
 } from '../types';
 
 export async function clientLoader({ params }: { params: { id?: string } }) {
-  const dbId = params.id || 'db-inventory-pg';
-  const [database, migrations, allDbs, groups] = await Promise.all([
-    fetchDatabaseById(dbId),
-    fetchMigrationsByDatabaseId(dbId),
-    fetchDatabases(),
-    fetchGroups(),
+  const dbId = params.id || '1';
+  let database: TargetDatabase | null = null;
+  try {
+    database = await databaseService.getAccessibleDatabaseById(dbId);
+  } catch {
+    throw new Response('Target Database Not Found', { status: 404 });
+  }
+
+  const [migrations, allDbs, groups] = await Promise.all([
+    migrationService.getMigrationsByDatabaseId(dbId).catch(() => []),
+    databaseService.getAccessibleDatabases(),
+    groupService.getGroups().catch(() => []),
   ]);
 
   if (!database) {
     throw new Response('Target Database Not Found', { status: 404 });
+  }
+
+  if (migrations.length > 0) {
+    const maxVersion = Math.max(...migrations.map((m) => m.version));
+    database = { ...database, headVersion: maxVersion };
   }
 
   return { database, migrations, allDbs, groups };
@@ -66,18 +77,27 @@ export default function DatabaseDetailPage() {
           variant: d.database.quarantined ? 'danger' : 'neutral',
         }}
         actions={
-          <select
-            aria-label="Switch active target database"
-            value={d.database.id}
-            onChange={(e) => navigate(`/databases/${e.target.value}`)}
-            className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
-          >
-            {allDbs.map((db) => (
-              <option key={db.id} value={db.id}>
-                {db.name} ({db.engine})
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/console?db=${d.database.id}`}
+              className="h-10 px-3.5 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#F5EEDD] text-[#3A241A] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Terminal className="w-4 h-4 text-[#1E6B8C]" />
+              <span>SQL Console</span>
+            </Link>
+            <select
+              aria-label="Switch active target database"
+              value={d.database.id}
+              onChange={(e) => navigate(`/databases/${e.target.value}`)}
+              className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
+            >
+              {allDbs.map((db) => (
+                <option key={db.id} value={db.id}>
+                  {db.name} ({db.engine})
+                </option>
+              ))}
+            </select>
+          </div>
         }
       />
 
@@ -99,8 +119,8 @@ export default function DatabaseDetailPage() {
         headMigrationId={d.headMig?.id}
         search={d.search}
         onSearchChange={d.setSearch}
-        directionFilter={d.directionFilter}
-        onDirectionFilterChange={d.setDirectionFilter}
+        hideRollbacks={d.hideRollbacks}
+        onHideRollbacksChange={d.setHideRollbacks}
         statusFilter={d.statusFilter}
         onStatusFilterChange={d.setStatusFilter}
         columnsMap={d.columnsMap}
@@ -167,7 +187,7 @@ const DatabaseTraversalControls: React.FC<DatabaseTraversalControlsProps> = ({
           disabled={!rollbackCheck.allowed}
           onClick={onRequestRollback}
           title={rollbackCheck.reason}
-          className="h-10 px-4 rounded-xl bg-[#822433] hover:bg-[#681C28] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+          className="min-h-[44px] h-11 px-4 rounded-xl bg-[#822433] hover:bg-[#681C28] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[#822433]"
         >
           <RotateCcw className="w-4 h-4" />
           <span>Rollback (1-Step)</span>
@@ -178,13 +198,13 @@ const DatabaseTraversalControls: React.FC<DatabaseTraversalControlsProps> = ({
           disabled={!redoCheck.allowed}
           onClick={onRequestRedo}
           title={redoCheck.reason}
-          className="h-10 px-4 rounded-xl bg-[#1E6B8C] hover:bg-[#16536E] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+          className="min-h-[44px] h-11 px-4 rounded-xl bg-[#1E6B8C] hover:bg-[#16536E] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[#1E6B8C]"
         >
           <RotateCw className="w-4 h-4" />
           <span>Forward (Redo)</span>
         </button>
 
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#264D3B]/12 border border-[#264D3B]/30 text-[#264D3B] font-mono text-xs font-bold">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#264D3B]/12 border border-[#264D3B]/30 text-[#264D3B] font-mono text-xs font-bold">
           <span className="w-2 h-2 rounded-full bg-[#264D3B]" />
           HEAD · {formatMigrationVersion(database.headVersion)}
         </span>
@@ -198,7 +218,7 @@ const DatabaseTraversalControls: React.FC<DatabaseTraversalControlsProps> = ({
 
       <Link
         to={isCreateDisabled ? '#' : `/databases/${database.id}/drafts/new`}
-        className={`h-10 px-4 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm transition-colors ${
+        className={`min-h-[44px] h-11 px-4 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-[#264D3B] ${
           isCreateDisabled
             ? 'bg-[#A39281] text-white cursor-not-allowed opacity-60'
             : 'bg-[#264D3B] hover:bg-[#1B3B2B] text-[#F5EEDD] cursor-pointer'
@@ -216,8 +236,8 @@ interface MigrationTableProps {
   headMigrationId?: string;
   search: string;
   onSearchChange: (value: string) => void;
-  directionFilter: MigrationDirectionFilter;
-  onDirectionFilterChange: (value: MigrationDirectionFilter) => void;
+  hideRollbacks: boolean;
+  onHideRollbacksChange: (hide: boolean) => void;
   statusFilter: MigrationStatusFilter;
   onStatusFilterChange: (value: MigrationStatusFilter) => void;
   columnsMap: Record<string, boolean>;
@@ -231,8 +251,8 @@ const MigrationTable: React.FC<MigrationTableProps> = ({
   headMigrationId,
   search,
   onSearchChange,
-  directionFilter,
-  onDirectionFilterChange,
+  hideRollbacks,
+  onHideRollbacksChange,
   statusFilter,
   onStatusFilterChange,
   columnsMap,
@@ -240,8 +260,8 @@ const MigrationTable: React.FC<MigrationTableProps> = ({
   onSelectMigration,
   onOpenDiff,
 }) => (
-  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs overflow-hidden">
-    <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3">
+  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs">
+    <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3 rounded-t-2xl relative z-20">
       <SearchInput
         value={search}
         onChange={onSearchChange}
@@ -249,21 +269,20 @@ const MigrationTable: React.FC<MigrationTableProps> = ({
         className="max-w-xs"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Filter migrations by direction"
-          value={directionFilter}
-          onChange={(e) => onDirectionFilterChange(e.target.value as MigrationDirectionFilter)}
-          className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
-        >
-          <option value="all">Direction: All</option>
-          <option value="UP">Normal UP</option>
-          <option value="ROLLBACK">Rollbacks</option>
-        </select>
+        <label className="min-h-[44px] h-11 px-4 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] hover:bg-[#F5EEDD] text-[#3A241A] text-xs font-semibold inline-flex items-center gap-2 cursor-pointer transition-colors select-none focus-within:ring-2 focus-within:ring-[#264D3B]">
+          <input
+            type="checkbox"
+            checked={hideRollbacks}
+            onChange={(e) => onHideRollbacksChange(e.target.checked)}
+            className="w-4 h-4 rounded border-[#D8C7A5] text-[#264D3B] focus:ring-[#264D3B] accent-[#264D3B] cursor-pointer"
+          />
+          <span>Hide Rollbacks</span>
+        </label>
         <select
           aria-label="Filter migrations by status"
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as MigrationStatusFilter)}
-          className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
+          className="min-h-[44px] h-11 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3.5 focus:outline-none focus:border-[#1E6B8C] focus-visible:ring-2 focus-visible:ring-[#264D3B] cursor-pointer"
         >
           <option value="all">Status: All</option>
           <option value="Success">Success</option>
@@ -283,7 +302,7 @@ const MigrationTable: React.FC<MigrationTableProps> = ({
       </div>
     </div>
 
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-b-2xl">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-[#EFE5D1] text-[11px] font-bold uppercase tracking-wider text-[#6B5444] bg-[#F5EEDD]/40">

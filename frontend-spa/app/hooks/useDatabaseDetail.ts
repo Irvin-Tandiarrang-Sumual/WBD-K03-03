@@ -1,21 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/auth-context';
-import {
-  executeForwardRedo,
-  executeRollback,
-  fetchMigrationsByDatabaseId,
-} from '../services/dummy_migrations';
+import { migrationService } from '../services/migration_service';
 import {
   canForwardRedoDatabase,
   canRollbackDatabase,
   getHeadMigration,
 } from '../utils/databaseRules';
 import { filterMigrations } from '../utils/filters';
-import { getUserAccessibleDatabases } from '../utils/permissions';
 import { toggleColumnVisibility } from '../utils/table';
 import type {
   AccessGroup,
-  MigrationDirectionFilter,
+  DbPermission,
   MigrationRecord,
   MigrationStatusFilter,
   TargetDatabase,
@@ -31,7 +26,7 @@ export interface UseDatabaseDetailProps {
 
 interface FilterState {
   search: string;
-  direction: MigrationDirectionFilter;
+  hideRollbacks: boolean;
   status: MigrationStatusFilter;
 }
 
@@ -58,7 +53,7 @@ export function useDatabaseDetail({
 
   const [filters, setFilters] = useState<FilterState>({
     search: '',
-    direction: 'all',
+    hideRollbacks: false,
     status: 'all',
   });
 
@@ -68,61 +63,59 @@ export function useDatabaseDetail({
   const [diffMigration, setDiffMigration] = useState<MigrationRecord | null>(null);
   const [confirmRollbackOpen, setConfirmRollbackOpen] = useState(false);
 
-  const accessibleDbs = useMemo(
-    () => getUserAccessibleDatabases(user, allDbs, groups),
-    [user, allDbs, groups]
-  );
-  const currentAccess = accessibleDbs.find((a) => a.database.id === database.id);
-  const permission = currentAccess?.permission ?? 'view_edit';
+  // Database permission is directly granted by backend access control
+  const permission: DbPermission =
+    database.permission ?? (user.role === 'admin' ? 'view_edit' : 'view_only');
 
   const rollbackCheck = canRollbackDatabase(database, migrations, permission);
   const redoCheck = canForwardRedoDatabase(database, permission);
   const headMig = getHeadMigration(database, migrations);
 
   const filteredMigrations = useMemo(
-    () => filterMigrations(migrations, filters.search, filters.direction, filters.status),
-    [migrations, filters.search, filters.direction, filters.status]
+    () => filterMigrations(migrations, filters.search, filters.hideRollbacks, filters.status),
+    [migrations, filters.search, filters.hideRollbacks, filters.status]
   );
 
   const handleRollback = async () => {
     setConfirmRollbackOpen(false);
     await runAsync(
       async () => {
-        const res = await executeRollback(database.id, user.username);
-        if (!res.success) throw new Error('Rollback execution failed');
-        return res;
+        const res = await migrationService.proposeRollback(database.id);
+        const updatedMigrations = await migrationService.getMigrationsByDatabaseId(database.id);
+        return { res, updatedMigrations };
       },
       {
-        successMessage: (res) => `Rolled back to #${res.newHeadVersion}`,
+        successMessage: () => `Rollback draft created / proposed successfully`,
         successTone: 'pine',
         errorMessage: 'Rollback failed',
-        onSuccess: async (res) => {
-          setDatabase((prev) => applyRollbackDatabaseState(prev, res.newHeadVersion));
-          const updatedMigrations = await fetchMigrationsByDatabaseId(database.id);
+        onSuccess: async ({ updatedMigrations }) => {
           setMigrations(updatedMigrations);
+          if (updatedMigrations.length > 0) {
+            const nextHead = Math.max(...updatedMigrations.map((m) => m.version));
+            setDatabase((prev) => ({ ...prev, headVersion: nextHead }));
+          }
         },
       }
     );
   };
 
   const handleRedo = async () => {
-    if (!redoCheck.targetVersion) return;
-    const targetVersion = redoCheck.targetVersion;
-
     await runAsync(
       async () => {
-        const res = await executeForwardRedo(database.id, targetVersion, user.username);
-        if (!res.success) throw new Error('Redo execution failed');
-        return res;
+        const res = await migrationService.proposeForward(database.id);
+        const updatedMigrations = await migrationService.getMigrationsByDatabaseId(database.id);
+        return { res, updatedMigrations };
       },
       {
-        successMessage: (res) => `Redo applied forward to #${res.newHeadVersion}`,
+        successMessage: () => `Forward draft created / proposed successfully`,
         successTone: 'pine',
-        errorMessage: 'Redo failed',
-        onSuccess: async (res) => {
-          setDatabase((prev) => applyRedoDatabaseState(prev, res.newHeadVersion));
-          const updatedMigrations = await fetchMigrationsByDatabaseId(database.id);
+        errorMessage: 'Forward failed',
+        onSuccess: async ({ updatedMigrations }) => {
           setMigrations(updatedMigrations);
+          if (updatedMigrations.length > 0) {
+            const nextHead = Math.max(...updatedMigrations.map((m) => m.version));
+            setDatabase((prev) => ({ ...prev, headVersion: nextHead }));
+          }
         },
       }
     );
@@ -142,12 +135,10 @@ export function useDatabaseDetail({
     redoCheck,
     search: filters.search,
     setSearch: (search: string) => setFilters((prev) => ({ ...prev, search })),
-    directionFilter: filters.direction,
-    setDirectionFilter: (direction: MigrationDirectionFilter) =>
-      setFilters((prev) => ({ ...prev, direction })),
+    hideRollbacks: filters.hideRollbacks,
+    setHideRollbacks: (hideRollbacks: boolean) => setFilters((prev) => ({ ...prev, hideRollbacks })),
     statusFilter: filters.status,
-    setStatusFilter: (status: MigrationStatusFilter) =>
-      setFilters((prev) => ({ ...prev, status })),
+    setStatusFilter: (status: MigrationStatusFilter) => setFilters((prev) => ({ ...prev, status })),
     columnsMap,
     toggleColumn,
     selectedMigration,
@@ -158,23 +149,5 @@ export function useDatabaseDetail({
     setConfirmRollbackOpen,
     handleRollback,
     handleRedo,
-  };
-}
-
-// --- Pure State Transition Helpers (Stepdown Rule) ---
-
-function applyRollbackDatabaseState(prev: TargetDatabase, newHeadVersion: number): TargetDatabase {
-  return {
-    ...prev,
-    headVersion: newHeadVersion,
-    redoStack: [...prev.redoStack, prev.headVersion],
-  };
-}
-
-function applyRedoDatabaseState(prev: TargetDatabase, newHeadVersion: number): TargetDatabase {
-  return {
-    ...prev,
-    headVersion: newHeadVersion,
-    redoStack: prev.redoStack.slice(0, -1),
   };
 }

@@ -1,16 +1,16 @@
-import type { MigrationDirectionFilter, MigrationRecord, MigrationStatusFilter } from '../types';
+import type { MigrationRecord, MigrationStatusFilter } from '../types';
 import { formatMigrationVersion } from './formatters';
 
 export function filterMigrations(
   migrations: MigrationRecord[],
   query = '',
-  direction: MigrationDirectionFilter = 'all',
+  hideRollbacks = false,
   status: MigrationStatusFilter = 'all'
 ): MigrationRecord[] {
   const normalizedQuery = query.trim().toLowerCase();
 
   return migrations.filter((migration) => {
-    if (direction !== 'all' && migration.type !== direction) return false;
+    if (hideRollbacks && migration.type === 'ROLLBACK') return false;
     if (status !== 'all' && migration.status !== status) return false;
     if (normalizedQuery && !matchesMigrationQuery(migration, normalizedQuery)) return false;
     return true;

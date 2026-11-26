@@ -37,6 +37,11 @@ export const DraftStatusChip: React.FC<DraftStatusChipProps> = ({ status, classN
       cls: 'bg-[#1E6B8C]/15 text-[#1E6B8C] border border-[#1E6B8C]/35',
       icon: <RefreshCw className="w-3.5 h-3.5 animate-spin" />,
     },
+    partial: {
+      label: 'partial (recovery)',
+      cls: 'bg-[#F3B738]/30 text-[#6E4900] border border-[#F3B738]',
+      icon: <AlertTriangle className="w-3.5 h-3.5 text-[#8A5A00]" />,
+    },
     partially_reverted: {
       label: 'partially_reverted',
       cls: 'bg-[#822433] text-white border border-[#691B28]',

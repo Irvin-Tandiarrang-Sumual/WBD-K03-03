@@ -17,27 +17,27 @@ services:
   demo_postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: db1_pg
-      POSTGRES_USER: demo_user
-      POSTGRES_PASSWORD: demo_password
+      POSTGRES_DB: ${DEMO_PG_DB:-db1_pg}
+      POSTGRES_USER: ${DEMO_PG_USER:-demo_user}
+      POSTGRES_PASSWORD: ${DEMO_PG_PASSWORD:-demo_password}
     volumes:
-      - ./docker/postgres-demo/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/postgres-demo:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U demo_user -d db1_pg"]
+      test: ["CMD-SHELL", "pg_isready -U ${DEMO_PG_USER:-demo_user} -d ${DEMO_PG_DB:-db1_pg}"]
       interval: 2s
       timeout: 5s
       retries: 10
   demo_mysql:
     image: mysql:8.4
     environment:
-      MYSQL_DATABASE: db2_mysql
-      MYSQL_USER: demo_user
-      MYSQL_PASSWORD: demo_password
-      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ${DEMO_MYSQL_DB:-db2_mysql}
+      MYSQL_USER: ${DEMO_MYSQL_USER:-demo_user}
+      MYSQL_PASSWORD: ${DEMO_MYSQL_PASSWORD:-demo_password}
+      MYSQL_ROOT_PASSWORD: ${DEMO_MYSQL_ROOT_PASSWORD:-root_password}
     volumes:
-      - ./docker/mysql-demo/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/mysql-demo:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u demo_user -pdemo_password --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u ${DEMO_MYSQL_USER:-demo_user} -p${DEMO_MYSQL_PASSWORD:-demo_password} --silent"]
       interval: 2s
       timeout: 5s
       retries: 20
@@ -66,12 +66,11 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend-spa
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
     environment:
       NODE_ENV: production
-      HOSTNAME: 0.0.0.0
       PORT: 3000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"

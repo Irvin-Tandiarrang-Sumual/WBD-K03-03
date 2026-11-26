@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/auth-context';
-import { saveDatabase, testDatabaseConnection } from '../services/dummy_databases';
+import { databaseService } from '../services/database_service';
 import { toggleColumnVisibility } from '../utils/table';
 import type { DbEngine, DbStatus, TargetDatabase } from '../types';
 import { useAsyncAction } from './useAsyncAction';
@@ -48,33 +48,37 @@ export function useAdminDatabases(initialDatabases: TargetDatabase[]) {
 
   const handleTestConnection = async (db: TargetDatabase) => {
     setTestingId(db.id);
-    await runAsync(
-      async () => {
-        const res = await testDatabaseConnection(db.id);
-        return res;
-      },
-      {
-        successMessage: (res) =>
-          res.success
-            ? `Connected to ${db.name} (${db.hostPort}) · ${res.latencyMs}ms`
-            : `Connection to ${db.name} degraded`,
-        successTone: 'pine',
-        onError: () => {
-          showSnackbar(`Connection to ${db.name} degraded`, 'maroon');
+    try {
+      await runAsync(
+        async () => {
+          const res = await databaseService.testConnection(db.id);
+          return res;
         },
-      }
-    );
-    setTestingId(null);
+        {
+          successMessage: (res) =>
+            res.success
+              ? `Connected to ${db.name} (${db.hostPort}) · ${res.latencyMs}ms`
+              : `Connection to ${db.name} degraded (${res.latencyMs}ms)`,
+          successTone: 'pine',
+          errorMessage: `Failed to test connection to ${db.name}`,
+        }
+      );
+    } finally {
+      setTestingId(null);
+    }
   };
 
   const handleSaveDb = async (data: SaveDbInput) => {
     await runAsync(
       async () => {
-        const saved = await saveDatabase({
-          id: editingDb ? editingDb.id : undefined,
+        const portNumber = parseInt(data.port, 10) || (data.engine === 'PostgreSQL' ? 5432 : 3306);
+        const saved = await databaseService.createAdminDatabase({
           name: data.name,
-          engine: data.engine,
-          hostPort: `${data.host}:${data.port}`,
+          type: data.engine === 'PostgreSQL' ? 'postgresql' : 'mysql',
+          host: data.host,
+          port: portNumber,
+          user: data.engine === 'PostgreSQL' ? 'postgres' : 'root',
+          password: 'password',
         });
         return saved;
       },

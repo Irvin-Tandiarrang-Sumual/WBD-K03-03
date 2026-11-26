@@ -6,13 +6,17 @@ import { PageHeader } from '../components/common/PageHeader';
 import { SearchInput } from '../components/common/SearchInput';
 import { QuarantineBanner } from '../components/feedback/QuarantineBanner';
 import { useDatabasesCatalog } from '../hooks/useDatabasesCatalog';
-import { fetchDatabases } from '../services/dummy_databases';
-import { fetchGroups } from '../services/dummy_groups';
+import { databaseService } from '../services/database_service';
+import { groupService } from '../services/group_service';
 import { formatMigrationVersion } from '../utils/formatters';
+import { getPermissionBadgeClass } from '../utils/permissions';
 import type { AccessGroup, DbEngine, DbPermission, TargetDatabase } from '../types';
 
 export async function clientLoader() {
-  const [databases, groups] = await Promise.all([fetchDatabases(), fetchGroups()]);
+  const [databases, groups] = await Promise.all([
+    databaseService.getAccessibleDatabases(),
+    groupService.getGroups().catch(() => []),
+  ]);
   return { databases, groups };
 }
 
@@ -181,7 +185,7 @@ const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
         aria-label="Filter catalog by permission"
         value={permissionFilter}
         onChange={(e) => onPermissionFilterChange(e.target.value as 'all' | DbPermission)}
-        className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
+        className="min-h-[44px] h-11 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3.5 focus:outline-none focus:border-[#1E6B8C] focus-visible:ring-2 focus-visible:ring-[#264D3B] cursor-pointer"
       >
         <option value="all">Access: All</option>
         <option value="view_edit">view_edit</option>
@@ -191,7 +195,7 @@ const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
         aria-label="Filter catalog by engine"
         value={engineFilter}
         onChange={(e) => onEngineFilterChange(e.target.value as 'all' | DbEngine)}
-        className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
+        className="min-h-[44px] h-11 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3.5 focus:outline-none focus:border-[#1E6B8C] focus-visible:ring-2 focus-visible:ring-[#264D3B] cursor-pointer"
       >
         <option value="all">Engine: All</option>
         <option value="PostgreSQL">PostgreSQL</option>
@@ -200,11 +204,3 @@ const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
     </div>
   </div>
 );
-
-// --- Pure Style Helper ---
-
-function getPermissionBadgeClass(permission: DbPermission): string {
-  return permission === 'view_edit'
-    ? 'bg-[#264D3B]/15 text-[#264D3B] border border-[#264D3B]/35'
-    : 'bg-[#1E6B8C]/12 text-[#1E6B8C] border border-[#1E6B8C]/30';
-}

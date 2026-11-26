@@ -89,3 +89,9 @@ function findHighestDatabasePermission(
 
   return highestMatch;
 }
+
+export function getPermissionBadgeClass(permission: DbPermission): string {
+  return permission === 'view_edit'
+    ? 'bg-[#264D3B]/12 text-[#264D3B] border border-[#264D3B]/25'
+    : 'bg-[#1E6B8C]/12 text-[#1E6B8C] border border-[#1E6B8C]/25';
+}

@@ -15,6 +15,12 @@
   code, pre, kbd, samp {
     font-family: var(--font-mono);
   }
+
+  /* WCAG AA Compliant Keyboard Focus Indicator */
+  :focus-visible {
+    outline: 2px solid #264D3B !important;
+    outline-offset: 2px !important;
+  }
 }
 
 @keyframes oogway-stripe-shift {

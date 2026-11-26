@@ -5,17 +5,17 @@ import { PageHeader } from '../components/common/PageHeader';
 import { AccessChangeConfirmModal } from '../components/modals/AccessChangeConfirmModal';
 import { LeaderReplacementModal } from '../components/modals/LeaderReplacementModal';
 import { useAdminGroupDetail } from '../hooks/useAdminGroupDetail';
-import { fetchDatabases } from '../services/dummy_databases';
-import { fetchGroupById } from '../services/dummy_groups';
-import { fetchUsers } from '../services/dummy_users';
+import { databaseService } from '../services/database_service';
+import { groupService } from '../services/group_service';
+import { userService } from '../services/user_service';
 import type { AccessGroup, DbPermission, PlatformUser, TargetDatabase } from '../types';
 
 export async function clientLoader({ params }: { params: { id?: string } }) {
-  const groupId = params.id || 'grp-core-services';
+  const groupId = params.id || '1';
   const [group, users, databases] = await Promise.all([
-    fetchGroupById(groupId),
-    fetchUsers(),
-    fetchDatabases(),
+    groupService.getGroupById(groupId),
+    userService.getUsers(),
+    databaseService.getAdminDatabases(),
   ]);
 
   if (!group) {

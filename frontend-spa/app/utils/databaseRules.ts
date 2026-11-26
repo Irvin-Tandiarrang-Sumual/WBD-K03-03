@@ -46,10 +46,5 @@ export function canForwardRedoDatabase(
   if (database.quarantined) {
     return { allowed: false, reason: 'Database is quarantined' };
   }
-  if (!database.redoStack || database.redoStack.length === 0) {
-    return { allowed: false, reason: 'No forward redo migration available on this branch' };
-  }
-
-  const targetVersion = database.redoStack[database.redoStack.length - 1];
-  return { allowed: true, targetVersion };
+  return { allowed: true };
 }

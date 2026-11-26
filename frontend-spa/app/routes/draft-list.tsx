@@ -5,12 +5,13 @@ import { DraftStatusChip } from '../components/common/DraftStatusChip';
 import { PageHeader } from '../components/common/PageHeader';
 import { SearchInput } from '../components/common/SearchInput';
 import { useDraftList } from '../hooks/useDraftList';
-import { fetchDatabases } from '../services/dummy_databases';
-import { fetchDrafts } from '../services/dummy_drafts';
+import { databaseService } from '../services/database_service';
+import { draftService } from '../services/draft_service';
 import type { DraftProposal, DraftStatus, TargetDatabase } from '../types';
 
 export async function clientLoader() {
-  const [drafts, databases] = await Promise.all([fetchDrafts(), fetchDatabases()]);
+  const databases = await databaseService.getAccessibleDatabases();
+  const drafts = await draftService.getAllDraftsAcrossDatabases(databases);
   return { drafts, databases };
 }
 
@@ -76,7 +77,7 @@ const DraftListTable: React.FC<DraftListTableProps> = ({
   onToggleColumn,
   onSelectDraft,
 }) => (
-  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs overflow-hidden">
+  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs">
     <DraftFilterToolbar
       search={search}
       onSearchChange={onSearchChange}
@@ -89,7 +90,7 @@ const DraftListTable: React.FC<DraftListTableProps> = ({
       onToggleColumn={onToggleColumn}
     />
 
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-b-2xl">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-[#EFE5D1] text-[11px] font-bold uppercase tracking-wider text-[#6B5444] bg-[#F5EEDD]/40">
@@ -155,7 +156,7 @@ const DraftFilterToolbar: React.FC<DraftFilterToolbarProps> = ({
   columnsMap,
   onToggleColumn,
 }) => (
-  <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3">
+  <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3 rounded-t-2xl relative z-20">
     <SearchInput
       value={search}
       onChange={onSearchChange}

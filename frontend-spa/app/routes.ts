@@ -10,6 +10,7 @@ export default [
     route("databases", "routes/databases.tsx"),
     route("databases/:id", "routes/database-detail.tsx"),
     route("databases/:id/drafts/new", "routes/create-draft.tsx"),
+    route("console", "routes/query-console.tsx"),
     route("drafts", "routes/draft-list.tsx"),
     route("drafts/:id", "routes/draft-detail.tsx"),
     route("approvals", "routes/approvals.tsx"),

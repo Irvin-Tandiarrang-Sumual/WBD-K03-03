@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/auth-context';
-import { createUser } from '../services/dummy_users';
+import { userService } from '../services/user_service';
 import type { AppRole, PlatformUser } from '../types';
 import { useAsyncAction } from './useAsyncAction';
 
@@ -36,11 +36,11 @@ export function useAdminUsers(initialUsers: PlatformUser[]) {
   }) => {
     await runAsync(
       async () => {
-        const created = await createUser({
+        const created = await userService.createUser({
           username: data.username,
-          displayName: data.displayName,
-          email: data.email,
+          password: `${data.username}123`,
           role: data.role === 'Admin' ? 'admin' : 'user',
+          groupIds: [1],
         });
         return created;
       },

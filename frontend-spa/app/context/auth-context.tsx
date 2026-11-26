@@ -1,52 +1,32 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { AppNotification, AppRole, PlatformUser } from '../types';
-import { INITIAL_USERS } from '../services/dummy_users';
+import { authService } from '../services/auth_service';
 
-export const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif-1',
-    title: 'New Migration Proposal',
-    body: 'Dipper Pines submitted DRF-2026-003 for inventory_prod_pg.',
-    message: 'Dipper Pines submitted DRF-2026-003 for inventory_prod_pg.',
-    time: '8m ago',
-    targetUrl: '/approvals',
-    unread: true,
-    createdAtRelative: '8m ago',
-  },
-  {
-    id: 'notif-2',
-    title: 'Quarantine Auto-Recovery',
-    body: 'analytics_clickhouse locked on state 423. Linear rollback required.',
-    message: 'analytics_clickhouse locked on state 423. Linear rollback required.',
-    time: '24m ago',
-    targetUrl: '/databases/db-analytics-clickhouse',
-    unread: true,
-    createdAtRelative: '24m ago',
-  },
-  {
-    id: 'notif-3',
-    title: 'Unanimous Consensus Reached',
-    body: 'DRF-2026-001 has been approved by 2/2 leaders and applied.',
-    message: 'DRF-2026-001 has been approved by 2/2 leaders and applied.',
-    time: '2h ago',
-    targetUrl: '/drafts/DRF-2026-001',
-    unread: false,
-    createdAtRelative: '2h ago',
-  },
-];
+export const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 interface SnackbarState {
   message: string;
   tone: 'pine' | 'maroon' | 'blue';
 }
 
+const GUEST_USER: PlatformUser = {
+  id: '',
+  username: 'guest',
+  displayName: 'Guest',
+  email: '',
+  role: 'user',
+  avatarInitials: 'GU',
+  avatarColor: 'bg-[#264D3B] text-[#F5EEDD]',
+};
+
 interface AuthContextType {
   user: PlatformUser;
   role: AppRole;
   isAuthenticated: boolean;
+  isLoading: boolean;
   switchRole: (role: AppRole) => void;
-  login: (username: string) => boolean;
-  logout: () => void;
+  login: (username: string, password?: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   notifications: AppNotification[];
   unreadNotifCount: number;
   markAllNotificationsRead: () => void;
@@ -57,9 +37,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<PlatformUser>(INITIAL_USERS[0]); // default admin
-  const [currentRole, setCurrentRole] = useState<AppRole>('Admin');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<PlatformUser>(GUEST_USER);
+  const [currentRole, setCurrentRole] = useState<AppRole>('User');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [snackbar, setSnackbar] = useState<SnackbarState | null>(null);
 
@@ -72,33 +53,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const switchRole = (nextRole: AppRole) => {
     setCurrentRole(nextRole);
-    const matchedUser =
-      INITIAL_USERS.find((u) => {
-        if (nextRole === 'Admin') return u.role === 'admin';
-        if (nextRole === 'Leader') return u.id === 'usr-alice-leader';
-        return u.role === 'user' && u.id !== 'usr-alice-leader';
-      }) || INITIAL_USERS[0];
-    setCurrentUser(matchedUser);
-    showSnackbar(`Switched role to ${nextRole} (${matchedUser.displayName})`, 'blue');
+    showSnackbar(`Switched role to ${nextRole}`, 'blue');
   };
 
-  const login = (username: string): boolean => {
-    const found = INITIAL_USERS.find(
-      (u) => u.username.toLowerCase() === username.trim().toLowerCase()
-    );
-    if (!found) return false;
-    setCurrentUser(found);
-    if (found.role === 'admin') setCurrentRole('Admin');
-    else if (found.id === 'usr-alice-leader') setCurrentRole('Leader');
-    else setCurrentRole('User');
-    setIsAuthenticated(true);
-    showSnackbar(`Welcome back, ${found.displayName}! 🌲`, 'pine');
-    return true;
+  useEffect(() => {
+    let isMounted = true;
+    authService
+      .getMe()
+      .then((user) => {
+        if (!isMounted) return;
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        setCurrentRole(user.role === 'admin' ? 'Admin' : 'User');
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setCurrentUser(GUEST_USER);
+        setIsAuthenticated(false);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const login = async (username: string, password = ''): Promise<boolean> => {
+    try {
+      const user = await authService.login(username, password);
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      setCurrentRole(user.role === 'admin' ? 'Admin' : 'User');
+      showSnackbar(`Welcome back, ${user.displayName}! 🌲`, 'pine');
+      return true;
+    } catch (err: any) {
+      showSnackbar(err.message || 'Login failed', 'maroon');
+      throw err;
+    }
   };
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    showSnackbar('Signed out from Wedebe Console', 'maroon');
+  const logout = async (): Promise<void> => {
+    try {
+      await authService.logout();
+    } catch {
+      // Continue cleanup on network failure
+    } finally {
+      setCurrentUser(GUEST_USER);
+      setIsAuthenticated(false);
+      setCurrentRole('User');
+      showSnackbar('Signed out from Wedebe Console', 'maroon');
+    }
   };
 
   const markAllNotificationsRead = () => {
@@ -113,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user: currentUser,
         role: currentRole,
         isAuthenticated,
+        isLoading,
         switchRole,
         login,
         logout,
