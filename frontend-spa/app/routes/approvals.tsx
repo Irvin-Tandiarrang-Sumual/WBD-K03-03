@@ -6,12 +6,13 @@ import { PageHeader } from '../components/common/PageHeader';
 import { ProposalReviewModal } from '../components/modals/ProposalReviewModal';
 import { VetoReasonModal } from '../components/modals/VetoReasonModal';
 import { useApprovals } from '../hooks/useApprovals';
-import { fetchDatabases } from '../services/dummy_databases';
-import { fetchDrafts } from '../services/dummy_drafts';
+import { databaseService } from '../services/database_service';
+import { draftService } from '../services/draft_service';
 import type { DraftProposal, TargetDatabase } from '../types';
 
 export async function clientLoader() {
-  const [drafts, databases] = await Promise.all([fetchDrafts(), fetchDatabases()]);
+  const databases = await databaseService.getAccessibleDatabases();
+  const drafts = await draftService.getAllDraftsAcrossDatabases(databases);
   return { drafts, databases };
 }
 
@@ -33,7 +34,7 @@ export default function ApprovalsPage() {
             aria-label="Filter approvals by target database"
             value={d.databaseFilter}
             onChange={(e) => d.setDatabaseFilter(e.target.value)}
-            className="h-10 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3 focus:outline-none focus:border-[#1E6B8C] cursor-pointer"
+            className="min-h-[44px] h-11 rounded-xl border border-[#D8C7A5] bg-[#FFFFFF] text-[#3A241A] text-xs font-semibold px-3.5 focus:outline-none focus:border-[#1E6B8C] focus-visible:ring-2 focus-visible:ring-[#264D3B] cursor-pointer"
           >
             <option value="all">Target DB: All</option>
             {databases.map((db) => (
@@ -169,7 +170,7 @@ const ApprovalCard: React.FC<ApprovalCardProps> = ({
           type="button"
           aria-label={`View Details for ${draft.id}`}
           onClick={() => onViewDetails(draft)}
-          className="h-9 px-3 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#EFE5D1] text-[#3A241A] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="min-h-[40px] h-10 px-3.5 rounded-xl border border-[#D8C7A5] bg-[#FFFDF9] hover:bg-[#EFE5D1] text-[#3A241A] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#264D3B]"
         >
           <Eye className="w-3.5 h-3.5 text-[#1E6B8C]" />
           <span>View Details</span>
@@ -178,7 +179,7 @@ const ApprovalCard: React.FC<ApprovalCardProps> = ({
           type="button"
           aria-label={`Reject or Veto ${draft.id}`}
           onClick={() => onReject(draft)}
-          className="h-9 px-3 rounded-xl bg-[#822433] hover:bg-[#691B28] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          className="min-h-[40px] h-10 px-3.5 rounded-xl bg-[#822433] hover:bg-[#691B28] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#822433]"
         >
           <XCircle className="w-3.5 h-3.5" />
           <span>Reject / Veto</span>
@@ -187,7 +188,7 @@ const ApprovalCard: React.FC<ApprovalCardProps> = ({
           type="button"
           aria-label={`Approve ${draft.id}`}
           onClick={() => onApprove(draft)}
-          className="h-9 px-3.5 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-[#F5EEDD] text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          className="min-h-[40px] h-10 px-4 rounded-xl bg-[#264D3B] hover:bg-[#1B3B2B] text-[#F5EEDD] text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#264D3B]"
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>Approve</span>

@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/auth-context';
-import {
-  updateDatabaseHeadVersion,
-  updateDatabaseQuarantine,
-} from '../services/dummy_databases';
-import {
-  executeNormalDraft,
-  simulateBatchProgress,
-} from '../services/dummy_drafts';
+import { draftService } from '../services/draft_service';
 import type { DraftProposal, TargetDatabase } from '../types';
 import { useAsyncAction } from './useAsyncAction';
 
@@ -28,22 +21,44 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
       )
     : 0;
 
+  const isAuthor = user.id === draft.proposerId;
+  const isAdmin = user.role === 'admin';
+
+  const myPendingVote = draft.consensus.find(
+    (c) =>
+      c.status === 'pending' &&
+      (c.leaderId === user.id || isAdmin)
+  );
+
+  const handleVote = async (status: string) => {
+    await runAsync(
+      async () => {
+        const updated = await draftService.submitApproval(draft.id, status);
+        return updated;
+      },
+      {
+        successMessage: `Vote recorded: ${status.toUpperCase()} for draft ${draft.id}`,
+        successTone: ['approved', 'resume', 'yes'].includes(status) ? 'pine' : 'maroon',
+        onSuccess: (updated) => {
+          setDraft(updated);
+        },
+      }
+    );
+  };
+
   const handleExecuteNormal = async () => {
     await runAsync(
       async () => {
-        const res = await executeNormalDraft(draft.id, targetDb?.headVersion, user.username);
-        return res;
+        await draftService.executeDraft(draft.id);
+        const updated = await draftService.getDraftById(draft.id);
+        return updated;
       },
       {
-        successMessage: `Draft ${draft.id} executed successfully and applied!`,
+        successMessage: `Draft ${draft.id} execution initiated successfully!`,
         successTone: 'pine',
-        errorMessage: 'Execution failed',
-        onSuccess: async (res) => {
-          setDraft(res.draft);
-          if (targetDb) {
-            const nextVersion = targetDb.headVersion + 1;
-            await updateDatabaseHeadVersion(targetDb.id, nextVersion, []);
-          }
+        errorMessage: 'Execution failed or requires consensus approval',
+        onSuccess: (updated) => {
+          setDraft(updated);
         },
       }
     );
@@ -52,48 +67,46 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
   const handleBatchStep = async (direction: 'forward' | 'rollback') => {
     await runAsync(
       async () => {
-        const res = await simulateBatchProgress(
-          draft.id,
-          direction,
-          targetDb?.headVersion,
-          user.username
-        );
-        return res;
+        if (direction === 'forward') {
+          if (draft.status === 'approved') {
+            await draftService.executeDraft(draft.id);
+          } else {
+            await draftService.resumeBatch(draft.id);
+          }
+        } else {
+          await draftService.revertBatch(draft.id);
+        }
+
+        const updated = await draftService.getDraftById(draft.id);
+        return updated;
       },
       {
-        errorMessage: 'Batch step failed',
-        onSuccess: async (res) => {
-          setDraft(res.draft);
-
-          if (res.draft.status === 'partially_reverted') {
-            if (targetDb) {
-              await updateDatabaseQuarantine(targetDb.id, true, draft.id);
-            }
-            showSnackbar(`Batch encountered error! Locked in State 423 Quarantined.`, 'maroon');
-          } else if (res.draft.status === 'applied') {
-            if (targetDb) {
-              await updateDatabaseQuarantine(targetDb.id, false);
-            }
-            showSnackbar(`Batch execution completed 100% and applied!`, 'pine');
-          } else {
-            showSnackbar(
-              `Batch advanced: chunk ${res.draft.batchConfig?.currentBatch}/${res.draft.batchConfig?.totalBatches}`,
-              'blue'
-            );
-          }
+        successMessage:
+          direction === 'forward'
+            ? `Batch forward operation submitted`
+            : `Batch rollback operation submitted`,
+        successTone: direction === 'forward' ? 'pine' : 'maroon',
+        errorMessage: `Batch ${direction} operation failed`,
+        onSuccess: (updated) => {
+          setDraft(updated);
         },
       }
     );
   };
 
-  const showNormalExecuteBar = !draft.batchConfig && draft.status === 'approved';
+  const showNormalExecuteBar = draft.mode === 'normal' && draft.status === 'approved';
+  const canExecute = isAuthor || isAdmin;
 
   return {
     draft,
     targetDb,
     progressPercent,
     isExecuting,
+    isAuthor,
+    canExecute,
+    myPendingVote,
     showNormalExecuteBar,
+    handleVote,
     handleExecuteNormal,
     handleBatchStep,
   };

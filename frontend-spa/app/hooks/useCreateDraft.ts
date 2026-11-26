@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/auth-context';
-import { createDraft } from '../services/dummy_drafts';
+import { draftService } from '../services/draft_service';
 import { validateDraftForm } from '../utils/validation';
 import type { DraftFormInput } from '../types';
 import { useAsyncAction } from './useAsyncAction';
@@ -38,25 +38,12 @@ export function useCreateDraft(defaultDbId: string) {
 
     await runAsync(
       async () => {
-        const created = await createDraft({
-          databaseId: form.databaseId,
-          proposerId: user.id,
-          proposerName: user.displayName,
-          description: form.description.trim(),
-          mode: form.mode,
-          upSql: form.upSql.trim(),
-          batchConfig:
-            form.mode === 'batch_dml'
-              ? {
-                  targetTable: form.targetTable,
-                  batchColumn: form.batchColumn,
-                  batchSize: parseInt(form.batchSize, 10) || 500,
-                  totalRows: 2500,
-                  processedRows: 0,
-                  currentBatch: 0,
-                  totalBatches: 5,
-                }
-              : undefined,
+        const isBatch = form.mode === 'batch_dml';
+        const created = await draftService.createDraft(form.databaseId, {
+          sqlUp: form.upSql.trim(),
+          isBatch,
+          batchColumn: isBatch ? form.batchColumn : undefined,
+          batchSize: isBatch ? parseInt(form.batchSize, 10) || 500 : undefined,
         });
         return created;
       },
