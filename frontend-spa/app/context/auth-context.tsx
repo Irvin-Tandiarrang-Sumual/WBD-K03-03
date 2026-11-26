@@ -2,38 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { AppNotification, AppRole, PlatformUser } from '../types';
 import { authService } from '../services/auth_service';
 
-export const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif-1',
-    title: 'New Migration Proposal',
-    body: 'Dipper Pines submitted DRF-2026-003 for inventory_prod_pg.',
-    message: 'Dipper Pines submitted DRF-2026-003 for inventory_prod_pg.',
-    time: '8m ago',
-    targetUrl: '/approvals',
-    unread: true,
-    createdAtRelative: '8m ago',
-  },
-  {
-    id: 'notif-2',
-    title: 'Quarantine Auto-Recovery',
-    body: 'analytics_clickhouse locked on state 423. Linear rollback required.',
-    message: 'analytics_clickhouse locked on state 423. Linear rollback required.',
-    time: '24m ago',
-    targetUrl: '/databases/db-analytics-clickhouse',
-    unread: true,
-    createdAtRelative: '24m ago',
-  },
-  {
-    id: 'notif-3',
-    title: 'Unanimous Consensus Reached',
-    body: 'DRF-2026-001 has been approved by 2/2 leaders and applied.',
-    message: 'DRF-2026-001 has been approved by 2/2 leaders and applied.',
-    time: '2h ago',
-    targetUrl: '/drafts/DRF-2026-001',
-    unread: false,
-    createdAtRelative: '2h ago',
-  },
-];
+export const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 interface SnackbarState {
   message: string;
