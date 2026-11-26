@@ -90,6 +90,8 @@ docker compose down -v
 
 ## API Endpoints
 
+PostgreSQL batch migrations support a single `UPDATE` with a single-column integer primary key as its batch column. End SQL up and SQL down with a predicate such as `AND id BETWEEN ? AND ?` or `WHERE id BETWEEN ? AND ?`. The worker binds the exact keys for each batch and stores commit evidence alongside the target changes. Revert uses the approved SQL down in reverse batch order and limits it to keys actually changed by SQL up.
+
 Migration jobs are stored in the platform PostgreSQL database. When workers restart, pending jobs remain available for execution. Each database can have only one active job. A worker holds a PostgreSQL advisory lock while it processes the job, and PostgreSQL releases the lock if the worker connection ends.
 
 If a worker disconnects mid-execution, the next worker checks whether the draft already has a recorded outcome. When the outcome is still unclear, the job is held as `uncertain` and blocks new jobs on that database. Verify the actual changes on the target against the draft and any committed checkpoints before resuming work. Automatic reconciliation of uncertain outcomes is still pending.

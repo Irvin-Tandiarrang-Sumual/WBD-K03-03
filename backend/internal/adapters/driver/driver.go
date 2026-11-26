@@ -97,6 +97,20 @@ type DatabaseDriver struct {
 
 var _ ports.DatabaseDriver = (*DatabaseDriver)(nil)
 
+func (d *DatabaseDriver) PrepareBatch(ctx context.Context, db domain.Database, batch ports.BatchExecution) (int64, error) {
+	if db.Type != domain.DatabaseTypePostgreSQL {
+		return 0, domain.ErrInvalidDraftInput
+	}
+	return d.postgresqlExecutor.PrepareBatch(ctx, db, batch)
+}
+
+func (d *DatabaseDriver) ExecuteBatchChunk(ctx context.Context, db domain.Database, batch ports.BatchExecution, number int, revert bool) (*ports.BatchReceipt, error) {
+	if db.Type != domain.DatabaseTypePostgreSQL {
+		return nil, domain.ErrInvalidDraftInput
+	}
+	return d.postgresqlExecutor.ExecuteBatchChunk(ctx, db, batch, number, revert)
+}
+
 func NewDatabaseDriver(poolManager *DatabasePoolManager) *DatabaseDriver {
 	pgExecutor := postgresqldriver.NewExecutorRepository(poolManager.postgresqlPoolManager)
 	myExecutor := mysqldriver.NewExecutorRepository(poolManager.mysqlPoolManager)

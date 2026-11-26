@@ -146,6 +146,14 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 			return err
 		}
 	}
+	if batches, ok := w.databaseDriver.(ports.BatchExecutor); ok && draft.IsBatch {
+		if task.Operation != ports.MetricOpExecute {
+			if err := w.revalidateExecution(ctx, task, draft); err != nil {
+				return err
+			}
+		}
+		return w.executePersistedBatch(ctx, task, draft, db, batches)
+	}
 	if task.Operation == "revert" {
 		return w.executeRevert(ctx, task, draft, db)
 	}

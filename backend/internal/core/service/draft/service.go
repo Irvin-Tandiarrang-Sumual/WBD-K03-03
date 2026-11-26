@@ -80,12 +80,11 @@ func (s *draftService) CreateDraft(ctx context.Context, input domain.CreateDraft
 		return nil, err
 	}
 
-	if err := s.validateBatchMetadata(ctx, input); err != nil {
-		return nil, err
-	}
-
 	if err := s.userGroupService.Authorize(ctx, input.UserID, input.DatabaseID, domain.AccessViewEdit); err != nil {
 		return nil, domain.ErrForbidden
+	}
+	if err := s.validateBatchMetadata(ctx, input); err != nil {
+		return nil, err
 	}
 
 	groups, err := s.groupRepo.FindAllByDatabaseID(ctx, input.DatabaseID)
@@ -142,6 +141,11 @@ func (s *draftService) validateBatchMetadata(ctx context.Context, input domain.C
 		return nil
 	}
 
+	if _, ok := s.databaseDriver.(ports.BatchExecutor); ok {
+		if err := validateBatchStatements(db, input); err != nil {
+			return err
+		}
+	}
 	meta, err := s.databaseDriver.GetDatabaseMetadata(ctx, db)
 	if err != nil || meta == nil || len(meta.Columns) == 0 {
 		return nil
@@ -287,6 +291,9 @@ func (s *draftService) SubmitApproval(ctx context.Context, input domain.SubmitAp
 		}
 
 		vote := normalizeVote(input.Vote, input.Status)
+		if !canCastVote(draft.Status, vote) {
+			return domain.ErrInvalidDraftInput
+		}
 		now := time.Now()
 
 		if err := applyLeaderVote(ctx, txRepo, approvals, input.UserID, vote, now); err != nil {
@@ -347,6 +354,9 @@ func (s *draftService) invalidateIfAuthorUnauthorized(
 		return false, nil
 	}
 	if authErr := s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit); authErr != nil {
+		if draft.Status == domain.DraftStatusPartial || draft.Status == domain.DraftStatusPartiallyReverted {
+			return false, domain.ErrForbidden
+		}
 		draft.Status = domain.DraftStatusInvalidated
 		draft.UpdatedAt = time.Now()
 		if _, updErr := repo.Update(ctx, draft); updErr != nil {
@@ -389,13 +399,27 @@ func applyLeaderVote(
 
 	for _, app := range matched {
 		app.Vote = vote
-		app.Status = vote
+		app.Status = domain.ApprovalStatusApproved
+		if vote == domain.VoteRejected || vote == domain.VoteNo {
+			app.Status = domain.ApprovalStatusRejected
+		}
 		app.RespondedAt = &now
 		if _, err := repo.UpdateApproval(ctx, app); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func canCastVote(status, vote string) bool {
+	switch status {
+	case domain.DraftStatusPartial:
+		return vote == domain.VoteResume || vote == domain.VoteRevert
+	case domain.DraftStatusPartiallyReverted:
+		return vote == domain.VoteYes || vote == domain.VoteNo
+	default:
+		return vote == domain.VoteApproved || vote == domain.VoteRejected
+	}
 }
 
 func (s *draftService) resolveConsensus(
@@ -458,19 +482,19 @@ func resolvePartialRecoveryConsensus(
 	approvals []*domain.DraftApproval,
 	now time.Time,
 ) (*domain.Draft, error) {
-	hasRevert := false
+	allRevert := len(approvals) > 0
 	allResume := len(approvals) > 0
 	for _, app := range approvals {
 		v := strings.ToLower(strings.TrimSpace(app.Vote))
-		if v == domain.VoteRevert {
-			hasRevert = true
+		if v != domain.VoteRevert {
+			allRevert = false
 		}
 		if v != domain.VoteResume {
 			allResume = false
 		}
 	}
 
-	if hasRevert {
+	if allRevert {
 		draft.RecoveryAction = domain.VoteRevert
 		draft.UpdatedAt = now
 		return repo.Update(ctx, draft)
@@ -480,6 +504,11 @@ func resolvePartialRecoveryConsensus(
 		return repo.Update(ctx, draft)
 	}
 
+	if draft.RecoveryAction != "" {
+		draft.RecoveryAction = ""
+		draft.UpdatedAt = now
+		return repo.Update(ctx, draft)
+	}
 	return nil, nil
 }
 
@@ -504,8 +533,10 @@ func (s *draftService) resolvePartiallyRevertedConsensus(
 	}
 
 	if hasNo {
-		draft.Status = domain.DraftStatusFailed
-		draft.RecoveryAction = "aborted"
+		if draft.RecoveryAction == domain.RecoveryActionAborted {
+			return nil, nil
+		}
+		draft.RecoveryAction = domain.RecoveryActionAborted
 		draft.UpdatedAt = now
 		updatedDraft, err := repo.Update(ctx, draft)
 		if err != nil {
@@ -681,6 +712,9 @@ func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uin
 		return domain.ErrInvalidDraftState
 	}
 	if queue, ok := s.taskQueue.(ports.PersistentTaskQueue); ok {
+		if err := requireConsensus(ctx, s.migrationRepo, draft); err != nil {
+			return err
+		}
 		_, err := submitPersistentTask(ctx, queue, draft, ports.MetricOpResume, userID)
 		return err
 	}
@@ -729,6 +763,12 @@ func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uin
 		return domain.ErrInvalidDraftState
 	}
 	if queue, ok := s.taskQueue.(ports.PersistentTaskQueue); ok {
+		if !draft.IsReversible || strings.TrimSpace(draft.SqlDown) == "" {
+			return domain.ErrMigrationIrreversible
+		}
+		if err := requireConsensus(ctx, s.migrationRepo, draft); err != nil {
+			return err
+		}
 		_, err := submitPersistentTask(ctx, queue, draft, ports.MetricOpRevert, userID)
 		return err
 	}

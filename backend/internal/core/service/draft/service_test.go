@@ -2264,7 +2264,7 @@ func TestDraftService_SubmitApproval_PartialPhase_AllLeadersVoteResume_SetsReady
 	}
 }
 
-func TestDraftService_SubmitApproval_PartialPhase_SingleLeaderVotesRevert_SetsReadyToRevert(t *testing.T) {
+func TestDraftService_SubmitApproval_PartialPhase_ConflictingVotesRemainPending(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	draftID := uint(1)
@@ -2347,8 +2347,8 @@ func TestDraftService_SubmitApproval_PartialPhase_SingleLeaderVotesRevert_SetsRe
 	if err != nil {
 		t.Fatalf("unexpected error from leader 2 vote: %v", err)
 	}
-	if updated.RecoveryAction != domain.VoteRevert {
-		t.Fatalf("expected RecoveryAction == revert, got %s", updated.RecoveryAction)
+	if updated.RecoveryAction != "" {
+		t.Fatalf("expected no recovery action without consensus, got %s", updated.RecoveryAction)
 	}
 }
 
@@ -2685,8 +2685,8 @@ func TestDraftService_SubmitApproval_RevertFailurePhase_SingleLeaderVotesNo_Abor
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if updated.Status != domain.DraftStatusFailed {
-		t.Fatalf("expected draft status failed, got %s", updated.Status)
+	if updated.Status != domain.DraftStatusPartiallyReverted {
+		t.Fatalf("expected the database to remain quarantined, got %s", updated.Status)
 	}
 	if recordedMigration == nil || recordedMigration.Status != domain.MigrationStatusFail {
 		t.Fatalf("expected recorded fail migration, got %+v", recordedMigration)
