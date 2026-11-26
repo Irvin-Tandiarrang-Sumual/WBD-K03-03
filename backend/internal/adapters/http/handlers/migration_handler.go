@@ -77,59 +77,25 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewPagedResponse(http.StatusOK, "migrations retrieved successfully", data, params, totalData))
 }
 
-// CreateMigration runs a new SQL migration on a database.
+// CreateMigration submits a SQL migration for approval.
 //
-//	@Summary		Create migration
-//	@Description	Runs a SQL migration (sql_up) on the specified database and records the result. Requires edit access.
+//	@Summary		Submit migration draft
+//	@Description	Submits a SQL migration as a draft for unanimous approval. Requires edit access.
 //	@Tags			Me - Migrations
 //	@Accept			json
 //	@Produce		json
 //	@Security		CookieAuth
 //	@Param			database_id	path		int										true	"Database ID"
-//	@Param			body		body		CreateMigrationRequest					true	"SQL up migration"
-//	@Success		201			{object}	response.BaseResponse[MigrationResponse]	"Migration created"
+//	@Param			body		body		CreateDraftRequest					true	"SQL up migration"
+//	@Success		201			{object}	response.BaseResponse[DraftResponse]	"Draft created"
 //	@Failure		400			{object}	response.BaseResponse[any]				"Invalid database ID or migration input"
 //	@Failure		401			{object}	response.BaseResponse[any]				"Unauthorized"
 //	@Failure		403			{object}	response.BaseResponse[any]				"Forbidden (no edit access)"
 //	@Failure		409			{object}	response.BaseResponse[any]				"Migration version conflict"
 //	@Failure		500			{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/me/databases/{database_id}/migrations [post]
-func (h *MigrationHandler) CreateMigration(c *gin.Context) {
-	databaseID, err := ginutil.ParseUintParam(c, "database_id")
-	if err != nil {
-		c.Error(domain.ErrInvalidDatabaseID)
-		return
-	}
-
-	userID, err := middleware.CurrentUserID(c)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	var req CreateMigrationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-
-	migration, err := h.service.CreateMigration(
-		c.Request.Context(),
-		domain.CreateMigrationInput{
-			DatabaseID: databaseID,
-			UserID:     userID,
-			SqlUp:      req.SqlUp,
-		},
-	)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	message := "migration created successfully"
-	if migration.Status == "fail" {
-		message = "migration failed and was recorded"
-	}
-	c.JSON(http.StatusCreated, response.Success(message, toMigrationResponse(migration)))
+func (h *DraftHandler) CreateMigration(c *gin.Context) {
+	h.CreateDraft(c)
 }
 
 // GetMigrationByIDAndDatabaseID returns a single migration by ID.

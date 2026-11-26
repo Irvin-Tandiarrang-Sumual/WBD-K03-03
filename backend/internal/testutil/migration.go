@@ -12,6 +12,7 @@ type MigrationRepository struct {
 	ports.MigrationRepository
 	FindAllByDatabaseIDFunc    func(context.Context, uint, pagination.PaginationParams, bool) ([]*domain.Migration, int64, error)
 	FindLatestByDatabaseIDFunc func(context.Context, uint) (*domain.Migration, error)
+	FinishDraftFunc            func(context.Context, uint, *domain.Migration, *uint, *uint, *uint) error
 
 	SaveFunc                  func(context.Context, *domain.Migration) (*domain.Migration, error)
 	UpdateFunc                func(context.Context, *domain.Migration) (*domain.Migration, error)
@@ -61,4 +62,12 @@ func (f *MigrationRepository) UpdatePosition(context.Context, uint, *uint, *uint
 }
 func (f *MigrationRepository) FindPendingSnapshot(context.Context, uint) (*domain.Migration, error) {
 	return nil, nil
+}
+
+func (f *MigrationRepository) HasConsensus(context.Context, uint, uint) (bool, error) {
+	return true, nil
+}
+
+func (f *MigrationRepository) FinishDraft(ctx context.Context, id uint, migration *domain.Migration, head, parent, forward *uint) error {
+	return f.FinishDraftFunc(ctx, id, migration, head, parent, forward)
 }

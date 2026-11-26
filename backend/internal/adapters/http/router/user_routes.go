@@ -55,7 +55,7 @@ func registerUserDatabaseRoutes(me *gin.RouterGroup, dependencies routerDependen
 	)
 	databases.POST(
 		"/:database_id/migrations",
-		dependencies.migrationHandler.CreateMigration,
+		dependencies.draftHandler.CreateMigration,
 	)
 	databases.GET(
 		"/:database_id/migrations/compare",

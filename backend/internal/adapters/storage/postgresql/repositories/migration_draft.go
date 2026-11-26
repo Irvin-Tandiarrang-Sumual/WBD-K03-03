@@ -104,7 +104,8 @@ func (r *migrationRepository) HasConsensus(ctx context.Context, dbID, id uint) (
 	var approved bool
 	err := r.db.WithContext(ctx).Raw(`SELECT count(*)>0 AND bool_and(COALESCE(a.status='approved' AND a.leader_id=g.leader_id,false))
  FROM group_databases gd JOIN groups g ON g.id=gd.group_id
- LEFT JOIN draft_approvals a ON a.group_id=g.id AND a.draft_id=?
+ JOIN drafts d ON d.id=? AND d.database_id=gd.database_id
+ LEFT JOIN draft_approvals a ON a.group_id=g.id AND a.draft_id=d.id AND a.round=d.current_round
  WHERE gd.database_id=?`, id, dbID).Scan(&approved).Error
 	return approved, err
 }
@@ -121,6 +122,9 @@ func (r *migrationRepository) FinishDraft(ctx context.Context, id uint, audit *d
 		saved, err := repo.Save(ctx, audit)
 		if err != nil {
 			return err
+		}
+		if head == nil {
+			head, forward = &saved.ID, &saved.ID
 		}
 		*audit = *saved
 		if err = repo.UpdatePosition(ctx, audit.DatabaseID, head, parent, forward, audit.ExecutionID); err != nil {

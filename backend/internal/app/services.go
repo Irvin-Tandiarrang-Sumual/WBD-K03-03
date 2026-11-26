@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/channel"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -14,7 +15,6 @@ import (
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
 	userservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user"
 	usergroupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/user_group"
-	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 	"gorm.io/gorm"
 )
 
@@ -98,6 +98,7 @@ func buildServices(
 			}
 		},
 		migrationMetrics,
+		userGroupService,
 	)
 
 	taskQueue := channel.NewChannelQueue(

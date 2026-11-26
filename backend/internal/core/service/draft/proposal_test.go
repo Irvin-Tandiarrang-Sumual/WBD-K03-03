@@ -18,6 +18,7 @@ type draftStore struct {
 	draft         *domain.Draft
 	votes         map[uint]bool
 	lastExecution uint
+	lastAudit     *domain.Migration
 }
 
 func (r *draftStore) WithPosition(_ context.Context, _ uint, fn func(ports.MigrationRepository, domain.MigrationPosition) error) error {
@@ -69,6 +70,7 @@ func (r *draftStore) UpdatePosition(_ context.Context, _ uint, head, parent, for
 
 func (r *draftStore) FinishDraft(ctx context.Context, _ uint, m *domain.Migration, head, parent, forward *uint) error {
 	m.ID = m.ExecutionID + 10
+	r.lastAudit = m
 	if m.RevertsMigrationID == nil {
 		r.lastExecution = m.ID
 	}
@@ -80,6 +82,8 @@ type journey struct {
 	repo     *draftStore
 	svc      ports.DraftService
 	commands []string
+	worker   *draft.ExecutionWorker
+	task     *ports.ExecutionTask
 	ctx      context.Context
 }
 
@@ -114,7 +118,29 @@ func newJourney() *journey {
 		}
 		return nil
 	}}
-	j.svc = draft.NewDraftService(nil, nil, auth, &testutil.DatabaseRepository{}, driver, r)
+	draftRepo := &testutil.DraftRepository{
+		FindByIDFunc: func(context.Context, uint) (*domain.Draft, error) { return r.draft, nil },
+	}
+	dbRepo := &testutil.DatabaseRepository{
+		FindByIdFunc: func(context.Context, uint) (*domain.Database, error) {
+			return &domain.Database{ID: 1, CurrentMigrationID: r.pos.HeadID, LatestExecutionID: r.pos.ExecutionID}, nil
+		},
+		FindWithCredentialByIDFunc: func(context.Context, uint) (domain.Database, error) {
+			return domain.Database{ID: 1, CurrentMigrationID: r.pos.HeadID, LatestExecutionID: r.pos.ExecutionID}, nil
+		},
+		IncrementExecutionIDFunc: func(context.Context, uint) (uint, error) {
+			r.pos.ExecutionID++
+			return r.pos.ExecutionID, nil
+		},
+	}
+	queue := &testutil.TaskQueue{
+		EnqueueFunc: func(_ context.Context, task ports.ExecutionTask) error {
+			j.task = &task
+			return nil
+		},
+	}
+	j.svc = draft.NewDraftService(draftRepo, nil, auth, dbRepo, driver, r, queue)
+	j.worker = draft.NewExecutionWorker(draftRepo, dbRepo, r, driver, nil, j.svc.UnlockDatabase, nil, auth)
 	return j
 }
 
@@ -129,11 +155,18 @@ func (j *journey) apply(t *testing.T, op string) *domain.Migration {
 			t.Fatal(err)
 		}
 	}
-	m, err := j.svc.ExecuteMigrationDraft(j.ctx, 1, d.ID, 1)
-	if err != nil {
+	commandsBeforeEnqueue := len(j.commands)
+	if _, err := j.svc.ExecuteMigrationDraft(j.ctx, 1, d.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	return m
+	if len(j.commands) != commandsBeforeEnqueue || j.task == nil {
+		t.Fatal("expected SQL to wait for the worker")
+	}
+	if err := j.worker.Execute(j.ctx, *j.task); err != nil {
+		t.Fatal(err)
+	}
+	j.task = nil
+	return j.repo.lastAudit
 }
 
 func TestDraftService_ProposeRollback_ViewOnlyUser_ReturnsErrForbidden(t *testing.T) {

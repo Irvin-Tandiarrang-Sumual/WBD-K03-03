@@ -556,55 +556,96 @@ func (s *draftService) ValidateDraft(ctx context.Context, draftID uint) (*domain
 	return draft, nil
 }
 
-func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID uint) error {
+func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID uint) (string, error) {
 	if draftID == 0 || userID == 0 {
-		return domain.ErrInvalidDraftInput
+		return "", domain.ErrInvalidDraftInput
 	}
 
 	draft, err := s.draftRepo.FindByID(ctx, draftID)
 	if err != nil {
-		return err
-	}
-
-	if s.databaseRepo != nil {
-		db, err := s.databaseRepo.FindById(ctx, draft.DatabaseID)
-		if err != nil || db == nil {
-			return domain.ErrDatabaseNotFound
-		}
+		return "", err
 	}
 
 	if draft.UserID != userID {
-		return domain.ErrForbidden
+		return "", domain.ErrForbidden
+	}
+	return s.queueApprovedDraft(ctx, draft, userID)
 	}
 
-	if inv, _ := s.invalidateIfAuthorUnauthorized(ctx, s.draftRepo, draft); inv {
-		return domain.ErrDraftNotApproved
-	}
-
-	if draft.Status != domain.DraftStatusApproved {
-		return domain.ErrDraftNotApproved
-	}
-
-	if err := s.checkQuarantineConflicts(ctx, draft.DatabaseID); err != nil {
-		return err
-	}
-
+func (s *draftService) queueApprovedDraft(ctx context.Context, draft *domain.Draft, userID uint) (string, error) {
 	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
+	if err != nil {
+		return "", err
+	}
+
+	draft, err = s.reloadQueuedDraft(ctx, draft)
+	if err != nil {
+		lock.Unlock()
+		return "", err
+	}
+	execID, err := s.prepareDraftExecution(ctx, draft)
+	if err != nil {
+		lock.Unlock()
+		return "", err
+	}
+	if err := s.dispatchExecutionTask(ctx, draft, ports.MetricOpExecute, execID, userID, lock); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d:%d", draft.DatabaseID, execID), nil
+	}
+
+func (s *draftService) reloadQueuedDraft(ctx context.Context, draft *domain.Draft) (*domain.Draft, error) {
+	if s.draftRepo == nil {
+		return draft, nil
+	}
+	return s.draftRepo.FindByID(ctx, draft.ID)
+	}
+
+func (s *draftService) prepareDraftExecution(ctx context.Context, draft *domain.Draft) (uint, error) {
+	if err := s.validateApprovedDraft(ctx, draft); err != nil {
+		return 0, err
+	}
+	if err := s.checkQuarantineConflicts(ctx, draft.DatabaseID); err != nil {
+		return 0, err
+	}
+	if s.databaseRepo == nil {
+		return 0, nil
+	}
+	database, err := s.databaseRepo.FindById(ctx, draft.DatabaseID)
+	if err != nil || database == nil {
+		return 0, domain.ErrDatabaseNotFound
+	}
+	if isRollbackOrForward(draft) && draft.BaseExecutionID != database.LatestExecutionID {
+		return 0, domain.ErrDraftConflict
+	}
+	if err := requireConsensus(ctx, s.migrationRepo, draft); err != nil {
+		return 0, err
+	}
+	return s.databaseRepo.IncrementExecutionID(ctx, draft.DatabaseID)
+}
+
+func (s *draftService) validateApprovedDraft(ctx context.Context, draft *domain.Draft) error {
+	if isRollbackOrForward(draft) {
+		if draft.Status != domain.DraftStatusApproved {
+			return domain.ErrDraftConflict
+		}
+		if s.userGroupService != nil {
+			return s.userGroupService.Authorize(ctx, draft.UserID, draft.DatabaseID, domain.AccessViewEdit)
+		}
+		return nil
+	}
+	invalidated, err := s.invalidateIfAuthorUnauthorized(ctx, s.draftRepo, draft)
 	if err != nil {
 		return err
 	}
-
-	var execID uint
-	if s.databaseRepo != nil {
-		incID, err := s.databaseRepo.IncrementExecutionID(ctx, draft.DatabaseID)
-		if err != nil {
-			lock.Unlock()
-			return err
+	if invalidated || draft.Status != domain.DraftStatusApproved {
+		return domain.ErrDraftNotApproved
 		}
-		execID = incID
+	return nil
 	}
 
-	return s.dispatchExecutionTask(ctx, draft, "execute", execID, userID, lock)
+func isRollbackOrForward(draft *domain.Draft) bool {
+	return draft.Operation == domain.DraftOperationRollback || draft.Operation == domain.DraftOperationForward
 }
 
 func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uint) error {
@@ -727,6 +768,7 @@ func (s *draftService) dispatchExecutionTask(
 	userID uint,
 	lock *dbLock,
 ) error {
+	previousStatus := draft.Status
 	draft.Status = domain.DraftStatusExecuting
 	draft.UpdatedAt = time.Now()
 	if _, err := s.draftRepo.Update(ctx, draft); err != nil {
@@ -747,8 +789,10 @@ func (s *draftService) dispatchExecutionTask(
 			TraceCarrier: carrier,
 		}
 		if err := s.taskQueue.Enqueue(ctx, task); err != nil {
-			lock.Unlock()
-			return err
+			defer lock.Unlock()
+			draft.Status = previousStatus
+			_, restoreErr := s.draftRepo.Update(context.WithoutCancel(ctx), draft)
+			return errors.Join(err, restoreErr)
 		}
 	}
 

@@ -27,6 +27,8 @@ type ExecutionWorker struct {
 	metrics        ports.MigrationMetrics
 	maxRetries     int
 	backoffBase    time.Duration
+
+	userGroupService ports.UserGroupService
 }
 
 func NewExecutionWorker(
@@ -37,11 +39,12 @@ func NewExecutionWorker(
 	groupRepo ports.GroupRepository,
 	unlockDatabase func(databaseID uint),
 	metrics ports.MigrationMetrics,
+	authorizers ...ports.UserGroupService,
 ) *ExecutionWorker {
 	if metrics == nil {
 		metrics = ports.NoopMigrationMetrics{}
 	}
-	return &ExecutionWorker{
+	worker := &ExecutionWorker{
 		draftRepo:      draftRepo,
 		databaseRepo:   databaseRepo,
 		migrationRepo:  migrationRepo,
@@ -52,6 +55,10 @@ func NewExecutionWorker(
 		maxRetries:     3,
 		backoffBase:    10 * time.Millisecond,
 	}
+	if len(authorizers) > 0 {
+		worker.userGroupService = authorizers[0]
+	}
+	return worker
 }
 
 func (w *ExecutionWorker) SetRetryPolicy(maxRetries int, backoffBase time.Duration) {
@@ -126,6 +133,15 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 		return err
 	}
 
+	if task.Operation == ports.MetricOpExecute && draft.Status != domain.DraftStatusExecuting {
+		return domain.ErrInvalidDraftState
+	}
+	if task.Operation == ports.MetricOpExecute {
+		if err := w.revalidateExecution(ctx, task, draft); err != nil {
+			w.handleFailure(ctx, task, err.Error())
+			return err
+		}
+	}
 	if task.Operation == "revert" {
 		return w.executeRevert(ctx, task, draft, db)
 	}
@@ -134,7 +150,15 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 		return w.executeBatch(ctx, task, draft, db)
 	}
 
-	return w.executeSingleMigrationWithRetry(ctx, task, draft, db)
+	if w.migrationRepo == nil {
+		return w.executeSingleMigrationWithRetry(ctx, task, draft, db, nil)
+	}
+	plan, err := w.prepareExecution(ctx, task, draft, db)
+	if err != nil {
+		w.handleFailure(ctx, task, err.Error())
+		return err
+	}
+	return w.executeSingleMigrationWithRetry(ctx, task, draft, db, plan)
 }
 
 func (w *ExecutionWorker) executeSingleMigrationWithRetry(
@@ -142,6 +166,7 @@ func (w *ExecutionWorker) executeSingleMigrationWithRetry(
 	task ports.ExecutionTask,
 	draft *domain.Draft,
 	db domain.Database,
+	plan *migrationExecution,
 ) error {
 	var lastErr error
 	for attempt := 0; attempt <= w.maxRetries; attempt++ {
@@ -154,7 +179,7 @@ func (w *ExecutionWorker) executeSingleMigrationWithRetry(
 
 		_, cmdErr := w.databaseDriver.ExecuteCommand(ctx, db, draft.SqlUp)
 		if cmdErr == nil {
-			return w.handleSuccess(ctx, task, draft)
+			return w.finishExecution(ctx, task, draft, db, plan)
 		}
 
 		lastErr = cmdErr

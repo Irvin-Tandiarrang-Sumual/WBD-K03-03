@@ -139,7 +139,7 @@ func (r *databaseRepository) FindByIDAndUserID(ctx context.Context, databaseID u
 func (r *databaseRepository) FindByID(ctx context.Context, databaseID uint) (domain.Database, error) {
 	var storedDatabase model.Database
 	err := r.db.WithContext(ctx).
-		Select("id", "port", "host", "user", "type", "name").
+		Select("id", "port", "host", "user", "type", "name", "current_migration_id", "latest_execution_id").
 		First(&storedDatabase, databaseID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

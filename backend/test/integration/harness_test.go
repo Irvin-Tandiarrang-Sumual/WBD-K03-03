@@ -6,9 +6,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
 	driver "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver"
@@ -215,6 +217,7 @@ func newTestDraftHandler(
 		draftRepo, databaseRepo, migrationRepo, databaseDriver, groupRepo,
 		func(databaseID uint) { service.UnlockDatabase(databaseID) },
 		ports.NoopMigrationMetrics{},
+		userGroupService,
 	)
 	queue := channel.NewChannelQueue(worker.Execute, 2, 16, channel.DefaultTaskTimeout)
 	t.Cleanup(queue.Close)
@@ -383,4 +386,91 @@ func insertTestUser(t *testing.T, stack *testStack, username, password, role str
 		t.Fatal(err)
 	}
 	return leader
+}
+
+type testSession struct {
+	cookie string
+	csrf   string
+}
+
+func signIn(t *testing.T, stack *testStack, username string) testSession {
+	t.Helper()
+	cookie, csrf := loginUser(t, stack.engine, username, "password123")
+	return testSession{cookie: cookie, csrf: csrf}
+}
+
+func applyTestMigration(t *testing.T, stack *testStack, databaseID uint, author testSession, sqlUp, sqlDown string, leaders ...testSession) handlers.MigrationResponse {
+	t.Helper()
+	base := fmt.Sprintf("/api/v1/me/databases/%d", databaseID)
+	request := handlers.CreateDraftRequest{SqlUp: sqlUp, SqlDown: sqlDown}
+	proposal := executeRequest(stack.engine, http.MethodPost, base+"/migrations", request, author.cookie, author.csrf)
+	if proposal.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for migration draft: %s", proposal.Body.String())
+	}
+	draft := parseResponseBody[handlers.DraftResponse](t, proposal).Data
+	if draft.Status != domain.DraftStatusPendingApproval {
+		t.Fatalf("expected draft to await approval, got %s", draft.Status)
+	}
+	path := fmt.Sprintf("/api/v1/drafts/%d", draft.ID)
+	early := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, author.cookie, author.csrf)
+	if early.Code != http.StatusConflict {
+		t.Fatalf("expected unapproved execution to be rejected: %s", early.Body.String())
+	}
+	for _, leader := range leaders {
+		approveTestDraft(t, stack, path, leader)
+	}
+	accepted := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, author.cookie, author.csrf)
+	if accepted.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 after approval: %s", accepted.Body.String())
+	}
+	job := parseResponseBody[handlers.DraftExecutionResponse](t, accepted).Data
+	if job.JobID == "" || job.DraftID != draft.ID {
+		t.Fatalf("expected job ID for draft %d, got %+v", draft.ID, job)
+	}
+	return waitForAppliedMigration(t, stack, databaseID, draft.ID, author)
+}
+
+func approveTestDraft(t *testing.T, stack *testStack, path string, voter testSession) {
+	t.Helper()
+	vote := executeRequest(stack.engine, http.MethodPost, path+"/approvals",
+		handlers.SubmitApprovalRequest{Status: domain.VoteApproved}, voter.cookie, voter.csrf)
+	if vote.Code != http.StatusOK {
+		t.Fatalf("expected 200 for approval: %s", vote.Body.String())
+	}
+}
+
+func waitForAppliedMigration(t *testing.T, stack *testStack, databaseID, draftID uint, author testSession) handlers.MigrationResponse {
+	t.Helper()
+	path := fmt.Sprintf("/api/v1/drafts/%d", draftID)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := executeRequest(stack.engine, http.MethodGet, path, nil, author.cookie, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("failed to fetch draft: %s", rec.Body.String())
+		}
+		status := parseResponseBody[handlers.DraftResponse](t, rec).Data.Status
+		switch status {
+		case domain.DraftStatusFailed, domain.DraftStatusInvalidated:
+			t.Fatalf("draft %d ended in %s", draftID, status)
+		case domain.DraftStatusApplied:
+			return getDraftMigration(t, stack, databaseID, draftID, author)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("draft %d did not finish", draftID)
+	return handlers.MigrationResponse{}
+}
+
+func getDraftMigration(t *testing.T, stack *testStack, databaseID, draftID uint, author testSession) handlers.MigrationResponse {
+	t.Helper()
+	var migration model.Migration
+	if err := stack.db.Select("id").Where("database_id = ? AND draft_id = ?", databaseID, draftID).First(&migration).Error; err != nil {
+		t.Fatalf("failed to find migration for draft %d: %v", draftID, err)
+	}
+	path := fmt.Sprintf("/api/v1/me/databases/%d/migrations/%d", databaseID, migration.ID)
+	rec := executeRequest(stack.engine, http.MethodGet, path, nil, author.cookie, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("failed to fetch migration: %s", rec.Body.String())
+	}
+	return parseResponseBody[handlers.MigrationResponse](t, rec).Data
 }

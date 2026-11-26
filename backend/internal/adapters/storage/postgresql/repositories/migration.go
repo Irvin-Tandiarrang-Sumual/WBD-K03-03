@@ -48,7 +48,7 @@ func (r *migrationRepository) FindAllByDatabaseID(ctx context.Context, databaseI
 func (r *migrationRepository) FindLatestByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
 	var migration model.Migration
 	err := r.db.WithContext(ctx).
-		Where("database_id = ? AND draft_id IS NULL", databaseID).
+		Where("database_id = ? AND source_migration_id IS NULL AND reverts_migration_id IS NULL AND version <> ''", databaseID).
 		Order("id DESC").
 		First(&migration).Error
 	if err != nil {

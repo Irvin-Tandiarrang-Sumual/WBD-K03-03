@@ -65,6 +65,7 @@ func TestExecutionWorker_Execute_Success_RecordsSuccessMigrationAndMarksDraftApp
 		unlocked = true
 	}
 
+	prepareWorkerMigrationStore(draftRepo, migrationRepo, driver)
 	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, unlockFn, nil)
 
 	// Act
@@ -135,6 +136,7 @@ func TestExecutionWorker_Execute_TransientError_RetriesAndSucceeds(t *testing.T)
 		},
 	}
 
+	prepareWorkerMigrationStore(draftRepo, migrationRepo, driver)
 	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 	worker.SetRetryPolicy(3, 1*time.Millisecond)
 
@@ -200,6 +202,7 @@ func TestExecutionWorker_Execute_TransientErrorExceedsMaxRetries_RecordsFailMigr
 		},
 	}
 
+	prepareWorkerMigrationStore(draftRepo, migrationRepo, driver)
 	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 	worker.SetRetryPolicy(2, 1*time.Millisecond)
 
@@ -258,6 +261,7 @@ func TestExecutionWorker_Execute_TargetDBUnreachable_RecordsFailMigrationAndMark
 	}
 
 	driver := &testutil.DatabaseDriver{}
+	prepareWorkerMigrationStore(draftRepo, migrationRepo, driver)
 	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
@@ -319,6 +323,7 @@ func TestExecutionWorker_Execute_ContextTimeout_AbortsAndRecordsFailMigration(t 
 		},
 	}
 
+	prepareWorkerMigrationStore(draftRepo, migrationRepo, driver)
 	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 	worker.SetRetryPolicy(0, time.Millisecond)
 
@@ -379,6 +384,7 @@ func TestExecutionWorker_Execute_WorkerPanics_RecoversGracefullyAndMarksDraftFai
 		},
 	}
 
+	prepareWorkerMigrationStore(draftRepo, migrationRepo, driver)
 	worker := draft.NewExecutionWorker(draftRepo, dbRepo, migrationRepo, driver, nil, nil, nil)
 
 	// Act
@@ -1160,5 +1166,26 @@ func TestExecutionWorker_ProcessBatchChunk_ChunkFails_RecordsQuarantineMetric(t 
 	}
 	if !quarantinedFound {
 		t.Errorf("expected %q chunk metric to be recorded, got: %v", ports.MetricStatusQuarantined, mockMetrics.chunkCalls)
+	}
+}
+
+func prepareWorkerMigrationStore(draftRepo *testutil.DraftRepository, migrationRepo *testutil.MigrationRepository, driver *testutil.DatabaseDriver) {
+	migrationRepo.FindLatestByDatabaseIDFunc = func(context.Context, uint) (*domain.Migration, error) {
+		return &domain.Migration{ID: 1, Version: "1"}, nil
+	}
+	migrationRepo.FinishDraftFunc = func(ctx context.Context, id uint, migration *domain.Migration, _, _, _ *uint) error {
+		if _, err := migrationRepo.Save(ctx, migration); err != nil {
+			return err
+		}
+		draft, err := draftRepo.FindByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		draft.Status = domain.DraftStatusApplied
+		_, err = draftRepo.Update(ctx, draft)
+		return err
+	}
+	driver.GetDatabaseMetadataFunc = func(context.Context, domain.Database) (*ports.DatabaseMetadata, error) {
+		return &ports.DatabaseMetadata{}, nil
 	}
 }

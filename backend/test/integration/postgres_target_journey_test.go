@@ -177,18 +177,13 @@ func TestPostgresTarget_GivenUserWithReadWriteAccess_WhenApplySQLUpMigration_The
 	);
 	INSERT INTO pg_products (id, name, price) VALUES (1, 'Widget', 19.99);`
 
-	migrationReq := handlers.CreateMigrationRequest{SqlUp: sqlUp}
-	migrationURL := fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID)
-	rec := executeRequest(stack.engine, http.MethodPost, migrationURL, migrationReq, sessionCookie, csrfToken)
+	leader := signIn(t, stack, "pg-migrators-group-leader")
+	migration := applyTestMigration(t, stack, createdDB.ID, testSession{sessionCookie, csrfToken},
+		sqlUp, "DROP TABLE pg_products", leader)
 
 	// Assert - Migration creation success
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201 Created on migration, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	res := parseResponseBody[handlers.MigrationResponse](t, rec)
-	if res.Data.Status != "success" {
-		t.Fatalf("expected migration status success, got %q", res.Data.Status)
+	if migration.Status != domain.MigrationStatusSuccess || migration.Version == "" || len(migration.Snapshot) == 0 {
+		t.Fatalf("expected versioned migration with a snapshot, got %+v", migration)
 	}
 
 	// Verify table physically exists in Target PostgreSQL
@@ -231,21 +226,18 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 	user := createRegularUser(t, stack, "pg_rollback_user", "password123", []uint{group.ID})
 	sessionCookie, csrfToken := loginUser(t, stack.engine, user.Username, "password123")
 
+	author := testSession{sessionCookie, csrfToken}
+	leaderCookie, leaderToken := loginUser(t, stack.engine, leader.Username, "password123")
+	voters := []testSession{{leaderCookie, leaderToken}}
+	voters = append(voters, testSession{viewerCookie, viewerToken})
+
 	// Step 1: Apply initial baseline migration 1
-	rec1 := executeRequest(stack.engine, http.MethodPost, fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID),
-		handlers.CreateMigrationRequest{SqlUp: "CREATE TABLE pg_base_tbl (id INT PRIMARY KEY);"},
-		sessionCookie, csrfToken)
-	if rec1.Code != http.StatusCreated {
-		t.Fatalf("failed to create initial baseline migration: %s", rec1.Body.String())
-	}
+	applyTestMigration(t, stack, createdDB.ID, author,
+		"CREATE TABLE pg_base_tbl (id INT PRIMARY KEY);", "DROP TABLE pg_base_tbl", voters...)
 
 	// Step 2: Apply second migration to be rolled back
-	rec2 := executeRequest(stack.engine, http.MethodPost, fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID),
-		handlers.CreateMigrationRequest{SqlUp: "CREATE TABLE pg_rollback_tbl (id INT PRIMARY KEY, title VARCHAR(50));"},
-		sessionCookie, csrfToken)
-	if rec2.Code != http.StatusCreated {
-		t.Fatalf("failed to create second migration: %s", rec2.Body.String())
-	}
+	target := applyTestMigration(t, stack, createdDB.ID, author,
+		"CREATE TABLE pg_rollback_tbl (id INT PRIMARY KEY, title VARCHAR(50));", "DROP TABLE pg_rollback_tbl", voters...)
 
 	// Act
 	base := fmt.Sprintf("/api/v1/me/databases/%d", createdDB.ID)
@@ -259,7 +251,6 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 	if blocked.Code != http.StatusConflict {
 		t.Fatalf("expected unapproved execution to fail: %s", blocked.Body.String())
 	}
-	leaderCookie, leaderToken := loginUser(t, stack.engine, leader.Username, "password123")
 	vote := executeRequest(stack.engine, http.MethodPost, path+"/vote", map[string]bool{"approve": true}, leaderCookie, leaderToken)
 	if vote.Code != http.StatusNoContent {
 		t.Fatalf("vote: %s", vote.Body.String())
@@ -275,9 +266,11 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 	recRollback := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, sessionCookie, csrfToken)
 
 	// Assert - Rollback execution success
-	if recRollback.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on rollback, got %d: %s", recRollback.Code, recRollback.Body.String())
+	if recRollback.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted on rollback, got %d: %s", recRollback.Code, recRollback.Body.String())
 	}
+
+	rollback := waitForAppliedMigration(t, stack, createdDB.ID, draft.ID, author)
 
 	// Verify table pg_rollback_tbl is dropped in PostgreSQL target
 	verifyReq := handlers.DatabaseQueryRequest{Query: "SELECT * FROM pg_rollback_tbl;"}
@@ -286,8 +279,6 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 		t.Fatalf("expected query to fail because table should be dropped by rollback, but got 200 OK")
 	}
 
-	target := parseResponseBody[handlers.MigrationResponse](t, rec2).Data
-	rollback := parseResponseBody[handlers.MigrationResponse](t, recRollback).Data
 	if rollback.RevertsMigrationID == nil || *rollback.RevertsMigrationID != target.ID || rollback.ExecutionID == target.ExecutionID {
 		t.Fatalf("rollback audit %+v; target %+v", rollback, target)
 	}
@@ -296,24 +287,18 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 		t.Fatal(proposal.Body.String())
 	}
 	draft = parseResponseBody[handlers.MigrationDraftResponse](t, proposal).Data
-	path = fmt.Sprintf("%s/migration-drafts/%d", base, draft.ID)
-	vote = executeRequest(stack.engine, http.MethodPost, path+"/vote", map[string]bool{"approve": true}, leaderCookie, leaderToken)
-	if vote.Code != http.StatusNoContent {
-		t.Fatal(vote.Body.String())
-	}
+	path = fmt.Sprintf("/api/v1/drafts/%d", draft.ID)
+	approveTestDraft(t, stack, path, voters[0])
 	partial = executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, sessionCookie, csrfToken)
 	if partial.Code != http.StatusConflict {
 		t.Fatal(partial.Body.String())
 	}
-	vote = executeRequest(stack.engine, http.MethodPost, path+"/vote", map[string]bool{"approve": true}, viewerCookie, viewerToken)
-	if vote.Code != http.StatusNoContent {
-		t.Fatal(vote.Body.String())
-	}
+	approveTestDraft(t, stack, path, voters[1])
 	replay := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, sessionCookie, csrfToken)
-	if replay.Code != http.StatusOK {
+	if replay.Code != http.StatusAccepted {
 		t.Fatal(replay.Body.String())
 	}
-	forward := parseResponseBody[handlers.MigrationResponse](t, replay).Data
+	forward := waitForAppliedMigration(t, stack, createdDB.ID, draft.ID, author)
 	for _, hide := range []bool{false, true} {
 		history := executeRequest(stack.engine, http.MethodGet, fmt.Sprintf("%s/migrations?hide_rollback=%t", base, hide), nil, sessionCookie, csrfToken)
 		var page response.PagedResponse[handlers.MigrationResponse]

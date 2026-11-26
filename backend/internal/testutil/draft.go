@@ -218,11 +218,11 @@ func (f *DraftService) ValidateDraft(ctx context.Context, draftID uint) (*domain
 	return nil, nil
 }
 
-func (f *DraftService) ExecuteDraft(ctx context.Context, draftID uint, userID uint) error {
+func (f *DraftService) ExecuteDraft(ctx context.Context, draftID uint, userID uint) (string, error) {
 	if f.ExecuteDraftFunc != nil {
-		return f.ExecuteDraftFunc(ctx, draftID, userID)
+		return "", f.ExecuteDraftFunc(ctx, draftID, userID)
 	}
-	return nil
+	return "", nil
 }
 
 func (f *DraftService) UnlockDatabase(databaseID uint) {

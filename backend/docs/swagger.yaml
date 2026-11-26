@@ -26,6 +26,15 @@ definitions:
       success:
         type: boolean
     type: object
+  github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftExecutionResponse:
+    properties:
+      data:
+        $ref: '#/definitions/internal_adapters_http_handlers.DraftExecutionResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
   github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse:
     properties:
       data:
@@ -322,6 +331,13 @@ definitions:
       status:
         type: string
       vote:
+        type: string
+    type: object
+  internal_adapters_http_handlers.DraftExecutionResponse:
+    properties:
+      draftId:
+        type: integer
+      jobId:
         type: string
     type: object
   internal_adapters_http_handlers.DraftResponse:
@@ -1625,7 +1641,7 @@ paths:
         "202":
           description: Draft execution accepted
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftExecutionResponse'
         "400":
           description: Invalid draft ID
           schema:
@@ -1985,39 +2001,23 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "202":
+          description: Accepted
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse'
-        "400":
-          description: Invalid request or irreversible migration
-          schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftExecutionResponse'
         "403":
           description: Forbidden
           schema:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
-        "404":
-          description: Database or draft not found
-          schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
         "409":
-          description: Unavailable in the current state
-          schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
-        "500":
-          description: Internal server error
+          description: Conflict
           schema:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
       security:
       - CookieAuth: []
-      summary: Execute a unanimously approved migration draft
+      summary: Execute an approved rollback or forward draft
       tags:
-      - Me - Migrations
+      - Me - Drafts
   /me/databases/{database_id}/migration-drafts/{draft_id}/vote:
     post:
       consumes:
@@ -2126,8 +2126,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Runs a SQL migration (sql_up) on the specified database and records
-        the result. Requires edit access.
+      description: Submits a SQL migration as a draft for unanimous approval. Requires
+        edit access.
       parameters:
       - description: Database ID
         in: path
@@ -2139,14 +2139,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_adapters_http_handlers.CreateMigrationRequest'
+          $ref: '#/definitions/internal_adapters_http_handlers.CreateDraftRequest'
       produces:
       - application/json
       responses:
         "201":
-          description: Migration created
+          description: Draft created
           schema:
-            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse'
+            $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse'
         "400":
           description: Invalid database ID or migration input
           schema:
@@ -2169,7 +2169,7 @@ paths:
             $ref: '#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any'
       security:
       - CookieAuth: []
-      summary: Create migration
+      summary: Submit migration draft
       tags:
       - Me - Migrations
   /me/databases/{database_id}/migrations/{migration_id}:

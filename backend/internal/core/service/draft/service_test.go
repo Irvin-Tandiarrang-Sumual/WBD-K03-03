@@ -702,7 +702,7 @@ func TestDraftService_ExecuteDraft_DraftInvalidated_ReturnsErrDraftNotApproved(t
 	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrDraftNotApproved) {
@@ -746,7 +746,7 @@ func TestDraftService_ExecuteDraft_CallerLacksEditAccess_ReturnsErrForbidden(t *
 	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, callerID)
+	_, err := svc.ExecuteDraft(ctx, draftID, callerID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrForbidden) {
@@ -792,7 +792,7 @@ func TestDraftService_ExecuteDraft_Approved_TransitionsToExecuting(t *testing.T)
 	svc := draft.NewDraftService(draftRepo, nil, userGroupSvc)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if err != nil {
@@ -1466,7 +1466,7 @@ func TestDraftService_ExecuteDraft_InvalidIDs_ReturnsErrInvalidDraftInput(t *tes
 	svc := draft.NewDraftService(nil, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, 0, 10)
+	_, err := svc.ExecuteDraft(ctx, 0, 10)
 
 	// Assert
 	if !errors.Is(err, domain.ErrInvalidDraftInput) {
@@ -1485,7 +1485,7 @@ func TestDraftService_ExecuteDraft_DraftNotFound_ReturnsErrDraftNotFound(t *test
 	svc := draft.NewDraftService(draftRepo, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, 99, 10)
+	_, err := svc.ExecuteDraft(ctx, 99, 10)
 
 	// Assert
 	if !errors.Is(err, domain.ErrDraftNotFound) {
@@ -1519,7 +1519,7 @@ func TestDraftService_ExecuteDraft_DatabaseNotFound_ReturnsErrDatabaseNotFound(t
 	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrDatabaseNotFound) {
@@ -1548,7 +1548,7 @@ func TestDraftService_ExecuteDraft_NotAuthor_ReturnsErrForbidden(t *testing.T) {
 	svc := draft.NewDraftService(draftRepo, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, callerID)
+	_, err := svc.ExecuteDraft(ctx, draftID, callerID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrForbidden) {
@@ -1576,7 +1576,7 @@ func TestDraftService_ExecuteDraft_DraftNotApproved_ReturnsErrDraftNotApproved(t
 	svc := draft.NewDraftService(draftRepo, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrDraftNotApproved) {
@@ -1611,7 +1611,7 @@ func TestDraftService_ExecuteDraft_DatabaseExecuting_ReturnsErrMigrationInProgre
 	svc := draft.NewDraftService(draftRepo, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrMigrationInProgress) {
@@ -1646,7 +1646,7 @@ func TestDraftService_ExecuteDraft_DatabasePartiallyReverted_ReturnsErrDatabaseM
 	svc := draft.NewDraftService(draftRepo, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrDatabaseMustResolvePartiallyReverted) {
@@ -1687,9 +1687,9 @@ func TestDraftService_ExecuteDraft_ConcurrentRequestsSameDatabase_OnlyOneSucceed
 	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
 
 	// Act: First request acquires lock
-	err1 := svc.ExecuteDraft(ctx, 1, authorID)
+	_, err1 := svc.ExecuteDraft(ctx, 1, authorID)
 	// Second request for same DB while first is executing
-	err2 := svc.ExecuteDraft(ctx, 2, authorID)
+	_, err2 := svc.ExecuteDraft(ctx, 2, authorID)
 
 	// Assert
 	if err1 != nil {
@@ -1734,8 +1734,8 @@ func TestDraftService_ExecuteDraft_DifferentDatabases_AllowsParallelExecution(t 
 	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
 
 	// Act: Execute draft on DB 1 and draft on DB 2
-	err1 := svc.ExecuteDraft(ctx, 1, authorID)
-	err2 := svc.ExecuteDraft(ctx, 2, authorID)
+	_, err1 := svc.ExecuteDraft(ctx, 1, authorID)
+	_, err2 := svc.ExecuteDraft(ctx, 2, authorID)
 
 	// Assert: Both succeed because database mutexes are isolated per databaseID
 	if err1 != nil {
@@ -1789,7 +1789,7 @@ func TestDraftService_ExecuteDraft_ValidApprovedDraft_IncrementsExecutionIDAndEn
 	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if err != nil {
@@ -2079,7 +2079,7 @@ func TestDraftService_ExecuteBatch_DeterminesTargetScopeAndEnqueues(t *testing.T
 	svc := draft.NewDraftService(draftRepo, nil, nil, dbRepo, queue)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if err != nil {
@@ -2122,7 +2122,7 @@ func TestDraftService_ExecuteBatch_DatabaseLocked_ReturnsErrDatabaseLocked(t *te
 	svc := draft.NewDraftService(draftRepo, nil, nil)
 
 	// Act
-	err := svc.ExecuteDraft(ctx, draftID, authorID)
+	_, err := svc.ExecuteDraft(ctx, draftID, authorID)
 
 	// Assert
 	if !errors.Is(err, domain.ErrDatabaseLocked) {

@@ -1582,7 +1582,7 @@ const docTemplate = `{
                     "202": {
                         "description": "Draft execution accepted",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftExecutionResponse"
                         }
                     },
                     "400": {
@@ -2113,9 +2113,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Me - Migrations"
+                    "Me - Drafts"
                 ],
-                "summary": "Execute a unanimously approved migration draft",
+                "summary": "Execute an approved rollback or forward draft",
                 "parameters": [
                     {
                         "type": "integer",
@@ -2133,22 +2133,10 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request or irreversible migration",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftExecutionResponse"
                         }
                     },
                     "403": {
@@ -2157,20 +2145,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
                         }
                     },
-                    "404": {
-                        "description": "Database or draft not found",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
                     "409": {
-                        "description": "Unavailable in the current state",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-any"
                         }
@@ -2344,7 +2320,7 @@ const docTemplate = `{
                         "CookieAuth": []
                     }
                 ],
-                "description": "Runs a SQL migration (sql_up) on the specified database and records the result. Requires edit access.",
+                "description": "Submits a SQL migration as a draft for unanimous approval. Requires edit access.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2354,7 +2330,7 @@ const docTemplate = `{
                 "tags": [
                     "Me - Migrations"
                 ],
-                "summary": "Create migration",
+                "summary": "Submit migration draft",
                 "parameters": [
                     {
                         "type": "integer",
@@ -2369,15 +2345,15 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateMigrationRequest"
+                            "$ref": "#/definitions/internal_adapters_http_handlers.CreateDraftRequest"
                         }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "Migration created",
+                        "description": "Draft created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_MigrationResponse"
+                            "$ref": "#/definitions/github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftResponse"
                         }
                     },
                     "400": {
@@ -2664,6 +2640,20 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/internal_adapters_http_handlers.DatabaseResponse"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_Irvin-Tandiarrang-Sumual_WBD-K03-03_pkg_response.BaseResponse-internal_adapters_http_handlers_DraftExecutionResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_adapters_http_handlers.DraftExecutionResponse"
                 },
                 "message": {
                     "type": "string"
@@ -3122,6 +3112,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "vote": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_adapters_http_handlers.DraftExecutionResponse": {
+            "type": "object",
+            "properties": {
+                "draftId": {
+                    "type": "integer"
+                },
+                "jobId": {
                     "type": "string"
                 }
             }

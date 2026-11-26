@@ -164,18 +164,13 @@ func TestMySQLTarget_GivenUserWithReadWriteAccess_WhenApplySQLUpMigration_ThenSc
 		price DECIMAL(10,2) NOT NULL
 	);`
 
-	migrationReq := handlers.CreateMigrationRequest{SqlUp: sqlUp}
-	migrationURL := fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID)
-	rec := executeRequest(stack.engine, http.MethodPost, migrationURL, migrationReq, sessionCookie, csrfToken)
+	leader := signIn(t, stack, "mysql-migrators-group-leader")
+	migration := applyTestMigration(t, stack, createdDB.ID, testSession{sessionCookie, csrfToken},
+		sqlUp, "DROP TABLE mysql_products", leader)
 
 	// Assert
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201 Created on migration in MySQL, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	res := parseResponseBody[handlers.MigrationResponse](t, rec)
-	if res.Data.Status != "success" {
-		t.Fatalf("expected migration status success, got %q", res.Data.Status)
+	if migration.Status != domain.MigrationStatusSuccess || migration.Version == "" || len(migration.Snapshot) == 0 {
+		t.Fatalf("expected versioned migration with a snapshot, got %+v", migration)
 	}
 
 	// Verify table physically exists in MySQL container
@@ -212,21 +207,17 @@ func TestMySQLTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensatin
 	user := createRegularUser(t, stack, "mysql_rollback_user", "password123", []uint{group.ID})
 	sessionCookie, csrfToken := loginUser(t, stack.engine, user.Username, "password123")
 
+	author := testSession{sessionCookie, csrfToken}
+	leaderCookie, leaderToken := loginUser(t, stack.engine, leader.Username, "password123")
+	voters := []testSession{{leaderCookie, leaderToken}}
+
 	// Step 1: Apply baseline migration 1
-	rec1 := executeRequest(stack.engine, http.MethodPost, fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID),
-		handlers.CreateMigrationRequest{SqlUp: "CREATE TABLE mysql_base_tbl (id INT PRIMARY KEY);"},
-		sessionCookie, csrfToken)
-	if rec1.Code != http.StatusCreated {
-		t.Fatalf("failed to create initial baseline migration in MySQL: %s", rec1.Body.String())
-	}
+	applyTestMigration(t, stack, createdDB.ID, author,
+		"CREATE TABLE mysql_base_tbl (id INT PRIMARY KEY);", "DROP TABLE mysql_base_tbl", voters...)
 
 	// Step 2: Apply second migration to be rolled back
-	rec2 := executeRequest(stack.engine, http.MethodPost, fmt.Sprintf("/api/v1/me/databases/%d/migrations", createdDB.ID),
-		handlers.CreateMigrationRequest{SqlUp: "CREATE TABLE mysql_rollback_tbl (id INT PRIMARY KEY, title VARCHAR(50));"},
-		sessionCookie, csrfToken)
-	if rec2.Code != http.StatusCreated {
-		t.Fatalf("failed to create second migration in MySQL: %s", rec2.Body.String())
-	}
+	applyTestMigration(t, stack, createdDB.ID, author,
+		"CREATE TABLE mysql_rollback_tbl (id INT PRIMARY KEY, title VARCHAR(50));", "DROP TABLE mysql_rollback_tbl", voters...)
 
 	// Act
 	base := fmt.Sprintf("/api/v1/me/databases/%d", createdDB.ID)
@@ -240,7 +231,6 @@ func TestMySQLTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensatin
 	if blocked.Code != http.StatusConflict {
 		t.Fatalf("expected unapproved execution to fail: %s", blocked.Body.String())
 	}
-	leaderCookie, leaderToken := loginUser(t, stack.engine, leader.Username, "password123")
 	vote := executeRequest(stack.engine, http.MethodPost, path+"/vote", map[string]bool{"approve": true}, leaderCookie, leaderToken)
 	if vote.Code != http.StatusNoContent {
 		t.Fatalf("vote: %s", vote.Body.String())
@@ -248,9 +238,11 @@ func TestMySQLTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensatin
 	recRollback := executeRequest(stack.engine, http.MethodPost, path+"/execute", nil, sessionCookie, csrfToken)
 
 	// Assert - Rollback execution success
-	if recRollback.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on rollback in MySQL, got %d: %s", recRollback.Code, recRollback.Body.String())
+	if recRollback.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted on rollback in MySQL, got %d: %s", recRollback.Code, recRollback.Body.String())
 	}
+
+	waitForAppliedMigration(t, stack, createdDB.ID, draft.ID, author)
 
 	// Verify table mysql_rollback_tbl is dropped in MySQL container
 	verifyReq := handlers.DatabaseQueryRequest{Query: "SELECT * FROM mysql_rollback_tbl;"}

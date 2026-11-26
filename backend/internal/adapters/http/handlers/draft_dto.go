@@ -20,6 +20,11 @@ type SubmitApprovalRequest struct {
 	Status string `json:"status" binding:"required"`
 }
 
+type DraftExecutionResponse struct {
+	JobID   string `json:"jobId"`
+	DraftID uint   `json:"draftId"`
+}
+
 type DraftApprovalResponse struct {
 	ID          uint       `json:"id"`
 	DraftID     uint       `json:"draftId"`

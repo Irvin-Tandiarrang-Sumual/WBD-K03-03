@@ -258,7 +258,7 @@ func (h *DraftHandler) VoteDraft(c *gin.Context) {
 //	@Produce		json
 //	@Security		CookieAuth
 //	@Param			id		path		int							true	"Draft ID"
-//	@Success		202		{object}	response.BaseResponse[any]	"Draft execution accepted"
+//	@Success		202		{object}	response.BaseResponse[DraftExecutionResponse]	"Draft execution accepted"
 //	@Failure		400		{object}	response.BaseResponse[any]	"Invalid draft ID"
 //	@Failure		401		{object}	response.BaseResponse[any]	"Unauthorized"
 //	@Failure		403		{object}	response.BaseResponse[any]	"Forbidden (not author)"
@@ -280,14 +280,25 @@ func (h *DraftHandler) ExecuteDraft(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.ExecuteDraft(c.Request.Context(), draftID, userID); err != nil {
+	jobID, err := h.service.ExecuteDraft(c.Request.Context(), draftID, userID)
+	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, response.Success[any]("draft execution accepted", nil))
+	c.JSON(http.StatusAccepted, response.Success("draft execution accepted", DraftExecutionResponse{JobID: jobID, DraftID: draftID}))
 }
 
+// @Summary Execute an approved rollback or forward draft
+// @Tags Me - Drafts
+// @Produce json
+// @Security CookieAuth
+// @Param database_id path int true "Database ID"
+// @Param draft_id path int true "Draft ID"
+// @Success 202 {object} response.BaseResponse[DraftExecutionResponse]
+// @Failure 403 {object} response.BaseResponse[any]
+// @Failure 409 {object} response.BaseResponse[any]
+// @Router /me/databases/{database_id}/migration-drafts/{draft_id}/execute [post]
 func (h *DraftHandler) ExecuteMigrationDraft(c *gin.Context) {
 	dbID, userID, ok := draftActor(c)
 	if !ok {
@@ -298,12 +309,12 @@ func (h *DraftHandler) ExecuteMigrationDraft(c *gin.Context) {
 		c.Error(domain.ErrInvalidDraftInput)
 		return
 	}
-	m, err := h.service.ExecuteMigrationDraft(c.Request.Context(), dbID, id, userID)
+	jobID, err := h.service.ExecuteMigrationDraft(c.Request.Context(), dbID, id, userID)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, response.Success("draft applied", toMigrationResponse(m)))
+	c.JSON(http.StatusAccepted, response.Success("draft execution accepted", DraftExecutionResponse{JobID: jobID, DraftID: id}))
 }
 
 // ResumeBatch resumes execution of a partially reverted/failed batch draft.

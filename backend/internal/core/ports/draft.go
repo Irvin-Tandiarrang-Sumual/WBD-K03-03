@@ -15,8 +15,8 @@ type DraftService interface {
 	SubmitApproval(ctx context.Context, input domain.SubmitApprovalInput) (*domain.Draft, error)
 	VoteDraft(ctx context.Context, databaseID, draftID, userID uint, approve bool) error
 	ValidateDraft(ctx context.Context, draftID uint) (*domain.Draft, error)
-	ExecuteDraft(ctx context.Context, draftID uint, userID uint) error
-	ExecuteMigrationDraft(ctx context.Context, databaseID, draftID, userID uint) (*domain.Migration, error)
+	ExecuteDraft(ctx context.Context, draftID uint, userID uint) (string, error)
+	ExecuteMigrationDraft(ctx context.Context, databaseID, draftID, userID uint) (string, error)
 	UnlockDatabase(databaseID uint)
 	ResumeBatch(ctx context.Context, draftID uint, userID uint) error
 	RevertBatch(ctx context.Context, draftID uint, userID uint) error

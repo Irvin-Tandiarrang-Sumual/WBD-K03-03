@@ -3,7 +3,6 @@ package draft
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -78,96 +77,20 @@ func (s *draftService) VoteDraft(ctx context.Context, dbID, draftID, userID uint
 	})
 }
 
-func (s *draftService) ExecuteMigrationDraft(ctx context.Context, dbID, draftID, userID uint) (*domain.Migration, error) {
+func (s *draftService) ExecuteMigrationDraft(ctx context.Context, dbID, draftID, userID uint) (string, error) {
+	if s.migrationRepo == nil {
+		return "", domain.ErrDatabaseNotFound
+	}
 	if s.userGroupService != nil {
 		if err := s.userGroupService.Authorize(ctx, userID, dbID, domain.AccessViewEdit); err != nil {
-			return nil, err
+			return "", err
 		}
 	}
-	if s.databaseRepo == nil || s.databaseDriver == nil || s.migrationRepo == nil {
-		return nil, domain.ErrDatabaseNotFound
-	}
-	db, err := s.databaseRepo.FindWithCredentialByID(ctx, dbID)
+	draft, err := s.migrationRepo.FindDraft(ctx, dbID, draftID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	var audit *domain.Migration
-	var destination, parent, forward *uint
-	err = s.migrationRepo.WithPosition(ctx, dbID, func(repo ports.MigrationRepository, pos domain.MigrationPosition) error {
-		if err := s.completePendingSnapshot(ctx, repo, db); err != nil {
-			return err
-		}
-		draft, err := repo.FindDraft(ctx, dbID, draftID)
-		if err != nil {
-			return err
-		}
-		if draft.Status != "approved" || draft.BaseExecutionID != pos.ExecutionID {
-			return domain.ErrDraftConflict
-		}
-		if s.userGroupService != nil {
-			if err = s.userGroupService.Authorize(ctx, draft.UserID, dbID, domain.AccessViewEdit); err != nil {
-				return err
-			}
-		}
-		approved, err := repo.HasConsensus(ctx, dbID, draftID)
-		if err != nil {
-			return err
-		}
-		if !approved {
-			return domain.ErrDraftConflict
-		}
-		node, err := resolveTargetMigration(ctx, repo, dbID, pos, draft.Operation)
-		if err != nil {
-			return err
-		}
-		if node.ID != draft.TargetID {
-			return domain.ErrDraftConflict
-		}
-		destination = &node.ID
-		audit = &domain.Migration{
-			DatabaseID:         dbID,
-			UserID:             userID,
-			Version:            node.Version,
-			SourceMigrationID:  &node.ID,
-			DraftID:            &draft.ID,
-			ExecutionID:        pos.ExecutionID + 1,
-			SqlUp:              draft.SqlUp,
-			SqlDown:            draft.SqlDown,
-			Status:             domain.MigrationStatusSuccess,
-			IsReversible:       node.IsReversible,
-			IrreversibleReason: node.IrreversibleReason,
-		}
-		if draft.Operation == domain.DraftOperationRollback {
-			id, err := repo.FindActiveExecution(ctx, node.ID)
-			if err != nil {
-				return err
-			}
-			audit.RevertsMigrationID = &id
-			destination, parent, forward = node.ParentMigrationID, node.ParentMigrationID, &node.ID
-		}
-		return repo.UpdateDraftStatus(ctx, draftID, "executing")
-	})
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.databaseDriver.ExecuteCommand(ctx, db, audit.SqlUp)
-	if err != nil {
-		if statusErr := s.migrationRepo.UpdateDraftStatus(context.WithoutCancel(ctx), draftID, "failed"); statusErr != nil {
-			return nil, fmt.Errorf("%w (recording failure: %v)", err, statusErr)
-		}
-		return nil, err
-	}
-	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	s.captureAppliedSnapshot(finishCtx, db, audit)
-	err = s.migrationRepo.FinishDraft(finishCtx, draftID, audit, destination, parent, forward)
-	if err != nil {
-		return nil, err
-	}
-	if audit.Status == domain.MigrationStatusSnapshotPending {
-		return nil, domain.ErrMigrationSnapshotUnavailable
-	}
-	return audit, nil
+	return s.queueApprovedDraft(ctx, draft, userID)
 }
 
 func resolveTargetMigration(ctx context.Context, repo ports.MigrationRepository, dbID uint, pos domain.MigrationPosition, operation string) (*domain.Migration, error) {
@@ -200,8 +123,8 @@ func resolveTargetMigration(ctx context.Context, repo ports.MigrationRepository,
 	}
 }
 
-func (s *draftService) captureAppliedSnapshot(ctx context.Context, db domain.Database, m *domain.Migration) {
-	snapshot, _, err := migration.CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
+func captureAppliedSnapshot(ctx context.Context, driver ports.DatabaseDriver, db domain.Database, m *domain.Migration) {
+	snapshot, _, err := migration.CaptureDatabaseSnapshot(ctx, driver, db)
 	if err != nil || len(snapshot) == 0 {
 		m.Status = domain.MigrationStatusSnapshotPending
 		return
@@ -210,12 +133,12 @@ func (s *draftService) captureAppliedSnapshot(ctx context.Context, db domain.Dat
 	m.Status = domain.MigrationStatusSuccess
 }
 
-func (s *draftService) completePendingSnapshot(ctx context.Context, repo ports.MigrationRepository, db domain.Database) error {
+func completePendingSnapshot(ctx context.Context, driver ports.DatabaseDriver, repo ports.MigrationRepository, db domain.Database) error {
 	pending, err := repo.FindPendingSnapshot(ctx, db.ID)
 	if err != nil || pending == nil {
 		return err
 	}
-	s.captureAppliedSnapshot(ctx, db, pending)
+	captureAppliedSnapshot(ctx, driver, db, pending)
 	if pending.Status != domain.MigrationStatusSuccess {
 		return domain.ErrMigrationSnapshotUnavailable
 	}
