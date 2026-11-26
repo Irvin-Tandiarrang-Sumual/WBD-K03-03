@@ -2,21 +2,26 @@ package app
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
 	httpmiddleware "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 	"github.com/gin-gonic/gin"
 
 	_ "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/docs"
 )
 
 func Run() {
+	slog.SetDefault(logger.NewJSONLogger(os.Stdout, slog.LevelInfo))
+
 	application, err := buildApplication()
 	if err != nil {
-		log.Fatalf("failed to build application: %v", err)
+		slog.Error("failed to build application", "error", err.Error())
+		os.Exit(1)
 	}
 	defer application.close()
 
@@ -26,8 +31,10 @@ func Run() {
 		application.config.Server.Port,
 	)
 
+	slog.Info("starting HTTP server", "address", address)
 	if err := application.engine.Run(address); err != nil {
-		log.Fatalf("failed to run HTTP server: %v", err)
+		slog.Error("failed to run HTTP server", "error", err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -75,7 +82,8 @@ func buildApplication() (*application, error) {
 	)
 
 	handlers := buildHandlers(configuration, services, systemDatabase)
-	engine := gin.Default()
+	engine := gin.New()
+	engine.Use(gin.Recovery())
 	engine.Use(httpmiddleware.CORS(configuration.Server.FrontendOrigin))
 	engine.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

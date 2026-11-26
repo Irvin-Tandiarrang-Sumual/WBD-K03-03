@@ -54,6 +54,7 @@ func SetupRouter(
 		healthHandler:         healthHandler,
 	}
 
+	engine.Use(middleware.Logger())
 	engine.Use(middleware.ErrorHandler())
 
 	api := engine.Group("/api/v1")
