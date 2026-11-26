@@ -219,5 +219,6 @@ func toMigrationResponse(migration *domain.Migration) MigrationResponse {
 		ErrorMessage: migration.ErrorMessage,
 		Snapshot:     snapshot,
 		UserID:       migration.UserID,
+		MigratedAt:   migration.MigratedAt,
 	}
 }

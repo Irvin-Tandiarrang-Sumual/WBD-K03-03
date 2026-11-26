@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/auth-context';
 import { migrationService } from '../services/migration_service';
 import {
@@ -48,8 +48,8 @@ export function useDatabaseDetail({
   const { user, showSnackbar } = useAuth();
   const { execute: runAsync } = useAsyncAction(showSnackbar);
 
-  const [database, setDatabase] = useState<TargetDatabase>(initialDatabase);
-  const [migrations, setMigrations] = useState<MigrationRecord[]>(initialMigrations);
+  const database = initialDatabase;
+  const migrations = initialMigrations;
 
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -60,7 +60,8 @@ export function useDatabaseDetail({
   const [columnsMap, setColumnsMap] = useState<Record<string, boolean>>(DEFAULT_COLUMNS);
 
   const [selectedMigration, setSelectedMigration] = useState<MigrationRecord | null>(null);
-  const [diffMigration, setDiffMigration] = useState<MigrationRecord | null>(null);
+  const [diffMigration, setDiff] = useState<MigrationRecord | null>(null);
+  const diffRequest = useRef(0);
   const [confirmRollbackOpen, setConfirmRollbackOpen] = useState(false);
 
   // Database permission is directly granted by backend access control
@@ -79,50 +80,51 @@ export function useDatabaseDetail({
   const handleRollback = async () => {
     setConfirmRollbackOpen(false);
     await runAsync(
-      async () => {
-        const res = await migrationService.proposeRollback(database.id);
-        const updatedMigrations = await migrationService.getMigrationsByDatabaseId(database.id);
-        return { res, updatedMigrations };
-      },
+      () => migrationService.proposeRollback(database.id),
       {
         successMessage: () => `Rollback draft created / proposed successfully`,
         successTone: 'pine',
         errorMessage: 'Rollback failed',
-        onSuccess: async ({ updatedMigrations }) => {
-          setMigrations(updatedMigrations);
-          if (updatedMigrations.length > 0) {
-            const nextHead = Math.max(...updatedMigrations.map((m) => m.version));
-            setDatabase((prev) => ({ ...prev, headVersion: nextHead }));
-          }
-        },
       }
     );
   };
 
   const handleRedo = async () => {
     await runAsync(
-      async () => {
-        const res = await migrationService.proposeForward(database.id);
-        const updatedMigrations = await migrationService.getMigrationsByDatabaseId(database.id);
-        return { res, updatedMigrations };
-      },
+      () => migrationService.proposeForward(database.id),
       {
         successMessage: () => `Forward draft created / proposed successfully`,
         successTone: 'pine',
         errorMessage: 'Forward failed',
-        onSuccess: async ({ updatedMigrations }) => {
-          setMigrations(updatedMigrations);
-          if (updatedMigrations.length > 0) {
-            const nextHead = Math.max(...updatedMigrations.map((m) => m.version));
-            setDatabase((prev) => ({ ...prev, headVersion: nextHead }));
-          }
-        },
       }
     );
   };
 
   const toggleColumn = (key: string) => {
     setColumnsMap((prev) => toggleColumnVisibility(prev, key, 1));
+  };
+
+  const setDiffMigration = async (migration: MigrationRecord | null) => {
+    const request = ++diffRequest.current;
+    if (!migration) {
+      setDiff(null);
+      return;
+    }
+    const index = migrations.findIndex((entry) => entry.id === migration.id);
+    const previous = migrations.slice(0, index).reverse().find((entry) => entry.status === 'Success');
+    if (!previous || migration.status !== 'Success') {
+      setDiff({ ...migration, schemaDiff: [{ type: 'context', content: 'No comparable schema snapshot.' }] });
+      return;
+    }
+    await runAsync(
+      () => migrationService.compareMigrationSnapshots(database.id, previous, migration),
+      {
+        errorMessage: 'Failed to compare schema snapshots',
+        onSuccess: (updated) => {
+          if (request === diffRequest.current) setDiff(updated);
+        },
+      }
+    );
   };
 
   return {

@@ -25,6 +25,34 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
   const isAdmin = user.role === 'admin';
 
   useEffect(() => {
+    setDraft(initialDraft);
+  }, [initialDraft]);
+
+  const isPolling = !draft.batchConfig && draft.status === 'executing';
+  useEffect(() => {
+    if (!isPolling) return;
+    let stopped = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const updated = await draftService.getDraftById(draft.id);
+        if (stopped) return;
+        setDraft(updated);
+        if (updated.status !== 'executing') return;
+      } catch (error) {
+        if (stopped) return;
+        console.error('Failed to refresh draft status', error);
+      }
+      timeout = setTimeout(refresh, 1000);
+    };
+    timeout = setTimeout(refresh, 1000);
+    return () => {
+      stopped = true;
+      clearTimeout(timeout);
+    };
+  }, [draft.id, isPolling]);
+
+  useEffect(() => {
     if (!draft.batchConfig || draft.status !== 'executing') {
       return;
     }

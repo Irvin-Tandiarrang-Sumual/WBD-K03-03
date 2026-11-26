@@ -3064,6 +3064,9 @@ const docTemplate = `{
                 "accessType": {
                     "type": "string"
                 },
+                "currentMigrationId": {
+                    "type": "integer"
+                },
                 "host": {
                     "type": "string"
                 },
@@ -3331,6 +3334,9 @@ const docTemplate = `{
                 },
                 "isReversible": {
                     "type": "boolean"
+                },
+                "migratedAt": {
+                    "type": "string"
                 },
                 "revertsMigrationId": {
                     "type": "integer"

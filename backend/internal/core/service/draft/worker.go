@@ -760,11 +760,17 @@ func (w *ExecutionWorker) handleFailure(ctx context.Context, task ports.Executio
 		MigratedAt:   now,
 	}
 
+	draft, err := w.draftRepo.FindByID(ctx, task.DraftID)
+	if err == nil && draft != nil {
+		migration.SqlUp, migration.SqlDown = draft.SqlUp, draft.SqlDown
+		migration.IsReversible = draft.IsReversible
+		migration.IrreversibleReason = draft.IrreversibleReason
+	}
 	if w.migrationRepo != nil {
 		_, _ = w.migrationRepo.Save(ctx, migration)
 	}
 
-	if draft, err := w.draftRepo.FindByID(ctx, task.DraftID); err == nil && draft != nil {
+	if err == nil && draft != nil {
 		draft.Status = domain.DraftStatusFailed
 		draft.UpdatedAt = now
 		_, _ = w.draftRepo.Update(ctx, draft)

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 )
@@ -87,6 +88,7 @@ type MigrationResponse struct {
 	ErrorMessage string          `json:"errorMessage"`
 	Snapshot     json.RawMessage `json:"snapshot,omitempty"`
 	UserID       uint            `json:"userId"`
+	MigratedAt   time.Time       `json:"migratedAt"`
 }
 
 func toSchemaDiffResponse(diff *domain.SchemaDiffResult) *SchemaDiffResultResponse {

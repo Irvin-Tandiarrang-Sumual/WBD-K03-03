@@ -16,6 +16,7 @@ export interface BackendMigrationResponse {
   isReversible?: boolean;
   irreversibleReason?: string;
   userId?: number;
+  migratedAt?: string;
   createdAt?: string;
 }
 
@@ -31,27 +32,12 @@ export function mapBackendMigrationToRecord(m: BackendMigrationResponse): Migrat
   const versionNum = parseInt(m.version, 10) || m.id || 1;
   const isRollback = m.revertsMigrationId !== undefined && m.revertsMigrationId !== null;
   const isFailed = (m.status || '').toLowerCase().includes('fail');
-
-  const diffLines: SchemaDiffLine[] = [
-    { type: 'header', content: `--- Schema State before v${versionNum}` },
-    { type: 'header', content: `+++ Schema State after v${versionNum}` },
-    { type: 'context', content: `@@ migration executed: ${m.version} @@` },
-  ];
-
-  if (m.sqlUp) {
-    const lines = m.sqlUp.split('\n');
-    lines.forEach((l) => {
-      const trimmed = l.trim();
-      if (trimmed.startsWith('--') || trimmed === '') {
-        diffLines.push({ type: 'context', content: `  ${l}` });
-      } else {
-        diffLines.push({ type: 'add', content: `+ ${l}` });
-      }
-    });
-  }
+  const executedAt = m.migratedAt ?? m.createdAt;
 
   return {
     id: String(m.id),
+    revertsMigrationId: m.revertsMigrationId == null ? undefined : String(m.revertsMigrationId),
+    sourceMigrationId: m.sourceMigrationId == null ? undefined : String(m.sourceMigrationId),
     databaseId: String(m.databaseId),
     version: versionNum,
     summary: m.sqlUp.slice(0, 60).replace(/\n/g, ' ') || `Migration v${versionNum}`,
@@ -59,18 +45,28 @@ export function mapBackendMigrationToRecord(m: BackendMigrationResponse): Migrat
     status: isFailed ? 'Fail' : 'Success',
     reversible: m.isReversible ?? true,
     executedBy: m.userId ? `User #${m.userId}` : 'System Admin',
-    executedAt: m.createdAt || new Date().toISOString(),
-    executedAtRelative: 'recently',
+    executedAt,
+    executedAtRelative: executedAt ? new Date(executedAt).toLocaleString() : '—',
     durationMs: 45,
     upSql: m.sqlUp || '',
     downSql: m.sqlDown || undefined,
     errorLog: m.errorMessage || undefined,
     diffFromVersion: Math.max(0, versionNum - 1),
-    schemaDiff: diffLines,
+    schemaDiff: [],
   };
 }
 
 export const migrationService = {
+  async getMigrationHistory(databaseId: string | number): Promise<MigrationRecord[]> {
+    const limit = 100;
+    const history: MigrationRecord[] = [];
+    for (let page = 1; ; page++) {
+      const migrations = await this.getMigrationsByDatabaseId(databaseId, { page, limit });
+      history.push(...migrations);
+      if (migrations.length < limit) return history;
+    }
+  },
+
   async getMigrationsByDatabaseId(
     databaseId: string | number,
     params: { page?: number; limit?: number; hideRollback?: boolean } = { page: 1, limit: 100 }
@@ -101,11 +97,27 @@ export const migrationService = {
     databaseId: string | number,
     migrationId1: string | number,
     migrationId2: string | number
-  ): Promise<any> {
+  ): Promise<{ schemaDiff?: { isIdentical: boolean; summaryItems: { detail: string; type: string }[] } }> {
     const rawDbId = cleanEntityId(databaseId, 'db-');
     return await api.get(
       `/me/databases/${rawDbId}/migrations/compare?migration_id_1=${migrationId1}&migration_id_2=${migrationId2}`
     );
+  },
+
+  async compareMigrationSnapshots(databaseId: string, previous: MigrationRecord, current: MigrationRecord): Promise<MigrationRecord> {
+    const { schemaDiff } = await this.compareMigrations(databaseId, previous.id, current.id);
+    const lines: SchemaDiffLine[] = schemaDiff?.summaryItems.map((item) => ({
+      type: item.type.includes('added') ? 'add' : item.type.includes('removed') ? 'remove' : 'context',
+      content: item.detail,
+    })) ?? [];
+    return {
+      ...current,
+      diffFromVersion: previous.version,
+      schemaDiff: lines.length ? lines : [{
+        type: 'context',
+        content: schemaDiff?.isIdentical ? 'No schema changes.' : 'No comparable schema snapshot.',
+      }],
+    };
   },
 
   async proposeRollback(databaseId: string | number): Promise<BackendMigrationDraftResponse> {

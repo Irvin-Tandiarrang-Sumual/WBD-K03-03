@@ -8,9 +8,18 @@ export function filterMigrations(
   status: MigrationStatusFilter = 'all'
 ): MigrationRecord[] {
   const normalizedQuery = query.trim().toLowerCase();
+  const hiddenIds = new Set<string>();
+  if (hideRollbacks) {
+    for (const migration of migrations) {
+      if (migration.status === 'Success' && migration.revertsMigrationId) {
+        hiddenIds.add(migration.id);
+        hiddenIds.add(migration.revertsMigrationId);
+      }
+    }
+  }
 
   return migrations.filter((migration) => {
-    if (hideRollbacks && migration.type === 'ROLLBACK') return false;
+    if (hiddenIds.has(migration.id)) return false;
     if (status !== 'all' && migration.status !== status) return false;
     if (normalizedQuery && !matchesMigrationQuery(migration, normalizedQuery)) return false;
     return true;

@@ -14,6 +14,7 @@ export interface TargetDatabase {
   quarantined: boolean;
   quarantineDraftId?: string;
   headVersion: number;
+  currentMigrationId?: string;
   redoStack?: number[];
   permission?: DbPermission;
   groupName?: string;

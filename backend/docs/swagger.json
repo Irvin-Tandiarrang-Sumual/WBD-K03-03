@@ -3062,6 +3062,9 @@
                 "accessType": {
                     "type": "string"
                 },
+                "currentMigrationId": {
+                    "type": "integer"
+                },
                 "host": {
                     "type": "string"
                 },
@@ -3329,6 +3332,9 @@
                 },
                 "isReversible": {
                     "type": "boolean"
+                },
+                "migratedAt": {
+                    "type": "string"
                 },
                 "revertsMigrationId": {
                     "type": "integer"

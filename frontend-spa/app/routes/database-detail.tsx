@@ -39,7 +39,7 @@ export async function clientLoader({ params }: { params: { id?: string } }) {
   }
 
   const [migrations, allDbs, groups] = await Promise.all([
-    migrationService.getMigrationsByDatabaseId(dbId).catch(() => []),
+    migrationService.getMigrationHistory(dbId),
     databaseService.getAccessibleDatabases(),
     groupService.getGroups().catch(() => []),
   ]);
@@ -48,10 +48,9 @@ export async function clientLoader({ params }: { params: { id?: string } }) {
     throw new Response('Target Database Not Found', { status: 404 });
   }
 
-  if (migrations.length > 0) {
-    const maxVersion = Math.max(...migrations.map((m) => m.version));
-    database = { ...database, headVersion: maxVersion };
-  }
+  const headId = database.currentMigrationId;
+  const head = migrations.find((migration) => migration.id === headId);
+  database = { ...database, headVersion: head?.version ?? 0 };
 
   return { database, migrations, allDbs, groups };
 }

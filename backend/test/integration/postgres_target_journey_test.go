@@ -232,7 +232,7 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 	voters = append(voters, testSession{viewerCookie, viewerToken})
 
 	// Step 1: Apply initial baseline migration 1
-	applyTestMigration(t, stack, createdDB.ID, author,
+	previous := applyTestMigration(t, stack, createdDB.ID, author,
 		"CREATE TABLE pg_base_tbl (id INT PRIMARY KEY);", "DROP TABLE pg_base_tbl", voters...)
 
 	// Step 2: Apply second migration to be rolled back
@@ -281,6 +281,14 @@ func TestPostgresTarget_GivenAppliedMigration_WhenRollbackTriggered_ThenCompensa
 
 	if rollback.RevertsMigrationID == nil || *rollback.RevertsMigrationID != target.ID || rollback.ExecutionID == target.ExecutionID {
 		t.Fatalf("rollback audit %+v; target %+v", rollback, target)
+	}
+	current := executeRequest(stack.engine, http.MethodGet, base, nil, sessionCookie, "")
+	if current.Code != http.StatusOK {
+		t.Fatal(current.Body.String())
+	}
+	databaseDetail := parseResponseBody[handlers.DatabaseResponse](t, current).Data
+	if databaseDetail.CurrentMigrationID == nil || *databaseDetail.CurrentMigrationID != previous.ID || rollback.MigratedAt.IsZero() {
+		t.Fatalf("expected the active parent and a rollback timestamp, got %+v and %+v", databaseDetail, rollback)
 	}
 	proposal = executeRequest(stack.engine, http.MethodPost, base+"/forward-draft", nil, sessionCookie, csrfToken)
 	if proposal.Code != http.StatusCreated {

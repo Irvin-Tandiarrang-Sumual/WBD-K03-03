@@ -231,5 +231,6 @@ func toDatabaseResponse(database *domain.Database) DatabaseResponse {
 		Type:       database.Type,
 		Name:       database.Name,
 		AccessType: string(database.AccessType),
+		CurrentMigrationID: database.CurrentMigrationID,
 	}
 }

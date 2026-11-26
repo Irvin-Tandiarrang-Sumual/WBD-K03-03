@@ -10,6 +10,7 @@ export interface BackendDatabaseResponse {
   type: string;
   name: string;
   accessType?: string;
+  currentMigrationId?: number | null;
 }
 
 export function mapBackendDatabaseToTargetDatabase(
@@ -31,6 +32,7 @@ export function mapBackendDatabaseToTargetDatabase(
     status: 'Healthy' as DbStatus,
     quarantined: false,
     headVersion: overrides?.headVersion ?? 1,
+    currentMigrationId: db.currentMigrationId == null ? undefined : String(db.currentMigrationId),
     redoStack: overrides?.redoStack ?? [],
     permission,
     ...overrides,

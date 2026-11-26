@@ -123,7 +123,7 @@ func (r *databaseRepository) FindByIDAndUserID(ctx context.Context, databaseID u
 		Joins("JOIN group_databases ON group_databases.database_id = databases.id").
 		Joins("JOIN user_groups ON user_groups.group_id = group_databases.group_id").
 		Where("databases.id = ? AND user_groups.user_id = ?", databaseID, userID).
-		Select("databases.id", "databases.port", "databases.host", "databases.user", "databases.type", "databases.name").
+		Select("databases.id", "databases.port", "databases.host", "databases.user", "databases.type", "databases.name", "databases.current_migration_id").
 		First(&storedDatabase).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

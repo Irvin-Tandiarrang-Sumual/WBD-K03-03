@@ -4,10 +4,13 @@ export function getHeadMigration(
   database: TargetDatabase,
   migrations: MigrationRecord[]
 ): MigrationRecord | undefined {
-  return migrations
-    .filter((m) => m.databaseId === database.id && m.status === 'Success')
-    .sort((a, b) => b.version - a.version)
-    .find((m) => m.version === database.headVersion);
+  const headId = database.currentMigrationId;
+  if (!headId) return undefined;
+  const revertedIds = new Set(migrations.filter((m) => m.status === 'Success').map((m) => m.revertsMigrationId));
+  return [...migrations].reverse().find((m) =>
+    m.databaseId === database.id && m.status === 'Success' && m.type === 'UP' &&
+    !revertedIds.has(m.id) && (m.id === headId || m.sourceMigrationId === headId)
+  );
 }
 
 export function canRollbackDatabase(

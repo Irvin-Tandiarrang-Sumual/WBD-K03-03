@@ -92,7 +92,10 @@ func (s *migrationService) CompareMigrations(
 
 	firstSnapshot := ParseSchemaSnapshot(first.Snapshot)
 	secondSnapshot := ParseSchemaSnapshot(second.Snapshot)
-	schemaDiff := DiffSchemaSnapshots(firstSnapshot, secondSnapshot)
+	var schemaDiff *domain.SchemaDiffResult
+	if firstSnapshot != nil && secondSnapshot != nil {
+		schemaDiff = DiffSchemaSnapshots(firstSnapshot, secondSnapshot)
+	}
 
 	return &domain.MigrationComparison{
 		FirstMigration:  first,
