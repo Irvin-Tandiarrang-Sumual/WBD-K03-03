@@ -18,6 +18,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/middleware"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/router"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/channel"
+	queuepostgres "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/postgresql"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/security"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/model"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
@@ -212,16 +213,15 @@ func newTestDraftHandler(
 ) *handlers.DraftHandler {
 	t.Helper()
 	draftRepo := repositories.NewDraftRepository(db)
-	var service ports.DraftService
 	worker := draftservice.NewExecutionWorker(
 		draftRepo, databaseRepo, migrationRepo, databaseDriver, groupRepo,
-		func(databaseID uint) { service.UnlockDatabase(databaseID) },
+		nil,
 		ports.NoopMigrationMetrics{},
 		userGroupService,
 	)
-	queue := channel.NewChannelQueue(worker.Execute, 2, 16, channel.DefaultTaskTimeout)
+	queue := queuepostgres.NewQueue(db, worker.Execute, 2, 16, channel.DefaultTaskTimeout)
 	t.Cleanup(queue.Close)
-	service = draftservice.NewDraftService(draftRepo, groupRepo, userGroupService, databaseRepo, queue, migrationRepo, databaseDriver)
+	service := draftservice.NewDraftService(draftRepo, groupRepo, userGroupService, databaseRepo, queue, migrationRepo, databaseDriver)
 	return handlers.NewDraftHandler(service)
 }
 

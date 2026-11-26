@@ -4,6 +4,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/channel"
+	queuepostgres "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/postgresql"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
@@ -28,7 +29,7 @@ type applicationServices struct {
 	databaseDriver ports.DatabaseDriverService
 	migration      ports.MigrationService
 	draft          ports.DraftService
-	queue          *channel.ChannelQueue
+	queue          *queuepostgres.Queue
 }
 
 func (s *applicationServices) close() {
@@ -84,7 +85,6 @@ func buildServices(
 		userGroupService,
 	)
 
-	var draftSvc ports.DraftService
 	migrationMetrics := metrics.NewPrometheusMigrationMetrics()
 	worker := draftservice.NewExecutionWorker(
 		draftRepository,
@@ -92,16 +92,13 @@ func buildServices(
 		migrationRepository,
 		infrastructure.databaseDriver,
 		groupRepository,
-		func(databaseID uint) {
-			if draftSvc != nil {
-				draftSvc.UnlockDatabase(databaseID)
-			}
-		},
+		nil,
 		migrationMetrics,
 		userGroupService,
 	)
 
-	taskQueue := channel.NewChannelQueue(
+	taskQueue := queuepostgres.NewQueue(
+		systemDatabase,
 		worker.Execute,
 		workerConfig.Count,
 		workerConfig.QueueCapacity,
@@ -117,7 +114,6 @@ func buildServices(
 		migrationRepository,
 		infrastructure.databaseDriver,
 	)
-	draftSvc = draftService
 
 	return &applicationServices{
 		auth:           authService,

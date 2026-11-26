@@ -573,6 +573,15 @@ func (s *draftService) ExecuteDraft(ctx context.Context, draftID uint, userID ui
 	}
 
 func (s *draftService) queueApprovedDraft(ctx context.Context, draft *domain.Draft, userID uint) (string, error) {
+	if queue, ok := s.taskQueue.(ports.PersistentTaskQueue); ok {
+		if err := s.validateApprovedDraft(ctx, draft); err != nil {
+			return "", err
+		}
+		if err := requireConsensus(ctx, s.migrationRepo, draft); err != nil {
+			return "", err
+		}
+		return submitPersistentTask(ctx, queue, draft, ports.MetricOpExecute, userID)
+	}
 	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
 	if err != nil {
 		return "", err
@@ -671,6 +680,10 @@ func (s *draftService) ResumeBatch(ctx context.Context, draftID uint, userID uin
 	if draft.Status != domain.DraftStatusPartial || draft.RecoveryAction != domain.VoteResume {
 		return domain.ErrInvalidDraftState
 	}
+	if queue, ok := s.taskQueue.(ports.PersistentTaskQueue); ok {
+		_, err := submitPersistentTask(ctx, queue, draft, ports.MetricOpResume, userID)
+		return err
+	}
 
 	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
 	if err != nil {
@@ -715,6 +728,10 @@ func (s *draftService) RevertBatch(ctx context.Context, draftID uint, userID uin
 	if draft.RecoveryAction != domain.VoteRevert {
 		return domain.ErrInvalidDraftState
 	}
+	if queue, ok := s.taskQueue.(ports.PersistentTaskQueue); ok {
+		_, err := submitPersistentTask(ctx, queue, draft, ports.MetricOpRevert, userID)
+		return err
+	}
 
 	lock, err := s.acquireDatabaseLock(draft.DatabaseID)
 	if err != nil {
@@ -741,6 +758,15 @@ func (s *draftService) acquireDatabaseLock(databaseID uint) (*dbLock, error) {
 		return nil, domain.ErrMigrationInProgress
 	}
 	return lock, nil
+}
+
+func submitPersistentTask(ctx context.Context, queue ports.PersistentTaskQueue, draft *domain.Draft, operation string, userID uint) (string, error) {
+	carrier := make(map[string]string)
+	telemetry.Inject(ctx, carrier)
+	return queue.Submit(ctx, ports.ExecutionTask{
+		DraftID: draft.ID, DatabaseID: draft.DatabaseID, UserID: userID,
+		Operation: operation, TraceCarrier: carrier,
+	})
 }
 
 func (s *draftService) checkQuarantineConflicts(ctx context.Context, databaseID uint) error {

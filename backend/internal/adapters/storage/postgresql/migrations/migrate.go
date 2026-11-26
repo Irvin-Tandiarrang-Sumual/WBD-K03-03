@@ -25,6 +25,7 @@ func MigrateSystemDatabase(db *gorm.DB) error {
 		&model.DraftApproval{},
 		&model.DraftCheckpoint{},
 		&model.Migration{},
+		&model.MigrationJob{},
 	); err != nil {
 		return err
 	}

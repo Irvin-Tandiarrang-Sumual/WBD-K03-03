@@ -116,6 +116,10 @@ func (w *ExecutionWorker) Execute(ctx context.Context, task ports.ExecutionTask)
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("worker panic: %v", r)
+			if task.JobID != 0 {
+				err = fmt.Errorf("%w: %v", domain.ErrMigrationOutcomeUnknown, panicErr)
+				return
+			}
 			w.handleFailure(context.Background(), task, panicErr.Error())
 			err = panicErr
 		}
@@ -181,6 +185,9 @@ func (w *ExecutionWorker) executeSingleMigrationWithRetry(
 		if cmdErr == nil {
 			return w.finishExecution(ctx, task, draft, db, plan)
 		}
+		if outcomeUnknown(cmdErr) {
+			return fmt.Errorf("%w: %w", domain.ErrMigrationOutcomeUnknown, cmdErr)
+		}
 
 		lastErr = cmdErr
 		if !isTransientError(cmdErr) {
@@ -240,6 +247,9 @@ func (w *ExecutionWorker) executeBatch(ctx context.Context, task ports.Execution
 
 		_, newCursor, isTerminal, chunkErr := w.executeAndCommitChunk(ctx, task, draft, db, currentBatch, plan.batchSize)
 		if chunkErr != nil {
+			if outcomeUnknown(chunkErr) {
+				return fmt.Errorf("%w: %w", domain.ErrMigrationOutcomeUnknown, chunkErr)
+			}
 			w.handleBatchFailure(context.Background(), task, draft, currentBatch, cursor, chunkErr.Error())
 			return chunkErr
 		}
@@ -288,7 +298,7 @@ func (w *ExecutionWorker) executeAndCommitChunk(
 
 	newCursor = fmt.Sprintf("%d", currentBatch*batchSize)
 	if saveErr := w.recordChunkCheckpoint(ctx, task, draft, currentBatch, rowsAffected, newCursor, chunkSpan); saveErr != nil {
-		return 0, "", false, saveErr
+		return 0, "", false, fmt.Errorf("%w: %w", domain.ErrMigrationOutcomeUnknown, saveErr)
 	}
 
 	return rowsAffected, newCursor, rowsAffected < int64(batchSize), nil
@@ -540,6 +550,9 @@ func (w *ExecutionWorker) executeRevert(ctx context.Context, task ports.Executio
 
 	for _, cp := range committed {
 		if err := w.revertSingleChunk(ctx, draft, db, cp); err != nil {
+			if outcomeUnknown(err) {
+				return fmt.Errorf("%w: %w", domain.ErrMigrationOutcomeUnknown, err)
+			}
 			w.handleRevertFailure(context.Background(), task, draft, cp.BatchNumber, err.Error())
 			return err
 		}
@@ -596,7 +609,9 @@ func (w *ExecutionWorker) revertSingleChunk(
 	}
 
 	cp.Status = "reverted"
-	_, _ = w.draftRepo.UpdateCheckpoint(ctx, cp)
+	if _, err := w.draftRepo.UpdateCheckpoint(ctx, cp); err != nil {
+		return fmt.Errorf("%w: %w", domain.ErrMigrationOutcomeUnknown, err)
+	}
 
 	w.metrics.RecordBatchChunk(ports.MetricStatusReverted, 0, ports.MetricOpRevert)
 	slog.InfoContext(ctx, "batch chunk reverted",
@@ -749,14 +764,11 @@ func (w *ExecutionWorker) handleFailure(ctx context.Context, task ports.Executio
 }
 
 func isTransientError(err error) bool {
-	if err == nil {
+	if err == nil || outcomeUnknown(err) {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "deadlock") ||
 		strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "broken pipe") ||
-		strings.Contains(msg, "i/o timeout") ||
 		strings.Contains(msg, "lock wait timeout")
 }

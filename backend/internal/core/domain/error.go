@@ -6,6 +6,7 @@ import (
 )
 
 var (
+	ErrMigrationOutcomeUnknown = errors.New("migration commit outcome requires verification")
 	ErrMigrationSnapshotUnavailable = errors.New("SQL applied; schema snapshot pending")
 	ErrNoActiveMigration            = errors.New("no active migration")
 	ErrNoForwardAvailable           = errors.New("no forward migration available")

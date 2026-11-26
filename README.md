@@ -90,6 +90,10 @@ docker compose down -v
 
 ## API Endpoints
 
+Migration jobs are stored in the platform PostgreSQL database. When workers restart, pending jobs remain available for execution. Each database can have only one active job. A worker holds a PostgreSQL advisory lock while it processes the job, and PostgreSQL releases the lock if the worker connection ends.
+
+If a worker disconnects mid-execution, the next worker checks whether the draft already has a recorded outcome. When the outcome is still unclear, the job is held as `uncertain` and blocks new jobs on that database. Verify the actual changes on the target against the draft and any committed checkpoints before resuming work. Automatic reconciliation of uncertain outcomes is still pending.
+
 All protected endpoints require session cookie (`session=<token>`) and CSRF validation headers, except `/api/v1/health` and `/api/v1/auth/login`.
 
 ### 1. Authentication (`/auth`)

@@ -279,7 +279,7 @@ func TestExecutionWorker_Execute_TargetDBUnreachable_RecordsFailMigrationAndMark
 	}
 }
 
-func TestExecutionWorker_Execute_ContextTimeout_AbortsAndRecordsFailMigration(t *testing.T) {
+func TestExecutionWorker_Execute_CommandTimeout_LeavesOutcomeUncertain(t *testing.T) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
@@ -331,14 +331,14 @@ func TestExecutionWorker_Execute_ContextTimeout_AbortsAndRecordsFailMigration(t 
 	err := worker.Execute(ctx, task)
 
 	// Assert
-	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context timeout error, got %v", err)
+	if !errors.Is(err, domain.ErrMigrationOutcomeUnknown) {
+		t.Fatalf("expected uncertain commit outcome, got %v", err)
 	}
-	if draftObj.Status != domain.DraftStatusFailed {
-		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusFailed, draftObj.Status)
+	if draftObj.Status != domain.DraftStatusExecuting {
+		t.Fatalf("expected draft status %q, got %q", domain.DraftStatusExecuting, draftObj.Status)
 	}
-	if recordedMigration == nil || recordedMigration.Status != domain.MigrationStatusFail {
-		t.Fatalf("expected fail migration, got %+v", recordedMigration)
+	if recordedMigration != nil {
+		t.Fatalf("expected no terminal migration record, got %+v", recordedMigration)
 	}
 }
 
