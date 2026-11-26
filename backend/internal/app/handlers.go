@@ -16,6 +16,7 @@ type applicationHandlers struct {
 	migration      *handlers.MigrationHandler
 	draft          *handlers.DraftHandler
 	health         *handlers.HealthHandler
+	metrics        *handlers.MetricsHandler
 }
 
 func buildHandlers(configuration *config.Config, services *applicationServices, systemDatabase *gorm.DB) *applicationHandlers {
@@ -29,5 +30,6 @@ func buildHandlers(configuration *config.Config, services *applicationServices, 
 		migration:      handlers.NewMigrationHandler(services.migration),
 		draft:          handlers.NewDraftHandler(services.draft),
 		health:         handlers.NewHealthHandler(systemDatabase),
+		metrics:        handlers.NewMetricsHandler(),
 	}
 }
