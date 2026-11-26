@@ -991,6 +991,138 @@ func TestUpdateGroup_ValidInput_ReturnsUpdatedGroup(t *testing.T) {
 	}
 }
 
+func TestUpdateGroup_LeaderIDZero_ReturnsErrInvalidInput(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.Group, error) {
+			return domain.Group{ID: 1, Name: "Team Alpha"}, nil
+		},
+	}
+	service := groupservice.NewGroupService(groupRepo, groupRepo, &testutil.UserRepository{}, &testutil.DatabaseRepository{}, &testutil.SessionService{})
+	zeroID := uint(0)
+
+	// Act
+	_, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{LeaderID: &zeroID})
+
+	// Assert
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestUpdateGroup_LeaderIDUserNotFound_ReturnsError(t *testing.T) {
+	// Arrange
+	expectedErr := errors.New("user not found")
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.Group, error) {
+			return domain.Group{ID: 1, Name: "Team Alpha"}, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.User, error) {
+			return domain.User{}, expectedErr
+		},
+	}
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, &testutil.DatabaseRepository{}, &testutil.SessionService{})
+	leaderID := uint(99)
+
+	// Act
+	_, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{LeaderID: &leaderID})
+
+	// Assert
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
+	}
+}
+
+func TestUpdateGroup_LeaderIDMemberLookupFails_ReturnsError(t *testing.T) {
+	// Arrange
+	expectedErr := errors.New("failed to load group members")
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.Group, error) {
+			return domain.Group{ID: 1, Name: "Team Alpha"}, nil
+		},
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return nil, expectedErr
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Username: "bob"}, nil
+		},
+	}
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, &testutil.DatabaseRepository{}, &testutil.SessionService{})
+	leaderID := uint(2)
+
+	// Act
+	_, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{LeaderID: &leaderID})
+
+	// Assert
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
+	}
+}
+
+func TestUpdateGroup_LeaderIDNotMember_ReturnsErrLeaderMustBeGroupMember(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.Group, error) {
+			return domain.Group{ID: 1, Name: "Team Alpha", LeaderID: 10}, nil
+		},
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil // Candidate 30 is not a member!
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Username: "charlie"}, nil
+		},
+	}
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, &testutil.DatabaseRepository{}, &testutil.SessionService{})
+	candidateID := uint(30)
+
+	// Act
+	_, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{LeaderID: &candidateID})
+
+	// Assert
+	if !errors.Is(err, domain.ErrLeaderMustBeGroupMember) {
+		t.Fatalf("expected ErrLeaderMustBeGroupMember, got %v", err)
+	}
+}
+
+func TestUpdateGroup_LeaderIDValidMember_UpdatesLeaderSuccessfully(t *testing.T) {
+	// Arrange
+	groupRepo := &testutil.GroupRepository{
+		FindByIDFunc: func(_ context.Context, _ uint) (domain.Group, error) {
+			return domain.Group{ID: 1, Name: "Team Alpha", LeaderID: 10}, nil
+		},
+		FindAllUserIDsByGroupIDFunc: func(_ context.Context, _ uint) ([]uint, error) {
+			return []uint{10, 20}, nil // Candidate 20 IS an existing member
+		},
+		UpdateFunc: func(_ context.Context, g domain.Group) (domain.Group, error) {
+			return g, nil
+		},
+	}
+	userRepo := &testutil.UserRepository{
+		FindByIDFunc: func(_ context.Context, id uint) (domain.User, error) {
+			return domain.User{ID: id, Username: "existing_member"}, nil
+		},
+	}
+	service := groupservice.NewGroupService(groupRepo, groupRepo, userRepo, &testutil.DatabaseRepository{}, &testutil.SessionService{})
+	newLeaderID := uint(20)
+
+	// Act
+	updated, err := service.UpdateGroup(context.Background(), 1, domain.UpdateGroupInput{LeaderID: &newLeaderID})
+
+	// Assert
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if updated.LeaderID != newLeaderID {
+		t.Fatalf("expected leaderID %d, got %d", newLeaderID, updated.LeaderID)
+	}
+}
+
 func TestDeleteGroup_GroupLookupFailure_ReturnsError(t *testing.T) {
 	// Arrange
 	expectedErr := errors.New("group not found")

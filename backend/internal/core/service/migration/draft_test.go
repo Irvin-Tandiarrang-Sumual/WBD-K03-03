@@ -361,3 +361,115 @@ func TestMigrationService_GetMigrations_HideRollbackFalse_ReturnsAll(t *testing.
 		t.Fatalf("history: %v", err)
 	}
 }
+
+func TestMigrationService_VoteMigrationDraft_LeaderRejects_TransitionsToRejected(t *testing.T) {
+	// Arrange
+	j := newJourney()
+	d, err := j.svc.ProposeMigrationDraft(j.ctx, 1, 1, domain.OperationRollback)
+	if err != nil {
+		t.Fatalf("unexpected error proposing draft: %v", err)
+	}
+
+	// Act: Leader 7 casts a rejection vote
+	err = j.svc.VoteMigrationDraft(j.ctx, 1, d.ID, 7, false)
+
+	// Assert: Draft status flips to rejected
+	if err != nil {
+		t.Fatalf("unexpected error voting reject: %v", err)
+	}
+	if j.repo.draft.Status != "rejected" {
+		t.Fatalf("expected draft status 'rejected', got %q", j.repo.draft.Status)
+	}
+
+	// Assert: Subsequent execution attempt is rejected with ErrDraftConflict
+	_, execErr := j.svc.ExecuteMigrationDraft(j.ctx, 1, d.ID, 1)
+	if !errors.Is(execErr, domain.ErrDraftConflict) {
+		t.Fatalf("expected ErrDraftConflict when executing rejected draft, got %v", execErr)
+	}
+}
+
+func TestMigrationService_VoteMigrationDraft_BaseExecutionConflict_ReturnsErrDraftConflict(t *testing.T) {
+	// Arrange
+	j := newJourney()
+	d, err := j.svc.ProposeMigrationDraft(j.ctx, 1, 1, domain.OperationRollback)
+	if err != nil {
+		t.Fatalf("unexpected error proposing draft: %v", err)
+	}
+
+	// Another migration ran in background, advancing ExecutionID from 3 to 4
+	j.repo.pos.ExecutionID = 4
+
+	// Act
+	err = j.svc.VoteMigrationDraft(j.ctx, 1, d.ID, 7, true)
+
+	// Assert
+	if !errors.Is(err, domain.ErrDraftConflict) {
+		t.Fatalf("expected ErrDraftConflict, got %v", err)
+	}
+}
+
+func TestMigrationService_ExecuteMigrationDraft_BaseExecutionConflict_ReturnsErrDraftConflict(t *testing.T) {
+	// Arrange
+	j := newJourney()
+	d, err := j.svc.ProposeMigrationDraft(j.ctx, 1, 1, domain.OperationRollback)
+	if err != nil {
+		t.Fatalf("unexpected error proposing draft: %v", err)
+	}
+	for _, leader := range []uint{7, 8} {
+		if err := j.svc.VoteMigrationDraft(j.ctx, 1, d.ID, leader, true); err != nil {
+			t.Fatalf("unexpected error voting approve: %v", err)
+		}
+	}
+
+	// Another migration completed right before execute call
+	j.repo.pos.ExecutionID = 99
+
+	// Act
+	_, execErr := j.svc.ExecuteMigrationDraft(j.ctx, 1, d.ID, 1)
+
+	// Assert
+	if !errors.Is(execErr, domain.ErrDraftConflict) {
+		t.Fatalf("expected ErrDraftConflict, got %v", execErr)
+	}
+}
+
+func TestMigrationService_ExecuteMigrationDraft_AuthorLostEditAccess_ReturnsErrAccessDenied(t *testing.T) {
+	// Arrange: Propose by author user 6 who has ViewOnly but can't edit
+	// Let's create a journey where author user 1 proposes, approved by leaders, but then author 1 loses edit access
+	j := newJourney()
+	d, err := j.svc.ProposeMigrationDraft(j.ctx, 1, 1, domain.OperationRollback)
+	if err != nil {
+		t.Fatalf("unexpected error proposing draft: %v", err)
+	}
+	for _, leader := range []uint{7, 8} {
+		if err := j.svc.VoteMigrationDraft(j.ctx, 1, d.ID, leader, true); err != nil {
+			t.Fatalf("unexpected error voting approve: %v", err)
+		}
+	}
+
+	// Author (d.UserID = 1) has edit permission revoked right before execution
+	authorEditRevoked := false
+	auth := &testutil.UserGroupService{
+		AuthorizeFunc: func(_ context.Context, user, _ uint, access domain.AccessType) error {
+			if authorEditRevoked && user == 1 && access == domain.AccessViewEdit {
+				return domain.ErrAccessDenied
+			}
+			return nil
+		},
+	}
+	driver := &testutil.DatabaseDriver{
+		ExecuteCommandFunc: func(_ context.Context, _ domain.Database, _ string) (*ports.DatabaseCommandResult, error) {
+			return nil, nil
+		},
+	}
+	j.svc = migration.NewMigrationService(j.repo, &testutil.DatabaseRepository{}, driver, auth)
+	authorEditRevoked = true
+
+	// Act: Caller (admin user 2) tries to execute the draft whose author has lost edit access
+	_, execErr := j.svc.ExecuteMigrationDraft(j.ctx, 1, d.ID, 2)
+
+	// Assert
+	if !errors.Is(execErr, domain.ErrAccessDenied) {
+		t.Fatalf("expected ErrAccessDenied for unauthorized draft author, got %v", execErr)
+	}
+}
