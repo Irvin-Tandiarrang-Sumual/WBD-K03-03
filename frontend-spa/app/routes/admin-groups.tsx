@@ -1,12 +1,15 @@
 import React from 'react';
 import { ArrowRight, Crown, Database, Shield, Users } from 'lucide-react';
 import { Link, useLoaderData } from 'react-router';
-import { fetchGroups } from '../services/dummy_groups';
-import { fetchUsers } from '../services/dummy_users';
+import { groupService } from '../services/group_service';
+import { userService } from '../services/user_service';
 import type { AccessGroup, PlatformUser } from '../types';
 
 export async function clientLoader() {
-  const [groups, users] = await Promise.all([fetchGroups(), fetchUsers()]);
+  const [groups, users] = await Promise.all([
+    groupService.getGroups(),
+    userService.getUsers(),
+  ]);
   return { groups, users };
 }
 

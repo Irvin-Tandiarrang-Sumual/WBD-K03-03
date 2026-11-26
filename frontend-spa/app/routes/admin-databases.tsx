@@ -6,12 +6,15 @@ import { PageHeader } from '../components/common/PageHeader';
 import { SearchInput } from '../components/common/SearchInput';
 import { RegisterDbModal } from '../components/modals/RegisterDbModal';
 import { useAdminDatabases } from '../hooks/useAdminDatabases';
-import { fetchDatabases } from '../services/dummy_databases';
-import { fetchGroups } from '../services/dummy_groups';
+import { databaseService } from '../services/database_service';
+import { groupService } from '../services/group_service';
 import type { AccessGroup, DbEngine, DbStatus, TargetDatabase } from '../types';
 
 export async function clientLoader() {
-  const [databases, groups] = await Promise.all([fetchDatabases(), fetchGroups()]);
+  const [databases, groups] = await Promise.all([
+    databaseService.getAdminDatabases(),
+    groupService.getGroups(),
+  ]);
   return { databases, groups };
 }
 
@@ -108,7 +111,7 @@ const AdminDatabasesTable: React.FC<AdminDatabasesTableProps> = ({
   onTestConnection,
   onEdit,
 }) => (
-  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs overflow-hidden">
+  <div className="bg-[#FFFDF9]/95 backdrop-blur-md rounded-2xl border border-[#D8C7A5] shadow-xs">
     <AdminDatabasesFilterBar
       search={search}
       onSearchChange={onSearchChange}
@@ -120,7 +123,7 @@ const AdminDatabasesTable: React.FC<AdminDatabasesTableProps> = ({
       onToggleColumn={onToggleColumn}
     />
 
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-b-2xl">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-[#EFE5D1] text-[11px] font-bold uppercase tracking-wider text-[#6B5444] bg-[#F5EEDD]/40">
@@ -176,7 +179,7 @@ const AdminDatabasesFilterBar: React.FC<AdminDatabasesFilterBarProps> = ({
   columnsMap,
   onToggleColumn,
 }) => (
-  <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3">
+  <div className="p-4 bg-[#EFE5D1]/55 border-b border-[#D8C7A5] flex flex-wrap items-center justify-between gap-3 rounded-t-2xl relative z-20">
     <SearchInput
       value={search}
       onChange={onSearchChange}
