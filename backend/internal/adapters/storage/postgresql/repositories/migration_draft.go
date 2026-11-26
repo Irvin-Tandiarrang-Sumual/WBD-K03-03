@@ -41,7 +41,7 @@ func (r *migrationRepository) UpdatePosition(ctx context.Context, dbID uint, hea
 	return tx.Model(&model.Database{}).Where("id=?", dbID).Updates(map[string]any{"current_migration_id": head, "latest_execution_id": executionID}).Error
 }
 
-func (r *migrationRepository) SaveDraft(ctx context.Context, d *domain.MigrationDraft) error {
+func (r *migrationRepository) SaveDraft(ctx context.Context, d *domain.Draft) error {
 	row := model.Draft{
 		DatabaseID:      d.DatabaseID,
 		UserID:          d.UserID,
@@ -68,13 +68,16 @@ func (r *migrationRepository) SaveDraft(ctx context.Context, d *domain.Migration
 	return nil
 }
 
-func (r *migrationRepository) FindDraft(ctx context.Context, dbID, id uint) (*domain.MigrationDraft, error) {
-	var draft domain.MigrationDraft
-	err := r.db.WithContext(ctx).Table("drafts").Where("database_id=? AND id=? AND operation IN ?", dbID, id, []string{domain.OperationRollback, domain.OperationForward}).Take(&draft).Error
+func (r *migrationRepository) FindDraft(ctx context.Context, dbID, id uint) (*domain.Draft, error) {
+	var row model.Draft
+	err := r.db.WithContext(ctx).Where("database_id=? AND id=? AND operation IN ?", dbID, id, []string{domain.DraftOperationRollback, domain.DraftOperationForward}).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrMigrationNotFound
 	}
-	return &draft, err
+	if err != nil {
+		return nil, err
+	}
+	return toDomainDraft(&row), nil
 }
 
 func (r *migrationRepository) UpdateDraftStatus(ctx context.Context, id uint, status string) error {

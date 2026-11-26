@@ -271,9 +271,6 @@ func (s *migrationService) tryLockDatabase(databaseID uint) (func(), bool) {
 	return mu.Unlock, true
 }
 
-// The target and history databases commit independently. If metadata is
-// temporarily unavailable, record the committed SQL and finish its snapshot
-// under the database lock before allowing another change to the schema.
 func (s *migrationService) captureAppliedSnapshot(ctx context.Context, db domain.Database, m *domain.Migration) {
 	snapshot, _, err := CaptureDatabaseSnapshot(ctx, s.databaseDriver, db)
 	if err != nil || len(snapshot) == 0 {

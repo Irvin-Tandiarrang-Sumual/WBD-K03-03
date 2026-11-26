@@ -123,20 +123,3 @@ type MigrationPosition struct {
 	HeadID      *uint
 	ExecutionID uint
 }
-
-type MigrationDraft struct {
-	ID              uint
-	DatabaseID      uint
-	UserID          uint
-	Operation       string
-	TargetID        uint
-	BaseExecutionID uint
-	SqlUp           string
-	SqlDown         string
-	Status          string
-}
-
-const (
-	OperationRollback = "rollback"
-	OperationForward  = "forward"
-)

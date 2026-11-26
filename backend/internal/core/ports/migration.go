@@ -12,16 +12,13 @@ type MigrationService interface {
 	CreateMigration(ctx context.Context, input domain.CreateMigrationInput) (*domain.Migration, error)
 	GetMigrationByIDAndDatabaseID(ctx context.Context, migrationID uint, databaseID uint, userID uint) (*domain.Migration, int64, error)
 	CompareMigrations(ctx context.Context, input domain.CompareMigrationsInput) (*domain.MigrationComparison, error)
-	ProposeMigrationDraft(ctx context.Context, databaseID, userID uint, operation string) (*domain.MigrationDraft, error)
-	VoteMigrationDraft(ctx context.Context, databaseID, draftID, userID uint, approve bool) error
-	ExecuteMigrationDraft(ctx context.Context, databaseID, draftID, userID uint) (*domain.Migration, error)
 }
 
 type MigrationRepository interface {
 	WithPosition(ctx context.Context, databaseID uint, fn func(MigrationRepository, domain.MigrationPosition) error) error
 	UpdatePosition(ctx context.Context, databaseID uint, head, parent, forward *uint, executionID uint) error
-	SaveDraft(ctx context.Context, draft *domain.MigrationDraft) error
-	FindDraft(ctx context.Context, databaseID, draftID uint) (*domain.MigrationDraft, error)
+	SaveDraft(ctx context.Context, draft *domain.Draft) error
+	FindDraft(ctx context.Context, databaseID, draftID uint) (*domain.Draft, error)
 	UpdateDraftStatus(ctx context.Context, draftID uint, status string) error
 	Vote(ctx context.Context, draftID, userID uint, approve bool) error
 	HasConsensus(ctx context.Context, databaseID, draftID uint) (bool, error)

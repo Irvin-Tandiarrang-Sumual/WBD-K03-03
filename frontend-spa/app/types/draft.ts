@@ -53,6 +53,9 @@ export interface DraftProposal {
   proposerName: string;
   mode: 'normal' | 'batch_dml';
   status: DraftStatus;
+  operation?: 'custom_sql' | 'rollback' | 'forward' | string;
+  targetId?: number;
+  baseExecutionId?: number;
   upSql: string;
   downSql?: string;
   batchConfig?: BatchConfig;

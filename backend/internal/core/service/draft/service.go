@@ -174,6 +174,7 @@ func buildNewDraftEntity(input domain.CreateDraftInput) *domain.Draft {
 	return &domain.Draft{
 		DatabaseID:         input.DatabaseID,
 		UserID:             input.UserID,
+		Operation:          domain.DraftOperationCustomSQL,
 		SqlUp:              input.SqlUp,
 		SqlDown:            input.SqlDown,
 		IsReversible:       isReversible,
@@ -268,9 +269,9 @@ func (s *draftService) SubmitApproval(ctx context.Context, input domain.SubmitAp
 			return domain.ErrInvalidDraftState
 		}
 
-		if inv, err := s.invalidateIfAuthorUnauthorized(ctx, txRepo, draft); err != nil {
+		if wasInvalidated, err := s.invalidateIfAuthorUnauthorized(ctx, txRepo, draft); err != nil {
 			return err
-		} else if inv {
+		} else if wasInvalidated {
 			invalidated = true
 			return nil
 		}

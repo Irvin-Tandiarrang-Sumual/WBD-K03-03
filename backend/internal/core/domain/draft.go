@@ -30,12 +30,23 @@ const (
 	VoteRevert   = "revert"
 	VoteYes      = "yes"
 	VoteNo       = "no"
+
+	DraftOperationCustomSQL = "custom_sql"
+	DraftOperationRollback  = "rollback"
+	DraftOperationForward   = "forward"
+
+	RecoveryActionResume  = "resume"
+	RecoveryActionRevert  = "revert"
+	RecoveryActionAborted = "aborted"
 )
 
 type Draft struct {
 	ID                 uint
 	DatabaseID         uint
 	UserID             uint
+	Operation          string
+	TargetID           uint
+	BaseExecutionID    uint
 	SqlUp              string
 	SqlDown            string
 	IsReversible       bool

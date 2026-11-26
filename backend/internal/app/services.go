@@ -113,6 +113,8 @@ func buildServices(
 		userGroupService,
 		databaseRepository,
 		taskQueue,
+		migrationRepository,
+		infrastructure.databaseDriver,
 	)
 	draftSvc = draftService
 

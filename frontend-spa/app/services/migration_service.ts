@@ -19,6 +19,14 @@ export interface BackendMigrationResponse {
   createdAt?: string;
 }
 
+export interface BackendMigrationDraftResponse {
+  id: number;
+  operation: string;
+  targetMigrationId: number;
+  sqlUp: string;
+  status: string;
+}
+
 export function mapBackendMigrationToRecord(m: BackendMigrationResponse): MigrationRecord {
   const versionNum = parseInt(m.version, 10) || m.id || 1;
   const isRollback = m.revertsMigrationId !== undefined && m.revertsMigrationId !== null;
@@ -100,14 +108,14 @@ export const migrationService = {
     );
   },
 
-  async proposeRollback(databaseId: string | number): Promise<any> {
+  async proposeRollback(databaseId: string | number): Promise<BackendMigrationDraftResponse> {
     const rawDbId = cleanEntityId(databaseId, 'db-');
-    return await api.post(`/me/databases/${rawDbId}/rollback-draft`);
+    return await api.post<BackendMigrationDraftResponse>(`/me/databases/${rawDbId}/rollback-draft`);
   },
 
-  async proposeForward(databaseId: string | number): Promise<any> {
+  async proposeForward(databaseId: string | number): Promise<BackendMigrationDraftResponse> {
     const rawDbId = cleanEntityId(databaseId, 'db-');
-    return await api.post(`/me/databases/${rawDbId}/forward-draft`);
+    return await api.post<BackendMigrationDraftResponse>(`/me/databases/${rawDbId}/forward-draft`);
   },
 
   async createMigration(databaseId: string | number, sqlUp: string): Promise<MigrationRecord> {

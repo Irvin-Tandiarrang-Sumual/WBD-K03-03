@@ -38,6 +38,9 @@ func (r *draftRepository) Save(ctx context.Context, draft *domain.Draft) (*domai
 		ID:                 draft.ID,
 		DatabaseID:         draft.DatabaseID,
 		UserID:             draft.UserID,
+		Operation:          draft.Operation,
+		TargetID:           draft.TargetID,
+		BaseExecutionID:    draft.BaseExecutionID,
 		SqlUp:              draft.SqlUp,
 		SqlDown:            draft.SqlDown,
 		IsReversible:       draft.IsReversible,
@@ -68,6 +71,9 @@ func (r *draftRepository) Update(ctx context.Context, draft *domain.Draft) (*dom
 	}
 
 	updates := map[string]any{
+		"operation":           draft.Operation,
+		"target_id":           draft.TargetID,
+		"base_execution_id":   draft.BaseExecutionID,
 		"status":              draft.Status,
 		"sql_down":            draft.SqlDown,
 		"is_reversible":       draft.IsReversible,
@@ -396,6 +402,9 @@ func toDomainDraft(m *model.Draft) *domain.Draft {
 		ID:                 m.ID,
 		DatabaseID:         m.DatabaseID,
 		UserID:             m.UserID,
+		Operation:          m.Operation,
+		TargetID:           m.TargetID,
+		BaseExecutionID:    m.BaseExecutionID,
 		SqlUp:              m.SqlUp,
 		SqlDown:            m.SqlDown,
 		IsReversible:       m.IsReversible,

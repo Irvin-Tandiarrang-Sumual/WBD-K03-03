@@ -9,11 +9,14 @@ import (
 
 type DraftService interface {
 	CreateDraft(ctx context.Context, input domain.CreateDraftInput) (*domain.Draft, error)
+	CreateAutoDraft(ctx context.Context, databaseID, userID uint, operation string) (*domain.Draft, error)
 	GetDraftsByDatabaseID(ctx context.Context, databaseID uint, userID uint, params pagination.PaginationParams) ([]*domain.Draft, int64, error)
 	GetDraftByID(ctx context.Context, draftID uint, userID uint) (*domain.Draft, error)
 	SubmitApproval(ctx context.Context, input domain.SubmitApprovalInput) (*domain.Draft, error)
+	VoteDraft(ctx context.Context, databaseID, draftID, userID uint, approve bool) error
 	ValidateDraft(ctx context.Context, draftID uint) (*domain.Draft, error)
 	ExecuteDraft(ctx context.Context, draftID uint, userID uint) error
+	ExecuteMigrationDraft(ctx context.Context, databaseID, draftID, userID uint) (*domain.Migration, error)
 	UnlockDatabase(databaseID uint)
 	ResumeBatch(ctx context.Context, draftID uint, userID uint) error
 	RevertBatch(ctx context.Context, draftID uint, userID uint) error

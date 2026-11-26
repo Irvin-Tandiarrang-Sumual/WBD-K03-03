@@ -1018,3 +1018,71 @@ func TestCreateMigration_ValidInputInitialBaselineCreated_CreatesBaselineThenMig
 		t.Fatalf("expected first saved migration to be baseline v1, got %+v", savedMigrations[0])
 	}
 }
+
+func TestMigrationService_Classify_Irreversible_ReturnsFalseWithReason(t *testing.T) {
+	// Arrange
+	queries := []string{"DROP TABLE t", "alter table t drop column a", "drop database test", "TRUNCATE t", "CREATE TABLE t(id int); DELETE FROM t"}
+	// Act
+	for _, sql := range queries {
+		reversible, reason := domain.ClassifyMigration(sql)
+		// Assert
+		if reversible != false || (strings.TrimSpace(reason) == "") != reversible {
+			t.Errorf("%s: %t %q", sql, reversible, reason)
+		}
+	}
+}
+
+func TestMigrationService_Classify_Reversible_ReturnsTrue(t *testing.T) {
+	// Arrange
+	queries := []string{"CREATE TABLE t(id int)", "ALTER TABLE t ADD COLUMN foo int", "CREATE INDEX i ON t(id)", "ALTER TABLE t RENAME TO b", "CREATE TABLE t(s text DEFAULT 'DROP TABLE')"}
+	// Act
+	for _, sql := range queries {
+		reversible, reason := domain.ClassifyMigration(sql)
+		// Assert
+		if reversible != true || (strings.TrimSpace(reason) == "") != reversible {
+			t.Errorf("%s: %t %q", sql, reversible, reason)
+		}
+	}
+}
+
+func TestMigrationService_GetMigrations_HideRollbackTrue_FiltersRevertedPairs(t *testing.T) {
+	// Arrange
+	var received bool
+	repo := &testutil.MigrationRepository{
+		FindAllByDatabaseIDFunc: func(_ context.Context, _ uint, _ pagination.PaginationParams, hide bool) ([]*domain.Migration, int64, error) {
+			received = true
+			if hide != true {
+				t.Fatalf("filter: %v", hide)
+			}
+			return nil, 0, nil
+		},
+	}
+	svc := migration.NewMigrationService(repo, nil, nil, &testutil.UserGroupService{})
+	// Act
+	_, _, err := svc.GetMigrationsByDatabaseID(context.Background(), 1, 1, pagination.PaginationParams{}, true)
+	// Assert
+	if err != nil || !received {
+		t.Fatalf("history: %v", err)
+	}
+}
+
+func TestMigrationService_GetMigrations_HideRollbackFalse_ReturnsAll(t *testing.T) {
+	// Arrange
+	var received bool
+	repo := &testutil.MigrationRepository{
+		FindAllByDatabaseIDFunc: func(_ context.Context, _ uint, _ pagination.PaginationParams, hide bool) ([]*domain.Migration, int64, error) {
+			received = true
+			if hide != false {
+				t.Fatalf("filter: %v", hide)
+			}
+			return nil, 0, nil
+		},
+	}
+	svc := migration.NewMigrationService(repo, nil, nil, &testutil.UserGroupService{})
+	// Act
+	_, _, err := svc.GetMigrationsByDatabaseID(context.Background(), 1, 1, pagination.PaginationParams{}, false)
+	// Assert
+	if err != nil || !received {
+		t.Fatalf("history: %v", err)
+	}
+}

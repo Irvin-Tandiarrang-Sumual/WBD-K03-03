@@ -26,6 +26,9 @@ export interface BackendDraftResponse {
   id: number;
   databaseId: number;
   userId: number;
+  operation?: string;
+  targetId?: number;
+  baseExecutionId?: number;
   sqlUp: string;
   sqlDown: string;
   isReversible: boolean;
@@ -111,6 +114,9 @@ export function mapBackendDraftToProposal(
     proposerName: `User #${d.userId}`,
     mode: d.isBatch ? 'batch_dml' : 'normal',
     status: validStatus,
+    operation: d.operation,
+    targetId: d.targetId,
+    baseExecutionId: d.baseExecutionId,
     upSql: d.sqlUp || '',
     downSql: d.sqlDown || undefined,
     batchConfig,
