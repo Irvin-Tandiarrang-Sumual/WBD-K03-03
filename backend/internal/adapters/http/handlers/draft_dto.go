@@ -36,6 +36,9 @@ type DraftResponse struct {
 	ID                 uint                    `json:"id"`
 	DatabaseID         uint                    `json:"databaseId"`
 	UserID             uint                    `json:"userId"`
+	Operation          string                  `json:"operation,omitempty"`
+	TargetID           uint                    `json:"targetId,omitempty"`
+	BaseExecutionID    uint                    `json:"baseExecutionId,omitempty"`
 	SqlUp              string                  `json:"sqlUp"`
 	SqlDown            string                  `json:"sqlDown"`
 	IsReversible       bool                    `json:"isReversible"`
@@ -84,6 +87,9 @@ func toDraftResponse(d *domain.Draft) DraftResponse {
 		ID:                 d.ID,
 		DatabaseID:         d.DatabaseID,
 		UserID:             d.UserID,
+		Operation:          d.Operation,
+		TargetID:           d.TargetID,
+		BaseExecutionID:    d.BaseExecutionID,
 		SqlUp:              d.SqlUp,
 		SqlDown:            d.SqlDown,
 		IsReversible:       d.IsReversible,

@@ -39,18 +39,8 @@ func NewDraftHandler(service ports.DraftService) *DraftHandler {
 //	@Failure		500		{object}	response.BaseResponse[any]			"Internal server error"
 //	@Router			/databases/{id}/drafts [post]
 func (h *DraftHandler) CreateDraft(c *gin.Context) {
-	databaseID, err := ginutil.ParseUintParam(c, "id")
-	if err != nil {
-		databaseID, err = ginutil.ParseUintParam(c, "database_id")
-		if err != nil {
-			c.Error(domain.ErrInvalidDatabaseID)
-			return
-		}
-	}
-
-	userID, err := middleware.CurrentUserID(c)
-	if err != nil {
-		c.Error(err)
+	databaseID, userID, ok := draftActor(c)
+	if !ok {
 		return
 	}
 
@@ -81,6 +71,33 @@ func (h *DraftHandler) CreateDraft(c *gin.Context) {
 	c.JSON(http.StatusCreated, response.Success("draft created successfully", toDraftResponse(createdDraft)))
 }
 
+func (h *DraftHandler) ProposeRollback(c *gin.Context) {
+	h.createAutoDraft(c, domain.DraftOperationRollback)
+}
+
+func (h *DraftHandler) ProposeForward(c *gin.Context) {
+	h.createAutoDraft(c, domain.DraftOperationForward)
+}
+
+func (h *DraftHandler) createAutoDraft(c *gin.Context, operation string) {
+	dbID, userID, ok := draftActor(c)
+	if !ok {
+		return
+	}
+	d, err := h.service.CreateAutoDraft(c.Request.Context(), dbID, userID, operation)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusCreated, response.Success("draft submitted", MigrationDraftResponse{
+		ID:                d.ID,
+		Operation:         d.Operation,
+		TargetMigrationID: d.TargetID,
+		SqlUp:             d.SqlUp,
+		Status:            d.Status,
+	}))
+}
+
 // GetDraftsByDatabaseID returns paginated draft history for a database.
 //
 //	@Summary		List database drafts
@@ -98,18 +115,8 @@ func (h *DraftHandler) CreateDraft(c *gin.Context) {
 //	@Failure		500		{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/databases/{id}/drafts [get]
 func (h *DraftHandler) GetDraftsByDatabaseID(c *gin.Context) {
-	databaseID, err := ginutil.ParseUintParam(c, "id")
-	if err != nil {
-		databaseID, err = ginutil.ParseUintParam(c, "database_id")
-		if err != nil {
-			c.Error(domain.ErrInvalidDatabaseID)
-			return
-		}
-	}
-
-	userID, err := middleware.CurrentUserID(c)
-	if err != nil {
-		c.Error(err)
+	databaseID, userID, ok := draftActor(c)
+	if !ok {
 		return
 	}
 
@@ -221,6 +228,28 @@ func (h *DraftHandler) SubmitApproval(c *gin.Context) {
 	c.JSON(http.StatusOK, response.Success("approval submitted successfully", toDraftResponse(updatedDraft)))
 }
 
+func (h *DraftHandler) VoteDraft(c *gin.Context) {
+	dbID, userID, ok := draftActor(c)
+	if !ok {
+		return
+	}
+	id, err := ginutil.ParseUintParam(c, "draft_id")
+	if err != nil {
+		c.Error(domain.ErrInvalidDraftInput)
+		return
+	}
+	var req VoteMigrationDraftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	if err := h.service.VoteDraft(c.Request.Context(), dbID, id, userID, *req.Approve); err != nil {
+		c.Error(err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // ExecuteDraft triggers asynchronous execution of an approved migration draft.
 //
 //	@Summary		Execute draft
@@ -257,6 +286,24 @@ func (h *DraftHandler) ExecuteDraft(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, response.Success[any]("draft execution accepted", nil))
+}
+
+func (h *DraftHandler) ExecuteMigrationDraft(c *gin.Context) {
+	dbID, userID, ok := draftActor(c)
+	if !ok {
+		return
+	}
+	id, err := ginutil.ParseUintParam(c, "draft_id")
+	if err != nil {
+		c.Error(domain.ErrInvalidDraftInput)
+		return
+	}
+	m, err := h.service.ExecuteMigrationDraft(c.Request.Context(), dbID, id, userID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response.Success("draft applied", toMigrationResponse(m)))
 }
 
 // ResumeBatch resumes execution of a partially reverted/failed batch draft.
@@ -471,4 +518,21 @@ func (h *DraftHandler) StreamBatchProgress(c *gin.Context) {
 			}
 		}
 	}
+}
+
+func draftActor(c *gin.Context) (uint, uint, bool) {
+	dbID, err := ginutil.ParseUintParam(c, "database_id")
+	if err != nil {
+		dbID, err = ginutil.ParseUintParam(c, "id")
+		if err != nil {
+			c.Error(domain.ErrInvalidDatabaseID)
+			return 0, 0, false
+		}
+	}
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		c.Error(err)
+		return 0, 0, false
+	}
+	return dbID, userID, true
 }
