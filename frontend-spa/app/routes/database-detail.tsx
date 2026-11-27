@@ -19,6 +19,7 @@ import { MigrationDetailModal } from '../components/modals/MigrationDetailModal'
 import { SchemaDiffModal } from '../components/modals/SchemaDiffModal';
 import { useDatabaseDetail } from '../hooks/useDatabaseDetail';
 import { databaseService } from '../services/database_service';
+import { draftService } from '../services/draft_service';
 import { groupService } from '../services/group_service';
 import { migrationService } from '../services/migration_service';
 import { formatMigrationVersion } from '../utils/formatters';
@@ -38,8 +39,9 @@ export async function clientLoader({ params }: { params: { id?: string } }) {
     throw new Response('Target Database Not Found', { status: 404 });
   }
 
-  const [migrations, allDbs, groups] = await Promise.all([
+  const [migrations, drafts, allDbs, groups] = await Promise.all([
     migrationService.getMigrationHistory(dbId),
+    draftService.getDraftsByDatabaseId(dbId).catch(() => []),
     databaseService.getAccessibleDatabases(),
     groupService.getGroups().catch(() => []),
   ]);
@@ -50,7 +52,16 @@ export async function clientLoader({ params }: { params: { id?: string } }) {
 
   const headId = database.currentMigrationId;
   const head = migrations.find((migration) => migration.id === headId);
-  database = { ...database, headVersion: head?.version ?? 0 };
+  const quarantinedDraft = drafts.find(
+    (d) => d.status === 'partial' || d.status === 'partially_reverted'
+  );
+  database = {
+    ...database,
+    headVersion: head?.version ?? 0,
+    quarantined: Boolean(quarantinedDraft),
+    quarantineDraftId: quarantinedDraft?.id,
+    status: quarantinedDraft ? 'Degraded' : database.status,
+  };
 
   return { database, migrations, allDbs, groups };
 }

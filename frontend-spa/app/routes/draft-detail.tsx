@@ -74,6 +74,7 @@ export default function DraftDetailPage() {
             progressPercent={d.progressPercent}
             isExecuting={d.isExecuting}
             onBatchStep={d.handleBatchStep}
+            onVote={d.handleVote}
           />
 
           {d.showNormalExecuteBar && (
@@ -120,6 +121,7 @@ interface BatchExecutionCardProps {
   progressPercent: number;
   isExecuting: boolean;
   onBatchStep: (direction: 'forward' | 'rollback') => void;
+  onVote: (status: string) => void;
 }
 
 const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
@@ -127,6 +129,7 @@ const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
   progressPercent,
   isExecuting,
   onBatchStep,
+  onVote,
 }) => {
   if (!draft.batchConfig) return null;
 
@@ -209,7 +212,31 @@ const BatchExecutionCard: React.FC<BatchExecutionCardProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {draft.status === 'partial' && draft.recoveryAction === 'revert' && (
+              <button
+                type="button"
+                disabled={isExecuting}
+                onClick={() => onVote('resume')}
+                className="h-9 px-3.5 rounded-xl border border-[#264D3B]/40 bg-[#264D3B]/10 hover:bg-[#264D3B] hover:text-[#F5EEDD] text-[#264D3B] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Switch to Resume</span>
+              </button>
+            )}
+
+            {draft.status === 'partial' && draft.recoveryAction === 'resume' && (
+              <button
+                type="button"
+                disabled={isExecuting}
+                onClick={() => onVote('revert')}
+                className="h-9 px-3.5 rounded-xl border border-[#822433]/35 bg-[#FFFDF9] hover:bg-[#822433]/10 text-[#822433] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Switch to Revert</span>
+              </button>
+            )}
+
             {(draft.status === 'failed' ||
               (draft.status === 'partial' && draft.recoveryAction === 'revert') ||
               (isPartiallyReverted && draft.recoveryAction === 'revert')) && (

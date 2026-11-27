@@ -7,6 +7,7 @@ import { SearchInput } from '../components/common/SearchInput';
 import { QuarantineBanner } from '../components/feedback/QuarantineBanner';
 import { useDatabasesCatalog } from '../hooks/useDatabasesCatalog';
 import { databaseService } from '../services/database_service';
+import { draftService } from '../services/draft_service';
 import { groupService } from '../services/group_service';
 import { migrationService } from '../services/migration_service';
 import { formatMigrationVersion } from '../utils/formatters';
@@ -21,15 +22,22 @@ export async function clientLoader() {
 
   const databases = await Promise.all(
     rawDatabases.map(async (db) => {
-      if (!db.currentMigrationId) {
-        return { ...db, headVersion: 0 };
-      }
-      try {
-        const head = await migrationService.getMigrationById(db.id, db.currentMigrationId);
-        return { ...db, headVersion: head.version };
-      } catch {
-        return { ...db, headVersion: 0 };
-      }
+      const [head, drafts] = await Promise.all([
+        db.currentMigrationId
+          ? migrationService.getMigrationById(db.id, db.currentMigrationId).catch(() => null)
+          : Promise.resolve(null),
+        draftService.getDraftsByDatabaseId(db.id).catch(() => []),
+      ]);
+      const quarantinedDraft = drafts.find(
+        (d) => d.status === 'partial' || d.status === 'partially_reverted'
+      );
+      return {
+        ...db,
+        headVersion: head?.version ?? 0,
+        quarantined: Boolean(quarantinedDraft),
+        quarantineDraftId: quarantinedDraft?.id,
+        status: quarantinedDraft ? ('Degraded' as const) : db.status,
+      };
     })
   );
 
