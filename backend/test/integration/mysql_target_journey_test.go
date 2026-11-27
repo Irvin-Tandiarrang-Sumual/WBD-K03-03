@@ -6,12 +6,51 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/driver"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/http/handlers"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 )
+
+func TestMySQLTarget_CreateMissingDatabase_GrantsAccessOnlyToRequestedDatabase(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	target := requireTargetMySQL(t)
+	target.Name = "grant_scope_test"
+	pools := driver.NewDatabasePoolManager()
+	t.Cleanup(func() { _ = pools.CloseAll() })
+	executor := driver.NewDatabaseDriver(pools)
+
+	// Act
+	err := driver.NewDatabaseConnectionTester().Test(ctx, target)
+	if err != nil {
+		t.Fatalf("provision MySQL target: %v", err)
+	}
+	grants, err := executor.ExecuteQuery(ctx, target, "SHOW GRANTS FOR CURRENT_USER")
+
+	// Assert
+	if err != nil {
+		t.Fatalf("read grants: %v", err)
+	}
+	hasDatabaseGrant := false
+	for _, row := range grants.Rows {
+		for _, value := range row {
+			grant := fmt.Sprint(value)
+			if strings.Contains(grant, "ON *.*") && !strings.HasPrefix(grant, "GRANT USAGE ") {
+				t.Errorf("unexpected server-wide grant: %s", grant)
+			}
+			if strings.Contains(grant, "ON `grant\\_scope\\_test`.*") {
+				hasDatabaseGrant = true
+			}
+		}
+	}
+	if !hasDatabaseGrant {
+		t.Fatalf("expected a literal grant for the requested database, got %v", grants.Rows)
+	}
+}
 
 func TestMySQLTarget_GivenUserWithReadOnlyAccess_WhenExecuteSelectQuery_ThenReturnRowsSuccessfully(t *testing.T) {
 	// Arrange

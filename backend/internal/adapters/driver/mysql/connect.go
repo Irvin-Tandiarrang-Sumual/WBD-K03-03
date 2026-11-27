@@ -2,8 +2,11 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
@@ -138,18 +141,31 @@ func tryCreateAndGrantWithRoot(ctx context.Context, host string, port uint, root
 	}
 
 	// Grant access to the target user so they can access the newly created database
-	if targetUser != "" {
-		grantDb := fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%%'", dbName, targetUser)
-		_, _ = sqlDB.ExecContext(ctx, grantDb)
-
-		// Also grant global create so subsequent operations are directly permitted
-		grantGlobal := fmt.Sprintf("GRANT ALL PRIVILEGES ON *.* TO '%s'@'%%'", targetUser)
-		_, _ = sqlDB.ExecContext(ctx, grantGlobal)
-
-		_, _ = sqlDB.ExecContext(ctx, "FLUSH PRIVILEGES")
+	if targetUser == "" {
+		return nil
 	}
+	return grantDatabaseAccess(ctx, sqlDB, dbName, targetUser)
+}
 
+func grantDatabaseAccess(ctx context.Context, db *sql.DB, dbName, user string) error {
+	var variable, partialRevokes string
+	err := db.QueryRowContext(ctx, "SHOW GLOBAL VARIABLES WHERE Variable_name = 'partial_revokes'").Scan(&variable, &partialRevokes)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("read MySQL grant mode: %w", err)
+	}
+	if partialRevokes != "ON" {
+		dbName = strings.ReplaceAll(dbName, "_", "\\_")
+	}
+	statement := fmt.Sprintf("GRANT ALL PRIVILEGES ON %s.* TO %s@`%%`",
+		quoteMySQLIdentifier(dbName), quoteMySQLIdentifier(user))
+	if _, err := db.ExecContext(ctx, statement); err != nil {
+		return fmt.Errorf("grant MySQL database access: %w", err)
+	}
 	return nil
+}
+
+func quoteMySQLIdentifier(name string) string {
+	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
 func buildDSN(database domain.Database) string {

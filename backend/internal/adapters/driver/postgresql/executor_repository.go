@@ -153,9 +153,6 @@ func (r *ExecutorRepository) query(ctx context.Context, database domain.Database
 
 	tx := db.WithContext(ctx).Begin(&sql.TxOptions{ReadOnly: true})
 	if tx.Error != nil {
-		tx = db.WithContext(ctx).Begin()
-	}
-	if tx.Error != nil {
 		return nil, fmt.Errorf("begin transaction: %w", tx.Error)
 	}
 	defer logger.ReadTransactionStarted(ctx, database.ID, func() error { return tx.Rollback().Error })()

@@ -99,12 +99,66 @@ Detailed documentation is organized by category in the [`docs/`](docs/) director
 | **Unit Testing** | Testing | Go unit tests across 22 packages (parsers, hazard classification, DDL reverse generators) and TypeScript verification. | [docs/unit-testing.md](docs/unit-testing.md) |
 | **Integration Testing** | Testing | Ephemeral container testing (PostgreSQL 15 & MySQL 8.4) with Testcontainers-Go covering 8 journey test suites. | [docs/integration-testing.md](docs/integration-testing.md) |
 | **End-to-End Testing** | Testing | Playwright browser automation covering 17 critical user journeys across desktop and mobile (375px) viewports. | [docs/e2e-testing.md](docs/e2e-testing.md) |
-| **Stress & Performance** | Testing | k6 load suite testing concurrency up to 75 VUs, advisory lock contention, worker queues, and MTTR. | [docs/stress-testing.md](docs/stress-testing.md) |
+| **Stress & Performance** | Pengujian | Uji k6 untuk melihat respons API dan antrean migrasi ketika beban naik lalu turun. | [docs/stress-testing.md](docs/stress-testing.md) |
 | **Observability** | Infrastructure | Centralized monitoring with Prometheus, Grafana dashboards, Loki log queries, and Jaeger distributed tracing. | [docs/observability.md](docs/observability.md) |
 | **Security SAST** | Security | Static Application Security Testing with CodeQL, automated CI workflows, and OWASP/CWE evaluations. | [docs/security.md](docs/security.md) |
 | **Demo Setup** | Guide | Seed accounts, target database profiles (`db1` to `db4`), and interactive scenario walkthroughs. | [docs/demo.md](docs/demo.md) |
 
 ---
+
+## Uji Beban Penuh k6 Milestone 2
+
+Jalankan profil penuh pada stack demo lokal yang sudah diisi data awal. [Skrip k6](stress/stress_suite.js) menguji daftar database, riwayat migrasi, query, dan explain sambil mengirim draf migrasi yang sudah disetujui ke database yang sama maupun berbeda. Skrip memantau status setiap job yang diterima hingga selesai. Job dihitung berhasil ketika statusnya `applied`.
+
+```powershell
+$env:OBSERVABILITY_CONFIG_DIR = './deploy/observability'
+$compose = @('-f', 'docker-compose.yml', '-f', 'deploy/observability/docker-compose.yaml', '-f', 'deploy/observability/app.override.yaml')
+$results = (New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("wbd-k6-" + (Get-Date -Format 'yyyyMMdd-HHmmss')))).FullName
+docker compose -p wbd-bonus-demo @compose --profile stress run --rm --no-deps -v "${results}:/results" -e STRESS_PROFILE=full k6 run --out json=/results/full.json stress_suite.js
+```
+
+VU adalah pengguna yang disimulasikan k6. Pada [profil penuh di repo](stress/config/environments.js), jumlah pengguna untuk skenario API dinaikkan bertahap lalu diturunkan kembali. Batas uji API adalah **p95 < 800 ms**, **p99 < 2.000 ms**, dan **error tak terduga < 3%**. P50 adalah waktu respons tengah. P95 menunjukkan waktu yang mencakup 95% request, jadi membantu melihat kelambatan yang tidak tergambar dari nilai tengah.
+
+### Hasil profil penuh
+
+Pengujian dilakukan di Docker lokal pada 27 November 2026 dengan commit `f8fc148`. Dari **26.688 request API**, p95 keseluruhan mencapai **914 ms**. P99 sebesar **1,87 detik** memenuhi batas 2 detik. k6 keluar dengan kode 99 karena p95 melewati target. Semua **55 job yang diterima mencapai `applied`**.
+
+| Fase | VU API | API p50 | API p95 | Request/detik | Error tak terduga | Job diterima / selesai | Waktu antre p95 | Durasi worker p50 | Job selesai/detik |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Beban awal, 30 dtk | 2 → 10 | 35 ms | 123 ms | 9,90 | 0 / 297 | 20 / 20 | 170 ms | 624 ms | 0,667 |
+| Di atas normal, 60 dtk | 10 → 30 | 34 ms | 145 ms | 106,98 | 0 / 6.419 | 35 / 35 | 100 ms | 356 ms | 0,583 |
+| Naik ke puncak, 60 dtk | 30 → 75 | 153 ms | 551 ms | 153,93 | 0 / 9.236 | 0 / 0 | — | — | 0 |
+| Bertahan di puncak, 30 dtk | 75 | 460 ms | 2.113 ms | 102,80 | 1 / 3.084 (0,032%) | 0 / 0 | — | — | 0 |
+| Penurunan beban, 30 dtk | 75 → 10 | 338 ms | 1.289 ms | 128,33 | 0 / 3.850 | 0 / 0 | — | — | 0 |
+| Pemulihan, 45 dtk | 10 → 0 | 25 ms | 224 ms | 84,44 | 0 / 3.800 | 0 / 0 | — | — | 0 |
+
+Angka per fase diambil dari output JSON k6 dan dibagi durasi fase untuk menghitung throughput. Job selesai dikelompokkan berdasarkan fase pengajuannya. Waktu antre dihitung dari waktu job tersimpan hingga worker mulai. Durasi worker dihitung dari log mulai hingga status akhir job tersimpan. Median dari awal polling hingga job terkonfirmasi selesai adalah **689 ms**.
+
+Data mentah memuat satu timeout ketika beban bertahan di puncak. Metrik error bawaan mencatat 0% karena request berstatus 0 ikut dihitung sebagai sukses. Tabel memasukkan timeout itu dan memisahkan **1.578 respons HTTP 409** serta **80 respons HTTP 423**. Penghitung `lock_conflicts` di skrip menghitung 409 dua kali dan mencakup pengajuan berulang. Untuk waktu antre, tabel memakai catatan job dan log worker karena metrik k6 mencatat nol.
+
+Pada dua fase awal, API bisa melayani lebih banyak request per detik dengan waktu respons yang masih dekat dengan beban awal. Saat beban dipertahankan di puncak, jumlah request yang dilayani per detik turun dari sekitar 154 ke 103, sementara p95 naik dari 551 ms ke 2,11 detik. Artinya, saat beban tinggi bertahan, pengguna mulai menunggu lebih lama dan target respons terlewati. Setelah beban turun, p95 membaik ke 224 ms, masih di atas 123 ms pada beban awal. Satu request setelah tes selesai merespons dalam 9,72 ms. Waktu sampai respons kembali stabil belum diukur.
+
+Seluruh 55 job yang diterima masuk pada dua fase awal dan selesai. Pada fase berikutnya, termasuk saat beban puncak, tidak ada job baru yang diterima. Karena itu, pengukuran waktu antre dan durasi worker hanya mencakup dua fase awal.
+
+## Bukti dan Analisis CodeQL
+
+CodeQL membaca kode untuk mencari pola yang berpotensi menimbulkan celah keamanan. Pemindaian Go dan JavaScript/TypeScript selesai dan hasil tersedia di Actions. [Bukti run CodeQL di GitHub Actions](https://github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/actions/runs/45959900310)
+
+| Bahasa | File yang dipindai | Temuan |
+|---|---:|---:|
+| Go | 135 dari 182 file | 11 |
+| JavaScript dan TypeScript | 14 dari 14 JS, 136 dari 136 TS | 0 |
+
+Di backend Go, terdapat temuan terkait dua hal. Pertama, aplikasi bisa membaca ID migrasi sebagai angka yang keliru pada sistem 32-bit. Kedua, sebagian input ikut membentuk perintah database, sehingga perlu dipastikan perintah tetap sesuai tujuan pengguna. Beberapa lokasi sudah punya pemeriksaan yang mencegah dampak tersebut. Untuk sisi web, scan ini melaporkan nol temuan pada file yang dipindai.
+
+| Rule dan skor keamanan | Lokasi | Dampak dan keputusan |
+|---|---|---|
+| `go/incorrect-integer-conversion`, tinggi (8,1), 2 temuan | `backend/internal/adapters/http/handlers/migration_handler.go:184–185` | ID migrasi berpotensi terpotong pada sistem 32-bit. Pembacaan ID sekarang menolak angka yang melebihi ukuran `uint` pada sistem yang dipakai. |
+| `go/incorrect-integer-conversion`, tinggi (8,1), 2 temuan | `backend/pkg/ginutil/ginutil.go:20,23` | Jalur ini sudah mengecek hasil konversi bolak-balik dan menolak nilai yang berubah sebelum mengembalikan ID. Dari peninjauan kode, kedua temuan ini dinilai false positive. |
+| `go/sql-injection`, tinggi (8,8), 3 temuan | `backend/internal/adapters/driver/mysql/connect.go:110,136` dan `backend/internal/adapters/driver/postgresql/connect.go:100` | Nama database masuk ke SQL pembuatan database. Jalur pemanggil sudah membatasi nama ke huruf, angka, dan garis bawah. Ketiga temuan dinilai false positive pada jalur yang ditinjau. |
+| `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/connect.go:143,147` | Nama akun sekarang diperlakukan sebagai nama akun MySQL yang dikutip dengan benar. Pemberian hak otomatis dibatasi ke database yang didaftarkan. Integration test memverifikasi bahwa akun dapat memakai database baru tanpa hak di tingkat server. |
+| `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/executor_repository.go:162` dan `backend/internal/adapters/driver/postgresql/executor_repository.go:163` | SQL Console memeriksa izin dan memvalidasi query di service. Driver sekarang menghentikan eksekusi jika transaksi baca gagal dibuka. Karena fitur ini memang menjalankan SQL yang dimasukkan pengguna, hasil scan ulang masih perlu ditinjau. |
+
 
 ## API Endpoints
 

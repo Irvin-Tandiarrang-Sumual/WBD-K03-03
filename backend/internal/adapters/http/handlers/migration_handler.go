@@ -166,12 +166,12 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	firstMigrationID, err := strconv.ParseUint(c.Query("migration_id_1"), 10, 64)
+	firstMigrationID, err := strconv.ParseUint(c.Query("migration_id_1"), 10, strconv.IntSize)
 	if err != nil || firstMigrationID == 0 {
 		c.Error(domain.ErrInvalidMigrationComparison)
 		return
 	}
-	secondMigrationID, err := strconv.ParseUint(c.Query("migration_id_2"), 10, 64)
+	secondMigrationID, err := strconv.ParseUint(c.Query("migration_id_2"), 10, strconv.IntSize)
 	if err != nil || secondMigrationID == 0 {
 		c.Error(domain.ErrInvalidMigrationComparison)
 		return
