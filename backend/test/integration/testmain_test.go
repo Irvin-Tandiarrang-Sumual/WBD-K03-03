@@ -86,6 +86,11 @@ func setupTestcontainers(ctx context.Context) error {
 	// 1. Platform PostgreSQL
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				setErr(fmt.Errorf("panic starting platform postgres: %v", r))
+			}
+		}()
 		c, err := tcpostgres.Run(ctx,
 			"postgres:15-alpine",
 			tcpostgres.WithDatabase("platform_integration_test"),
@@ -123,6 +128,11 @@ func setupTestcontainers(ctx context.Context) error {
 	// 2. Target PostgreSQL
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				setErr(fmt.Errorf("panic starting target postgres: %v", r))
+			}
+		}()
 		c, err := tcpostgres.Run(ctx,
 			"postgres:15-alpine",
 			tcpostgres.WithDatabase("target_pg_integration_test"),
@@ -161,6 +171,11 @@ func setupTestcontainers(ctx context.Context) error {
 	// 3. Target MySQL
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				setErr(fmt.Errorf("panic starting target mysql: %v", r))
+			}
+		}()
 		c, err := tcmysql.Run(ctx,
 			"mysql:8.4",
 			tcmysql.WithDatabase("target_mysql_integration_test"),
