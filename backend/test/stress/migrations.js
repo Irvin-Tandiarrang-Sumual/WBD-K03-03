@@ -48,7 +48,7 @@ export const options = {
 
 function data(response, status) {
   if (response.status !== status) {
-    exec.test.abort(`Expected HTTP ${status}, got ${response.status} at ${response.url}`);
+    exec.test.abort(`Expected HTTP ${status}, got ${response.status} at ${response.url}: ${response.body}`);
   }
   return response.json('data');
 }

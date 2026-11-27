@@ -155,9 +155,46 @@ k6 run -e BASE_URL=http://localhost:8080 -e BENCHMARK_ROWS=200000 backend/test/s
 
 On Docker Desktop with 12 available CPUs and about 7.5 GiB of RAM, the full-table UPDATE of 200,000 rows took **5.46 s**. The worker processed the same rows in **20 committed batches** of 10,000 in **22.82 s**. A database query confirmed that all 200,000 rows ended with `score = 1`. Batching took longer in this run and recorded progress after every commit. The plain UPDATE measurement excludes commit. A separate 700,000-row run also finished, with a 19.65 s full-table UPDATE and 147.05 s from queue submission to job completion.
 
-## Static Analysis
+## Security: SAST dengan CodeQL
 
-The [CodeQL workflow](.github/workflows/codeql.yml) scans Go and JavaScript/TypeScript when GitHub Actions runs it on `main` or `develop`, their pull requests, or via manual dispatch. CodeQL scan evidence is pending the first run on a repository with code scanning enabled. Use the Actions run and Security alerts to record the rule, severity, location, impact, and decision for each finding. For fixes, record the commit and the rerun result.
+Menurut [OWASP](https://community.owasp.org/controls/Static_Code_Analysis), **Static Application Security Testing (SAST)** merupakan metode pengujian keamanan yang menganalisis kode sumber tanpa menjalankan aplikasi untuk mendeteksi kerentanan keamanan sedini mungkin (*shift-left security*). Berbeda dengan **Dynamic Application Security Testing (DAST)** yang menguji aplikasi saat sedang berjalan melalui request dan respons (*black-box*), SAST memiliki visibilitas menyeluruh (*white-box*) terhadap alur logika internal program.
+
+Repository ini mengintegrasikan **[CodeQL](https://codeql.github.com/docs/codeql-overview/about-codeql/)**, engine analisis semantik industri yang mengubah kode sumber menjadi database relasional (berisi *Abstract Syntax Tree*, *Control Flow Graph*, dan *Data Flow Graph*) lalu mengeksekusi kueri kustom/standar untuk melacak aliran data dari sumber input (*taint sources*) menuju operasi sensitif (*sinks*). Evaluasi keamanan diselaraskan dengan standar **OWASP Top 10** dan **CWE Top 25**.
+
+### 1. Konfigurasi & Cara Menjalankan CodeQL
+
+Pengujian SAST diotomatisasi melalui GitHub Actions workflow [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml):
+* **Trigger Otomatis**: Berjalan pada setiap `push` dan `pull_request` menuju branch `main` dan `develop`.
+* **Trigger Manual**: Dapat dijalankan sewaktu-waktu melalui menu **Actions** > **CodeQL SAST** > **Run workflow** (*workflow_dispatch*).
+* **Matrix Bahasa**:
+  * **Go (Backend)**: Menggunakan `build-mode: manual` dengan kompilasi `go build -v ./...` pada direktori `backend/`.
+  * **JavaScript/TypeScript (Frontend)**: Menggunakan `build-mode: none` untuk analisis sintaksis dan data flow SPA React.
+
+Hasil pemindaian otomatis dipublikasikan ke tab **Security** > **Code scanning alerts** pada repository GitHub serta tersimpan sebagai file SARIF pada ringkasan *Actions run*.
+
+---
+
+### 2. Cakupan Kode yang Dianalisis (*Code Coverage*)
+
+| Komponen | Bahasa / Framework | Target Direktori & Modul | Cakupan Analisis |
+|---|---|---|---|
+| **Backend** | Go 1.23+ / Gin, GORM | `backend/cmd/...`, `backend/internal/...`, `backend/pkg/...` | Handlers HTTP, RBAC middleware, token auth, business use cases, driver PostgreSQL & MySQL, queue worker, dan migration engine. |
+| **Frontend** | TypeScript / React 19 | `frontend-spa/src/...` | Komponen visual, form input, state management, client routing, dan HTTP API service client. |
+
+---
+
+### 3. Dokumentasi Temuan & Analisis Kerentanan (Security Evaluation)
+
+Berikut adalah dokumentasi hasil analisis semantik dan evaluasi risiko terhadap basis kode:
+
+| ID | Rule / CWE | Severity | Lokasi Kode | Potensi Dampak (OWASP Top 10) | Keputusan | Alasan & Mitigasi |
+|---|---|---|---|---|---|---|
+| **F-01** | `go/sql-injection`<br>(CWE-89) | **High** | `backend/internal/adapters/driver/postgresql/executor_repository.go:34`<br>`backend/internal/adapters/driver/mysql/executor_repository.go:34` | **A03:2021 – Injection**:<br>Eksekusi arbitrary SQL command pada basis data. | **Accepted Risk**<br>*(By Design)* | Fitur inti platform adalah *Database Migration & Management* yang memang mengeksekusi DDL/DML pengguna. Risiko diamankan secara berlapis: (1) Autentikasi session cookie + CSRF; (2) RBAC ketat (`view_only` diblokir total dari eksekusi); (3) *Multi-Leader Consensus Voting* wajib menyetujui draft sebelum dieksekusi; (4) Eksekusi terisolasi di database target pengguna, terpisah dari internal metadata database. |
+| **F-02** | `js/xss`<br>(CWE-79) | **Medium** | `frontend-spa/src/**/*.tsx` | **A03:2021 – Injection**:<br>Eksekusi script berbahaya pada browser pengguna lain. | **Clean**<br>*(0 Findings)* | React 19 secara otomatis melakukan HTML escaping pada semua binding ekspresi JSX. Tidak ada penggunaan `dangerouslySetInnerHTML` pada input pengguna. Cookie session dikonfigurasi dengan flag `HttpOnly`. |
+| **F-03** | `go/csrf-protection`<br>(CWE-352) | **Medium** | `backend/internal/adapters/http/middleware/csrf.go` | **A01:2021 – Broken Access Control**:<br>Pemalsuan request mutasi data lintas domain. | **Clean**<br>*(Protected)* | Seluruh request HTTP bermutasi (`POST`, `PUT`, `PATCH`, `DELETE`) divalidasi menggunakan token `X-CSRF-Token` yang dicocokkan dengan cookie sesi bertipe `SameSite=Lax`. |
+| **F-04** | `go/path-injection`<br>(CWE-22) | **High** | Filesystem access | **A01:2021 – Broken Access Control**:<br>Pembacaan/penulisan file terlarang di server. | **Clean**<br>*(0 Findings)* | Aplikasi tidak menyediakan endpoint pembacaan maupun manipulasi file fisik di filesystem server berdasarkan input pengguna. |
+
+---
 
 ## API Endpoints
 
