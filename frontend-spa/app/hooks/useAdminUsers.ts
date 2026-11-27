@@ -83,14 +83,34 @@ export function useAdminUsers(initialUsers: PlatformUser[], initialGroups: Acces
           updated = await userService.updateUserRole(userId, data.role);
         }
 
-        return updated;
+        const currentGroupIds = new Set(
+          groups.filter((g) => g.memberIds.includes(userId)).map((g) => g.id)
+        );
+        const targetGroupIds = new Set(data.groupIds);
+
+        for (const gid of targetGroupIds) {
+          if (!currentGroupIds.has(gid)) {
+            await groupService.addUserToGroup(gid, userId);
+          }
+        }
+        for (const gid of currentGroupIds) {
+          if (!targetGroupIds.has(gid)) {
+            await groupService.removeUserFromGroup(gid, userId);
+          }
+        }
+
+        const refreshedGroups = await groupService.getGroups().catch(() => null);
+        return { updated, refreshedGroups };
       },
       {
-        successMessage: (updated) => `User @${updated.username} updated successfully!`,
+        successMessage: ({ updated }) => `User @${updated.username} updated successfully!`,
         successTone: 'pine',
         errorMessage: 'Failed to update user',
-        onSuccess: (updated) => {
+        onSuccess: ({ updated, refreshedGroups }) => {
           setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
+          if (refreshedGroups) {
+            setGroups(refreshedGroups);
+          }
           setEditingUser(null);
         },
       }

@@ -19,6 +19,46 @@ export function useAdminGroupDetail(initialGroup: AccessGroup, databases: Target
   const [group, setGroup] = useState<AccessGroup>(initialGroup);
   const [leaderReplaceOpen, setLeaderReplaceOpen] = useState(false);
   const [pendingAccessChange, setPendingAccessChange] = useState<PendingAccessChange | null>(null);
+  const [pendingRevokeDb, setPendingRevokeDb] = useState<{ dbId: string; dbName: string } | null>(null);
+
+  const handleAddMember = async (userId: string) => {
+    await runAsync(
+      async () => {
+        await groupService.addUserToGroup(group.id, userId);
+        return {
+          ...group,
+          memberIds: Array.from(new Set([...group.memberIds, userId])),
+        };
+      },
+      {
+        successMessage: 'Member added to group',
+        successTone: 'pine',
+        errorMessage: 'Failed to add member to group',
+        onSuccess: (updated) => setGroup(updated),
+      }
+    );
+  };
+
+  const handleSetLeader = async (userId: string) => {
+    await runAsync(
+      async () => {
+        const updated = await groupService.updateGroup(group.id, {
+          leaderId: Number(userId),
+        });
+        return {
+          ...updated,
+          leaderId: userId,
+          memberIds: Array.from(new Set([...group.memberIds, userId])),
+        };
+      },
+      {
+        successMessage: 'Group leader updated successfully',
+        successTone: 'pine',
+        errorMessage: 'Failed to update group leader',
+        onSuccess: (updated) => setGroup(updated),
+      }
+    );
+  };
 
   const handleRemoveMember = async (memberId: string) => {
     if (memberId === group.leaderId) {
@@ -131,15 +171,97 @@ export function useAdminGroupDetail(initialGroup: AccessGroup, databases: Target
     );
   };
 
+  const handleRequestRevokeAccess = (dbId: string) => {
+    const db = databases.find((d) => d.id === dbId);
+    if (!db) return;
+    setPendingRevokeDb({ dbId, dbName: db.name });
+  };
+
+  const handleConfirmRevokeAccess = async () => {
+    if (!pendingRevokeDb) return;
+    const target = pendingRevokeDb;
+
+    await runAsync(
+      async () => {
+        const nextAccesses = group.databaseAccess
+          .filter((acc) => acc.databaseId !== target.dbId)
+          .map((acc) => ({
+            databaseId: Number(acc.databaseId),
+            accessType: acc.permission,
+          }));
+
+        const updated = await groupService.updateGroup(group.id, {
+          databaseAccesses: nextAccesses,
+        });
+
+        return {
+          ...updated,
+          memberIds: group.memberIds,
+        };
+      },
+      {
+        successMessage: `Revoked ${target.dbName} access from ${group.name}`,
+        successTone: 'pine',
+        errorMessage: 'Failed to revoke database access',
+        onSuccess: (updated) => {
+          setGroup(updated);
+          setPendingRevokeDb(null);
+        },
+      }
+    );
+  };
+
+  const handleGrantAccess = async (dbId: string, permission: DbPermission) => {
+    const db = databases.find((d) => d.id === dbId);
+    if (!db) return;
+
+    await runAsync(
+      async () => {
+        const nextAccesses = [
+          ...group.databaseAccess.map((acc) => ({
+            databaseId: Number(acc.databaseId),
+            accessType: acc.permission,
+          })),
+          {
+            databaseId: Number(dbId),
+            accessType: permission,
+          },
+        ];
+
+        const updated = await groupService.updateGroup(group.id, {
+          databaseAccesses: nextAccesses,
+        });
+
+        return {
+          ...updated,
+          memberIds: group.memberIds,
+        };
+      },
+      {
+        successMessage: `Granted ${permission} access on ${db.name} to ${group.name}`,
+        successTone: 'pine',
+        errorMessage: 'Failed to grant database access',
+        onSuccess: (updated) => setGroup(updated),
+      }
+    );
+  };
+
   return {
     group,
     leaderReplaceOpen,
     setLeaderReplaceOpen,
     pendingAccessChange,
     setPendingAccessChange,
+    pendingRevokeDb,
+    setPendingRevokeDb,
+    handleAddMember,
+    handleSetLeader,
     handleRemoveMember,
     handleConfirmLeaderReplacement,
     handleRequestAccessChange,
     handleConfirmAccessChange,
+    handleRequestRevokeAccess,
+    handleConfirmRevokeAccess,
+    handleGrantAccess,
   };
 }

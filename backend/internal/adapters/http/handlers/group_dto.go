@@ -28,6 +28,7 @@ type GroupResponse struct {
 	ID               uint                     `json:"id"`
 	Name             string                   `json:"name"`
 	LeaderID         uint                     `json:"leaderId"`
+	MemberIDs        []uint                   `json:"memberIds"`
 	DatabaseAccesses []DatabaseAccessResponse `json:"databaseAccesses"`
 }
 
@@ -54,10 +55,16 @@ func toGroupResponse(group domain.Group) GroupResponse {
 		})
 	}
 
+	memberIDs := group.MemberIDs
+	if memberIDs == nil {
+		memberIDs = []uint{}
+	}
+
 	return GroupResponse{
 		ID:               group.ID,
 		Name:             group.Name,
 		LeaderID:         group.LeaderID,
+		MemberIDs:        memberIDs,
 		DatabaseAccesses: accesses,
 	}
 }

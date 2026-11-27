@@ -64,6 +64,7 @@ export default function AdminUsersPage() {
 
       <EditUserModal
         user={d.editingUser}
+        groups={d.groups}
         onClose={() => d.setEditingUser(null)}
         onSaveUser={d.handleUpdateUser}
       />

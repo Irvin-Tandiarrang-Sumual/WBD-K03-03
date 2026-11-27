@@ -66,11 +66,24 @@ func (r *groupRepository) FindAll(ctx context.Context, params pagination.Paginat
 			})
 	}
 
+	var memberships []struct {
+		GroupID uint
+		UserID  uint
+	}
+	if err = r.db.WithContext(ctx).Table("user_groups").Select("group_id, user_id").Where("group_id IN ?", groupIDs).Order("group_id ASC, user_id ASC").Scan(&memberships).Error; err != nil {
+		return nil, 0, err
+	}
+	membersByGroup := make(map[uint][]uint)
+	for _, m := range memberships {
+		membersByGroup[m.GroupID] = append(membersByGroup[m.GroupID], m.UserID)
+	}
+
 	for _, storedGroup := range storedGroups {
 		groups = append(groups, domain.Group{
 			ID:               storedGroup.ID,
 			Name:             storedGroup.Name,
 			LeaderID:         storedGroup.LeaderID,
+			MemberIDs:        membersByGroup[storedGroup.ID],
 			DatabaseAccesses: accessesByGroup[storedGroup.ID],
 		})
 	}
@@ -103,10 +116,16 @@ func (r *groupRepository) FindByID(ctx context.Context, id uint) (domain.Group, 
 		})
 	}
 
+	var memberIDs []uint
+	if err = r.db.WithContext(ctx).Table("user_groups").Where("group_id = ?", id).Order("user_id ASC").Pluck("user_id", &memberIDs).Error; err != nil {
+		return domain.Group{}, err
+	}
+
 	return domain.Group{
 		ID:               storedGroup.ID,
 		Name:             storedGroup.Name,
 		LeaderID:         storedGroup.LeaderID,
+		MemberIDs:        memberIDs,
 		DatabaseAccesses: accesses,
 	}, nil
 }

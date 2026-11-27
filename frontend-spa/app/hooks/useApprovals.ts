@@ -22,7 +22,6 @@ export function useApprovals(initialDrafts: DraftProposal[]) {
         d.status === 'partially_reverted';
       if (!isReviewableStatus) return false;
 
-      if (user.role === 'admin') return true;
       return d.consensus.some(
         (c) =>
           c.status === 'pending' &&
