@@ -6,7 +6,7 @@ import { Counter, Rate, Trend } from 'k6/metrics';
 const baseURL = (__ENV.BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
 const benchmarkRows = Number(__ENV.BENCHMARK_ROWS || 0);
 const phases = ['baseline', 'peak', 'recovery'];
-const phaseSeconds = 14;
+const phaseSeconds = 20;
 const duration = new Trend('api_duration', true);
 const requests = new Counter('api_requests');
 const errors = new Rate('api_errors');
@@ -21,14 +21,14 @@ const scenarios = benchmarkRows ? {
   api: {
     executor: 'ramping-vus', exec: 'readAPI', startVUs: 2, gracefulRampDown: '0s',
     stages: [
-      { duration: '14s', target: 2 },
-      { duration: '4s', target: 12 }, { duration: '10s', target: 12 },
-      { duration: '4s', target: 2 }, { duration: '10s', target: 2 },
+      { duration: '20s', target: 2 },
+      { duration: '4s', target: 12 }, { duration: '16s', target: 12 },
+      { duration: '4s', target: 2 }, { duration: '16s', target: 2 },
     ],
   },
   ...Object.fromEntries(phases.map((phase, index) => [phase, {
     executor: 'shared-iterations', vus: 1, iterations: 1, exec: 'submitAndWatch',
-    startTime: `${phaseSeconds * index + 5}s`, maxDuration: '8s',
+    startTime: `${phaseSeconds * index + 3}s`, maxDuration: '15s',
   }])),
 };
 export const options = {
@@ -100,9 +100,9 @@ export function setup() {
     return { author, benchmark: approveDraft(author, leaders, primary, 'wbd_batch_benchmark', 'score = score + 1', 10000) };
   }
   const jobs = Object.fromEntries(phases.map((phase) => [phase, [
-    approveDraft(author, leaders, primary, 'customers', 'name = name', 2),
-    approveDraft(author, leaders, primary, 'customers', 'name = name', 2),
-    approveDraft(author, leaders, secondary, 'daily_metrics', 'active_users = active_users', 2),
+    approveDraft(author, leaders, primary, 'customers', 'name = name', 250),
+    approveDraft(author, leaders, primary, 'customers', 'name = name', 250),
+    approveDraft(author, leaders, secondary, 'daily_metrics', 'active_users = active_users', 250),
   ]]));
   return { author, jobs };
 }
@@ -161,7 +161,7 @@ function watch(author, paths, tags, timeoutMs) {
         exec.test.abort(`Unexpected terminal draft status: ${status}`);
       }
     }
-    if (pending.size || running.size) sleep(benchmarkRows ? 1 : 0.2);
+    if (pending.size || running.size) sleep(benchmarkRows ? 1 : 0.05);
   }
   return (Date.now() - start) / 1000;
 }
@@ -194,7 +194,7 @@ function measureJobs(author, paths, phase, timeoutMs) {
 
 export function submitAndWatch({ author, jobs }) {
   const phase = exec.scenario.name;
-  measureJobs(author, jobs[phase], phase, 7000);
+  measureJobs(author, jobs[phase], phase, 14000);
 }
 
 export function benchmark({ author, benchmark: path }) {
