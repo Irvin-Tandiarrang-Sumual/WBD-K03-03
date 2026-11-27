@@ -10,12 +10,13 @@ import (
 var (
 	simpleIdentifierRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 	quotedIdentifierRegex = regexp.MustCompile(`^("[^"\r\n]+"|` + "`" + `[^` + "`" + `\r\n]+` + "`" + `)$`)
+	serverFileCallRegex   = regexp.MustCompile(`\bload_file\s*\(`)
 )
 
 var mutatingKeywords = []string{
 	"delete", "update", "insert", "drop", "alter",
 	"truncate", "create", "grant", "revoke", "merge",
-	"call", "execute",
+	"call", "execute", "into",
 }
 
 func IsReadOnlyQuery(query string) (bool, error) {
@@ -24,7 +25,7 @@ func IsReadOnlyQuery(query string) (bool, error) {
 		return false, nil
 	}
 
-	sanitized, err := StripCommentsAndLiterals(trimmed)
+	sanitized, err := stripCommentsAndLiterals(trimmed, true)
 	if err != nil {
 		return false, err
 	}
@@ -38,7 +39,7 @@ func IsReadOnlyQuery(query string) (bool, error) {
 		return false, nil
 	}
 
-	if ContainsMutatingKeyword(normalized) {
+	if ContainsMutatingKeyword(normalized) || serverFileCallRegex.MatchString(normalized) {
 		return false, nil
 	}
 
@@ -63,6 +64,10 @@ func ContainsMutatingKeyword(normalizedQuery string) bool {
 }
 
 func StripCommentsAndLiterals(sql string) (string, error) {
+	return stripCommentsAndLiterals(sql, false)
+}
+
+func stripCommentsAndLiterals(sql string, enforceReadOnly bool) (string, error) {
 	var builder strings.Builder
 	builder.Grow(len(sql))
 
@@ -77,6 +82,9 @@ func StripCommentsAndLiterals(sql string) (string, error) {
 		}
 
 		if isBlockCommentStart(sql, index) {
+			if enforceReadOnly && isExecutableComment(sql[index:]) {
+				return "", errors.New("executable SQL comments are not allowed")
+			}
 			nextIndex, err := consumeBlockComment(sql, index)
 			if err != nil {
 				return "", err
@@ -102,8 +110,12 @@ func StripCommentsAndLiterals(sql string) (string, error) {
 			if err != nil {
 				return "", err
 			}
+			if enforceReadOnly && strings.EqualFold(sql[index+1:nextIndex-1], "load_file") {
+				builder.WriteString(" load_file ")
+			} else {
+				builder.WriteString(" ")
+			}
 			index = nextIndex
-			builder.WriteString(" ")
 			continue
 		}
 
@@ -112,6 +124,10 @@ func StripCommentsAndLiterals(sql string) (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+func isExecutableComment(sql string) bool {
+	return strings.HasPrefix(sql, "/*!") || strings.HasPrefix(sql, "/*M!")
 }
 
 func isLineCommentStart(sql string, index int) bool {

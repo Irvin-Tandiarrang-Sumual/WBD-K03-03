@@ -157,7 +157,20 @@ Di backend Go, terdapat temuan terkait dua hal. Pertama, aplikasi bisa membaca I
 | `go/incorrect-integer-conversion`, tinggi (8,1), 2 temuan | `backend/pkg/ginutil/ginutil.go:20,23` | Jalur ini sudah mengecek hasil konversi bolak-balik dan menolak nilai yang berubah sebelum mengembalikan ID. Dari peninjauan kode, kedua temuan ini dinilai false positive. |
 | `go/sql-injection`, tinggi (8,8), 3 temuan | `backend/internal/adapters/driver/mysql/connect.go:110,136` dan `backend/internal/adapters/driver/postgresql/connect.go:100` | Nama database masuk ke SQL pembuatan database. Jalur pemanggil sudah membatasi nama ke huruf, angka, dan garis bawah. Ketiga temuan dinilai false positive pada jalur yang ditinjau. |
 | `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/connect.go:143,147` | Nama akun sekarang diperlakukan sebagai nama akun MySQL yang dikutip dengan benar. Pemberian hak otomatis dibatasi ke database yang didaftarkan. Integration test memverifikasi bahwa akun dapat memakai database baru tanpa hak di tingkat server. |
-| `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/executor_repository.go:162` dan `backend/internal/adapters/driver/postgresql/executor_repository.go:163` | SQL Console memeriksa izin dan memvalidasi query di service. Driver sekarang menghentikan eksekusi jika transaksi baca gagal dibuka. Karena fitur ini memang menjalankan SQL yang dimasukkan pengguna, hasil scan ulang masih perlu ditinjau. |
+| `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/executor_repository.go:162` dan `backend/internal/adapters/driver/postgresql/executor_repository.go:163` | SQL Console memeriksa izin dan memvalidasi query di service. Driver sekarang menghentikan eksekusi jika transaksi baca gagal dibuka. CodeQL masih menandai kedua jalur tersebut pada scan ulang. |
+
+### Hasil scan ulang setelah perbaikan
+
+Perubahan ada di [commit `bc5f233`](https://github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/commit/bc5f233aed1742b5d8fd703e674d88cb3f809969). Temuan Go turun dari **11 menjadi 8**. JavaScript dan TypeScript tetap **0**. [Pemeriksaan GitHub untuk commit perbaikan](https://github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/actions/runs/46010555158)
+
+| Bagian | Awal → ulang | Hasil peninjauan |
+|---|---:|---|
+| Pembacaan ID perbandingan migrasi | 2 → 0 | Kedua peringatan hilang setelah aplikasi membatasi angka yang bisa diterima sesuai ukuran `uint`. |
+| Pemberian hak akses MySQL | 2 → 1 | Peringatan pada pemberian hak tingkat server hilang setelah perintah itu dihapus. Peringatan di `mysql/connect.go:161` ditutup sebagai *false positive* pada jalur yang ditinjau. Nama akun dikutip sebagai identifier MySQL, nama database divalidasi, dan grant hanya berlaku untuk database tujuan, termasuk nama dengan garis bawah. Integration test memeriksa bahwa akun bisa memakai database baru tanpa mendapat hak tingkat server. |
+| Pemeriksaan ID umum dan pembuatan database | 5 → 5 | Dua peringatan di helper ID dan tiga peringatan pembuatan database tetap muncul. Peninjauan kode menilai kelimanya sebagai false positive pada jalur yang diperiksa karena pemeriksaan batas angka dan validasi nama database sudah ada. |
+| SQL Console MySQL dan PostgreSQL | 2 → 2 | Dua temuan ditutup dalam peninjauan dengan mitigasi. Menerima teks SQL adalah bagian dari fitur. Jalur Query, Explain, dan Explain Analyze memeriksa akses serta memvalidasi perintah di service, lalu driver mewajibkan transaksi baca. Validasi sekarang juga menolak komentar yang bisa dieksekusi, pemanggilan `LOAD_FILE`, dan `SELECT ... INTO`. Lokasi pada scan ini ada di `mysql/executor_repository.go:159` dan `postgresql/executor_repository.go:160`. |
+
+Hasil scan ulang di tabel adalah hasil dari commit `bc5f233`. Penutupan di atas adalah keputusan peninjauan kode. Untuk SQL Console, batas transaksi melindungi perubahan data biasa. Efek fungsi khusus yang tersedia pada database tujuan masih bergantung pada hak akun koneksi, sehingga akun target perlu memakai hak minimum. 
 
 
 ## API Endpoints

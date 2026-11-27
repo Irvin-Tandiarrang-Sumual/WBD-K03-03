@@ -20,7 +20,7 @@ test.describe('Module 2: Drafting, Wire-Protocol Dry-Run & Console Security', ()
     await userPage.locator('button:has-text("Submit Draft for Quorum")').click();
 
     // 5. Assert successful redirect to draft detail page or draft list
-    await expect(userPage).toHaveURL(/\/drafts/);
+    await expect(userPage).toHaveURL(/\/drafts\/\d+$/);
   });
 
   test('TC-E2E-SEC-001: Verify SQL Console read-only sanitizer blocks mutation and injection', async ({
@@ -38,7 +38,7 @@ test.describe('Module 2: Drafting, Wire-Protocol Dry-Run & Console Security', ()
     await runBtn.click();
 
     // 4. Verify system displays security rejection error
-    const errorBox = adminPage.locator('div:has-text("mutation"), div:has-text("forbidden"), div:has-text("read-only"), div:has-text("Error")').first();
+    const errorBox = adminPage.getByRole('heading', { name: 'Query Execution Failed' });
     await expect(errorBox).toBeVisible({ timeout: 5000 });
   });
 });

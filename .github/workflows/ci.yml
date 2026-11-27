@@ -78,6 +78,10 @@ jobs:
           cp .env.example .env
 
       - name: Run E2E Test Suite via Docker Compose
+        env:
+          BASE_URL: http://host.docker.internal:3000
+          FRONTEND_ORIGIN: http://host.docker.internal:3000
+          VITE_API_URL: http://host.docker.internal:8080/api/v1
         run: |
           docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
 
@@ -115,19 +119,7 @@ jobs:
 
       - name: Start Application Stack
         run: |
-          docker compose up -d --build internal_db demo_postgres demo_mysql app
-
-      - name: Wait for Services to be Healthy
-        run: |
-          echo "Waiting for databases and backend service to become healthy..."
-          if ! timeout 120s bash -c 'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'; then
-            echo "Timeout waiting for backend service! Container status:"
-            docker compose ps
-            echo "Backend logs:"
-            docker compose logs app
-            exit 1
-          fi
-          echo "Backend and databases are healthy and ready for stress load."
+          docker compose up -d --build --wait --wait-timeout 120 internal_db demo_postgres demo_mysql app
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
@@ -147,6 +139,7 @@ jobs:
           docker compose logs --tail=100 app
           docker compose logs --tail=50 internal_db
           docker compose logs --tail=50 demo_postgres
+          docker compose logs --tail=50 demo_mysql
 
       - name: Teardown Stack
         if: always()

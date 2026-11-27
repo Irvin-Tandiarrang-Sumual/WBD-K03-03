@@ -1,4 +1,4 @@
-import { test as base, Page } from '@playwright/test';
+import { test as base, type Browser, type Page } from '@playwright/test';
 import {
   ADMIN_AUTH,
   LEADER_AUTH,
@@ -15,40 +15,40 @@ type CustomFixtures = {
   auditorLeadPage: Page;
 };
 
+async function useRolePage(
+  browser: Browser,
+  baseURL: string | undefined,
+  storageState: string,
+  use: (page: Page) => Promise<void>,
+) {
+  const context = await browser.newContext({ baseURL, storageState });
+  try {
+    await context.route('https://fonts.googleapis.com/**', (route) => route.abort());
+    await use(await context.newPage());
+  } finally {
+    await context.close();
+  }
+}
+
 export const test = base.extend<CustomFixtures>({
-  adminPage: async ({ browser }, use) => {
-    const context = await browser.newContext({ storageState: ADMIN_AUTH });
-    const page = await context.newPage();
-    await use(page);
-    await context.close();
+  adminPage: async ({ browser, baseURL }, use) => {
+    await useRolePage(browser, baseURL, ADMIN_AUTH, use);
   },
 
-  leaderPage: async ({ browser }, use) => {
-    const context = await browser.newContext({ storageState: LEADER_AUTH });
-    const page = await context.newPage();
-    await use(page);
-    await context.close();
+  leaderPage: async ({ browser, baseURL }, use) => {
+    await useRolePage(browser, baseURL, LEADER_AUTH, use);
   },
 
-  userPage: async ({ browser }, use) => {
-    const context = await browser.newContext({ storageState: USER_AUTH });
-    const page = await context.newPage();
-    await use(page);
-    await context.close();
+  userPage: async ({ browser, baseURL }, use) => {
+    await useRolePage(browser, baseURL, USER_AUTH, use);
   },
 
-  leaderQaPage: async ({ browser }, use) => {
-    const context = await browser.newContext({ storageState: LEADER_QA_AUTH });
-    const page = await context.newPage();
-    await use(page);
-    await context.close();
+  leaderQaPage: async ({ browser, baseURL }, use) => {
+    await useRolePage(browser, baseURL, LEADER_QA_AUTH, use);
   },
 
-  auditorLeadPage: async ({ browser }, use) => {
-    const context = await browser.newContext({ storageState: AUDITOR_LEAD_AUTH });
-    const page = await context.newPage();
-    await use(page);
-    await context.close();
+  auditorLeadPage: async ({ browser, baseURL }, use) => {
+    await useRolePage(browser, baseURL, AUDITOR_LEAD_AUTH, use);
   },
 });
 

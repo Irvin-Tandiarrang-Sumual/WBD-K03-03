@@ -2,6 +2,7 @@ import { test, expect } from '../fixtures/test-fixtures.js';
 
 test.describe('Module 3: Multi-Leader Quorum & Invalidation (APR)', () => {
   test('TC-E2E-APR-001: Verify multi-leader 100% unanimous approval workflow', async ({
+    adminPage,
     leaderPage,
     leaderQaPage,
     auditorLeadPage,
@@ -15,36 +16,30 @@ test.describe('Module 3: Multi-Leader Quorum & Invalidation (APR)', () => {
     await userPage.locator('#draft-description').fill(proposalTitle);
     await userPage.locator('#draft-up-sql').fill('CREATE TABLE quorum_demo (id INT PRIMARY KEY);');
     await userPage.locator('button:has-text("Submit Draft for Quorum")').click();
-    await userPage.waitForURL(/\/drafts/);
+    await userPage.waitForURL(/\/drafts\/\d+$/);
 
     // Get current draft URL
     const currentDraftUrl = userPage.url();
 
     // 2. Leader 1 (engineering) approves
     await leaderPage.goto(currentDraftUrl);
-    const approveBtnLeader = leaderPage.locator('button:has-text("Approve")');
-    if (await approveBtnLeader.isVisible()) {
-      await approveBtnLeader.click();
-      // Should still be pending approval until all leaders approve
-      await expect(leaderPage.locator('text=Approved').first()).not.toBeVisible();
-    }
+    const approveBtnLeader = leaderPage.getByRole('button', { name: 'Approve', exact: true });
+    await approveBtnLeader.click();
+    // Should still be pending approval until all leaders approve
+    await expect(leaderPage.locator('h1 + div')).toHaveText('PENDING_APPROVAL');
 
     // 3. Leader 2 (qa-team) approves
     await leaderQaPage.goto(currentDraftUrl);
-    const approveBtnQa = leaderQaPage.locator('button:has-text("Approve")');
-    if (await approveBtnQa.isVisible()) {
-      await approveBtnQa.click();
-    }
+    await leaderQaPage.getByRole('button', { name: 'Approve', exact: true }).click();
 
     // 4. Leader 3 (auditors, view_only) approves
     await auditorLeadPage.goto(currentDraftUrl);
-    const approveBtnAuditor = auditorLeadPage.locator('button:has-text("Approve")');
-    if (await approveBtnAuditor.isVisible()) {
-      await approveBtnAuditor.click();
-    }
+    await auditorLeadPage.getByRole('button', { name: 'Approve', exact: true }).click();
+    await adminPage.goto(currentDraftUrl);
+    await adminPage.getByRole('button', { name: 'Approve', exact: true }).click();
 
     // 5. Verify draft status transitions to Approved once all approve
-    await expect(auditorLeadPage.locator('text=APPROVED, span:has-text("APPROVED")').first()).toBeVisible({ timeout: 5000 });
+    await expect(adminPage.locator('h1 + div')).toHaveText('APPROVED');
   });
 
   test('TC-E2E-APR-002: Verify single leader veto immediately marks draft as Rejected', async ({
@@ -60,24 +55,18 @@ test.describe('Module 3: Multi-Leader Quorum & Invalidation (APR)', () => {
     await userPage.locator('#draft-description').fill(title);
     await userPage.locator('#draft-up-sql').fill('CREATE TABLE veto_demo (id INT PRIMARY KEY);');
     await userPage.locator('button:has-text("Submit Draft for Quorum")').click();
-    await userPage.waitForURL(/\/drafts/);
+    await userPage.waitForURL(/\/drafts\/\d+$/);
 
     const draftUrl = userPage.url();
 
     // 2. Leader 1 approves
     await leaderPage.goto(draftUrl);
-    const approveBtn = leaderPage.locator('button:has-text("Approve")');
-    if (await approveBtn.isVisible()) {
-      await approveBtn.click();
-    }
+    await leaderPage.getByRole('button', { name: 'Approve', exact: true }).click();
 
     // 3. Leader 2 rejects
     await leaderQaPage.goto(draftUrl);
-    const rejectBtn = leaderQaPage.locator('button:has-text("Reject")');
-    if (await rejectBtn.isVisible()) {
-      await rejectBtn.click();
-      // Status must transition to REJECTED
-      await expect(leaderQaPage.locator('text=REJECTED, span:has-text("REJECTED")').first()).toBeVisible({ timeout: 5000 });
-    }
+    await leaderQaPage.getByRole('button', { name: 'Reject', exact: true }).click();
+    // Status must transition to REJECTED
+    await expect(leaderQaPage.locator('h1 + div')).toHaveText('REJECTED');
   });
 });

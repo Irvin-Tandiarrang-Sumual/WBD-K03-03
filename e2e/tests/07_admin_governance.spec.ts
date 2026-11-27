@@ -17,7 +17,7 @@ test.describe('Module 7: Admin Panel Governance & Protections (ADM)', () => {
     await expect(adminPage).toHaveURL(/\/admin\/groups/);
 
     // 4. Verify engineering group exists with leader designated
-    const engineeringGroup = adminPage.locator('text=engineering, a:has-text("engineering")').first();
+    const engineeringGroup = adminPage.getByText('engineering', { exact: true }).first();
     await expect(engineeringGroup).toBeVisible();
   });
 });

@@ -15,13 +15,24 @@ test.describe('Module 1: Authentication & Access Control (REG)', () => {
 
     // 3. Verify redirected to /databases and Administration section is visible
     await expect(page).toHaveURL(/\/databases/);
-    await expect(page.locator('text=Administration')).toBeVisible();
-    await expect(page.locator('a[href="/admin/users"]')).toBeVisible();
-    await expect(page.locator('a[href="/admin/groups"]')).toBeVisible();
-    await expect(page.locator('a[href="/admin/databases"]')).toBeVisible();
+    const openMenu = page.getByRole('button', { name: 'Open navigation menu' });
+    const mobileNavigation = await openMenu.isVisible();
+    if (mobileNavigation) {
+      await openMenu.click();
+    }
+    const sidebar = mobileNavigation
+      ? page.getByLabel('Mobile navigation drawer')
+      : page.getByRole('navigation', { name: 'Sidebar Navigation' }).first();
+    await expect(sidebar.getByText('Administration', { exact: true })).toBeVisible();
+    await expect(sidebar.locator('a[href="/admin/users"]')).toBeVisible();
+    await expect(sidebar.locator('a[href="/admin/groups"]')).toBeVisible();
+    await expect(sidebar.locator('a[href="/admin/databases"]')).toBeVisible();
 
     // 4. Logout
-    await page.locator('button:has-text("Logout"), button:has([data-lucide="log-out"]), button:has-text("Sign Out")').first().click();
+    const logout = mobileNavigation
+      ? sidebar.getByRole('button', { name: 'Sign out' })
+      : page.getByRole('button', { name: 'Sign out' }).first();
+    await logout.click();
     await expect(page).toHaveURL(/\/login/);
 
     // 5. Login as regular user
@@ -46,13 +57,11 @@ test.describe('Module 1: Authentication & Access Control (REG)', () => {
     await auditorLeadPage.goto('/databases/1');
 
     // 2. Verify mutation buttons are disabled
-    const proposeBtn = auditorLeadPage.locator('button:has-text("Propose Migration Draft"), a:has-text("Propose Migration Draft")');
+    const proposeBtn = auditorLeadPage.getByRole('link', { name: 'Propose Migration Draft' });
     const rollbackBtn = auditorLeadPage.locator('button:has-text("Rollback (1-Step)")');
     const forwardBtn = auditorLeadPage.locator('button:has-text("Forward (Redo)")');
 
-    if (await proposeBtn.count() > 0) {
-      await expect(proposeBtn).toBeDisabled();
-    }
+    await expect(proposeBtn).toHaveAttribute('href', '/databases/1');
     if (await rollbackBtn.count() > 0) {
       await expect(rollbackBtn).toBeDisabled();
     }
@@ -61,14 +70,23 @@ test.describe('Module 1: Authentication & Access Control (REG)', () => {
     }
 
     // 3. Directly invoke API mutation with auditor_lead session
-    const response = await auditorLeadPage.request.post('/api/v1/me/databases/1/drafts', {
-      data: {
-        sql_up: 'CREATE TABLE auditor_test (id INT PRIMARY KEY);',
-      },
-    });
+    const apiURL = process.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+    await auditorLeadPage.waitForFunction(() => sessionStorage.getItem('csrf_token'));
+    const status = await auditorLeadPage.evaluate(async (url) => {
+      const response = await fetch(`${url}/me/databases/1/drafts`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': sessionStorage.getItem('csrf_token') || '',
+        },
+        body: JSON.stringify({ sqlUp: 'CREATE TABLE auditor_test (id INT PRIMARY KEY);' }),
+      });
+      return response.status;
+    }, apiURL);
 
     // 4. Assert backend rejects with 403 Forbidden
-    expect([403, 401]).toContain(response.status());
+    expect(status).toBe(403);
   });
 
   test('TC-E2E-REG-003: Verify clearing session cookie triggers clean redirect to /login', async ({

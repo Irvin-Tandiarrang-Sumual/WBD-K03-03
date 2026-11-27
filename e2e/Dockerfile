@@ -1,13 +1,13 @@
 # Gunakan official image Playwright yang sudah memuat semua browser binaries & OS dependencies
-FROM mcr.microsoft.com/playwright:v1.50.0-noble
+FROM mcr.microsoft.com/playwright:v1.65.1-noble
 
 WORKDIR /app
 
 # Salin package.json & tsconfig
-COPY package.json tsconfig.json playwright.config.ts ./
+COPY package.json package-lock.json tsconfig.json playwright.config.ts ./
 
 # Install dependencies (Playwright package)
-RUN npm install
+RUN npm ci
 
 # Salin fixtures & tests
 COPY fixtures/ ./fixtures/
