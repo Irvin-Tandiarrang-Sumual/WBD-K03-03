@@ -1,8 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/auth-context';
 import { draftService } from '../services/draft_service';
-import type { DraftProposal, TargetDatabase } from '../types';
+import type { DraftProposal, DraftStatus, SnackbarData, TargetDatabase } from '../types';
 import { useAsyncAction } from './useAsyncAction';
+
+function notifyDraftExecutionStatus(
+  draftId: string,
+  status: DraftStatus,
+  showSnackbar: (message: string, tone?: SnackbarData['tone']) => void
+) {
+  switch (status) {
+    case 'applied':
+      showSnackbar(`Draft ${draftId} applied successfully!`, 'pine');
+      break;
+    case 'failed':
+      showSnackbar(`Draft ${draftId} execution failed.`, 'maroon');
+      break;
+    case 'partial':
+      showSnackbar(`Draft ${draftId} partially failed (database quarantined).`, 'maroon');
+      break;
+    case 'partially_reverted':
+      showSnackbar(`Draft ${draftId} partially reverted.`, 'maroon');
+      break;
+    case 'executing':
+      showSnackbar(`Draft ${draftId} queued for execution...`, 'blue');
+      break;
+    default:
+      break;
+  }
+}
 
 export interface UseDraftDetailProps {
   initialDraft: DraftProposal;
@@ -38,7 +64,10 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
         const updated = await draftService.getDraftById(draft.id);
         if (stopped) return;
         setDraft(updated);
-        if (updated.status !== 'executing') return;
+        if (updated.status !== 'executing') {
+          notifyDraftExecutionStatus(updated.id, updated.status, showSnackbar);
+          return;
+        }
       } catch (error) {
         if (stopped) return;
         console.error('Failed to refresh draft status', error);
@@ -79,6 +108,9 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
         try {
           const refreshed = await draftService.getDraftById(draft.id);
           setDraft(refreshed);
+          if (refreshed.status !== 'executing') {
+            notifyDraftExecutionStatus(refreshed.id, refreshed.status, showSnackbar);
+          }
         } catch (err) {
           console.error('[SSE] Failed to refresh draft after stream completion', err);
         }
@@ -120,11 +152,10 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
         return updated;
       },
       {
-        successMessage: `Draft ${draft.id} execution initiated successfully!`,
-        successTone: 'pine',
         errorMessage: 'Execution failed or requires consensus approval',
         onSuccess: (updated) => {
           setDraft(updated);
+          notifyDraftExecutionStatus(updated.id, updated.status, showSnackbar);
         },
       }
     );
@@ -147,14 +178,10 @@ export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps)
         return updated;
       },
       {
-        successMessage:
-          direction === 'forward'
-            ? `Batch forward operation submitted`
-            : `Batch rollback operation submitted`,
-        successTone: direction === 'forward' ? 'pine' : 'maroon',
         errorMessage: `Batch ${direction} operation failed`,
         onSuccess: (updated) => {
           setDraft(updated);
+          notifyDraftExecutionStatus(updated.id, updated.status, showSnackbar);
         },
       }
     );

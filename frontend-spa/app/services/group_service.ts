@@ -11,6 +11,7 @@ export interface BackendGroupResponse {
   id: number;
   name: string;
   leaderId: number;
+  memberIds?: number[];
   databaseAccesses: BackendDatabaseAccess[];
 }
 
@@ -23,6 +24,9 @@ export function mapBackendGroupToAccessGroup(g: BackendGroupResponse, allMemberI
   const members = new Set<string>();
   if (g.leaderId) {
     members.add(String(g.leaderId));
+  }
+  if (Array.isArray(g.memberIds)) {
+    g.memberIds.forEach((id) => members.add(String(id)));
   }
   if (allMemberIds) {
     allMemberIds.forEach((m) => members.add(m));

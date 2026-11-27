@@ -8,15 +8,31 @@ import { QuarantineBanner } from '../components/feedback/QuarantineBanner';
 import { useDatabasesCatalog } from '../hooks/useDatabasesCatalog';
 import { databaseService } from '../services/database_service';
 import { groupService } from '../services/group_service';
+import { migrationService } from '../services/migration_service';
 import { formatMigrationVersion } from '../utils/formatters';
 import { getPermissionBadgeClass } from '../utils/permissions';
 import type { AccessGroup, DbEngine, DbPermission, TargetDatabase } from '../types';
 
 export async function clientLoader() {
-  const [databases, groups] = await Promise.all([
+  const [rawDatabases, groups] = await Promise.all([
     databaseService.getAccessibleDatabases(),
     groupService.getGroups().catch(() => []),
   ]);
+
+  const databases = await Promise.all(
+    rawDatabases.map(async (db) => {
+      if (!db.currentMigrationId) {
+        return { ...db, headVersion: 0 };
+      }
+      try {
+        const head = await migrationService.getMigrationById(db.id, db.currentMigrationId);
+        return { ...db, headVersion: head.version };
+      } catch {
+        return { ...db, headVersion: 0 };
+      }
+    })
+  );
+
   return { databases, groups };
 }
 

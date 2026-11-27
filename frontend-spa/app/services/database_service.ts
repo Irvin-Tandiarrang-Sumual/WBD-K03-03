@@ -31,7 +31,7 @@ export function mapBackendDatabaseToTargetDatabase(
     hostPort: `${db.host}:${db.port}`,
     status: 'Healthy' as DbStatus,
     quarantined: false,
-    headVersion: overrides?.headVersion ?? 1,
+    headVersion: overrides?.headVersion ?? 0,
     currentMigrationId: db.currentMigrationId == null ? undefined : String(db.currentMigrationId),
     redoStack: overrides?.redoStack ?? [],
     permission,

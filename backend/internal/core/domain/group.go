@@ -20,6 +20,7 @@ type Group struct {
 	ID               uint
 	Name             string
 	LeaderID         uint
+	MemberIDs        []uint
 	DatabaseAccesses []DatabaseAccess
 }
 
