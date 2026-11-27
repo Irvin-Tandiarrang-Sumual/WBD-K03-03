@@ -153,7 +153,7 @@ func (q *Queue) runJob(conn *gorm.DB, job model.MigrationJob) error {
 func finishJob(conn *gorm.DB, job model.MigrationJob, executionErr error) error {
 	status := jobUncertain
 	var draft model.Draft
-	if err := conn.Select("status").Take(&draft, job.DraftID).Error; err != nil {
+	if err := conn.Take(&draft, job.DraftID).Error; err != nil {
 		return err
 	}
 	if !errors.Is(executionErr, domain.ErrMigrationOutcomeUnknown) {
@@ -162,6 +162,49 @@ func finishJob(conn *gorm.DB, job model.MigrationJob, executionErr error) error 
 			status = jobDone
 		case domain.DraftStatusFailed, domain.DraftStatusInvalidated, domain.DraftStatusPartial, domain.DraftStatusPartiallyReverted:
 			status = jobFailed
+		case domain.DraftStatusExecuting:
+			// Worker process was killed/crashed mid-flight (crash recovery).
+			if draft.IsBatch {
+				now := time.Now()
+				draft.Status = domain.DraftStatusPartial
+				draft.CurrentRound++
+				draft.RecoveryAction = ""
+				draft.UpdatedAt = now
+				_ = conn.Model(&draft).Updates(map[string]interface{}{
+					"status":          domain.DraftStatusPartial,
+					"current_round":   draft.CurrentRound,
+					"recovery_action": "",
+					"updated_at":      now,
+				}).Error
+
+				var groupDatabases []model.GroupDatabase
+				if err := conn.Where("database_id = ?", draft.DatabaseID).Find(&groupDatabases).Error; err == nil && len(groupDatabases) > 0 {
+					for _, gd := range groupDatabases {
+						var grp model.Group
+						if err := conn.Take(&grp, gd.GroupID).Error; err == nil {
+							var lid *uint
+							if grp.LeaderID != 0 {
+								l := grp.LeaderID
+								lid = &l
+							}
+							approval := model.DraftApproval{
+								DraftID:  draft.ID,
+								GroupID:  grp.ID,
+								Round:    draft.CurrentRound,
+								LeaderID: lid,
+								Phase:    domain.ApprovalPhasePartialRecovery,
+								Status:   domain.ApprovalStatusPending,
+								Vote:     domain.ApprovalStatusPending,
+							}
+							_ = conn.Create(&approval).Error
+						}
+					}
+				}
+				status = jobFailed
+			} else {
+				status = jobFailed
+				_ = conn.Model(&draft).Update("status", domain.DraftStatusFailed).Error
+			}
 		}
 	}
 	if status == jobUncertain {
