@@ -69,7 +69,7 @@ export function useDatabaseDetail({
     database.permission ?? (user.role === 'admin' ? 'view_edit' : 'view_only');
 
   const rollbackCheck = canRollbackDatabase(database, migrations, permission);
-  const redoCheck = canForwardRedoDatabase(database, permission);
+  const redoCheck = canForwardRedoDatabase(database, migrations, permission);
   const headMig = getHeadMigration(database, migrations);
 
   const filteredMigrations = useMemo(

@@ -41,6 +41,7 @@ export function canRollbackDatabase(
 
 export function canForwardRedoDatabase(
   database: TargetDatabase,
+  migrations: MigrationRecord[],
   userPermission: DbPermission
 ): { allowed: boolean; targetVersion?: number; reason?: string } {
   if (userPermission !== 'view_edit') {
@@ -49,5 +50,15 @@ export function canForwardRedoDatabase(
   if (database.quarantined) {
     return { allowed: false, reason: 'Database is quarantined' };
   }
-  return { allowed: true };
+  if (!database.currentMigrationId || database.headVersion <= 0) {
+    return { allowed: false, reason: 'No forward migration available' };
+  }
+
+  const activeMigration = migrations.find((m) => m.id === database.currentMigrationId);
+  if (!activeMigration?.forwardMigrationId) {
+    return { allowed: false, reason: 'No forward migration available' };
+  }
+
+  const targetMigration = migrations.find((m) => m.id === activeMigration.forwardMigrationId);
+  return { allowed: true, targetVersion: targetMigration?.version };
 }

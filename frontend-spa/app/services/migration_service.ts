@@ -11,6 +11,7 @@ export interface BackendMigrationResponse {
   sqlDown: string;
   errorMessage?: string;
   executionId?: number;
+  forwardMigrationId?: number | null;
   revertsMigrationId?: number | null;
   sourceMigrationId?: number | null;
   isReversible?: boolean;
@@ -36,6 +37,7 @@ export function mapBackendMigrationToRecord(m: BackendMigrationResponse): Migrat
 
   return {
     id: String(m.id),
+    forwardMigrationId: m.forwardMigrationId == null ? undefined : String(m.forwardMigrationId),
     revertsMigrationId: m.revertsMigrationId == null ? undefined : String(m.revertsMigrationId),
     sourceMigrationId: m.sourceMigrationId == null ? undefined : String(m.sourceMigrationId),
     databaseId: String(m.databaseId),

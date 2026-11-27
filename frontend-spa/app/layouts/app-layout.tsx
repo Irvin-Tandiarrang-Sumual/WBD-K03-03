@@ -131,7 +131,7 @@ export default function AppLayout() {
   const { section, title } = computeSectionAndTitle(location.pathname);
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden font-sans text-[#3A241A] bg-gradient-to-b from-[#F5EEDD] via-[#ECE1CB] to-[#DFD0B5] flex">
+    <div className="min-h-screen relative overflow-x-clip font-sans text-[#3A241A] bg-gradient-to-b from-[#F5EEDD] via-[#ECE1CB] to-[#DFD0B5] flex">
       {isNavigating && (
         <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-[#D8C7A5]/30 overflow-hidden">
           <div className="h-full bg-gradient-to-r from-[#264D3B] via-[#F3B738] to-[#1E6B8C] animate-pulse w-full" />

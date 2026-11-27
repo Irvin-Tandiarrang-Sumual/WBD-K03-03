@@ -5,6 +5,7 @@ export interface SchemaDiffLine {
 
 export interface MigrationRecord {
   id: string;
+  forwardMigrationId?: string;
   revertsMigrationId?: string;
   sourceMigrationId?: string;
   databaseId: string;

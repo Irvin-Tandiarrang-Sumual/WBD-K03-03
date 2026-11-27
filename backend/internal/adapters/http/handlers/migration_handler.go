@@ -205,6 +205,7 @@ func toMigrationResponse(migration *domain.Migration) MigrationResponse {
 	}
 	return MigrationResponse{
 		ExecutionID:        migration.ExecutionID,
+		ForwardMigrationID: migration.ForwardMigrationID,
 		RevertsMigrationID: migration.RevertsMigrationID,
 		SourceMigrationID:  migration.SourceMigrationID,
 		IsReversible:       migration.IsReversible,

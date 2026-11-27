@@ -74,6 +74,7 @@ type MigrationComparisonResponse struct {
 
 type MigrationResponse struct {
 	ExecutionID        uint   `json:"executionId"`
+	ForwardMigrationID *uint  `json:"forwardMigrationId"`
 	RevertsMigrationID *uint  `json:"revertsMigrationId"`
 	SourceMigrationID  *uint  `json:"sourceMigrationId"`
 	IsReversible       bool   `json:"isReversible"`
