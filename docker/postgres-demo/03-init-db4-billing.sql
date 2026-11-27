@@ -49,7 +49,7 @@ SELECT
         ELSE 'overdue'
     END,
     (CURRENT_DATE - ((id % 60) || ' days')::interval)::date
-FROM generate_series(9, 100000) AS id;
+FROM generate_series(9, 2000) AS id;
 
 INSERT INTO payments (invoice_id, payment_method, paid_amount, reference_code)
 SELECT
@@ -61,7 +61,7 @@ SELECT
     END,
     ((id * 31 % 10000000) + 100000)::numeric(14,2),
     'TRX-AUTO-' || LPAD(id::text, 8, '0')
-FROM generate_series(8, 100000) AS id;
+FROM generate_series(8, 2000) AS id;
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO demo_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO demo_user;

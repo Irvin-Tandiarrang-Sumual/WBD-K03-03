@@ -331,11 +331,11 @@ INSERT INTO customers (name, email)
 SELECT 
     'Customer ' || id,
     'customer_' || id || '@example.com'
-FROM generate_series(101, 100000) AS id;
+FROM generate_series(101, 2000) AS id;
 
 INSERT INTO orders (customer_id, total_amount, status)
 SELECT 
-    ((id % 100000) + 1),
+    ((id % 2000) + 1),
     ((id * 17) % 5000000) + 50000,
     CASE (id % 4)
         WHEN 0 THEN 'paid'
@@ -343,15 +343,15 @@ SELECT
         WHEN 2 THEN 'completed'
         ELSE 'cancelled'
     END
-FROM generate_series(101, 100000) AS id;
+FROM generate_series(101, 2000) AS id;
 
 INSERT INTO order_items (order_id, item_name, quantity, price)
 SELECT 
-    ((id % 100000) + 1),
+    ((id % 2000) + 1),
     'Order Item SKU-' || ((id % 1000) + 1),
     ((id % 5) + 1),
     ((id * 31) % 2000000) + 25000
-FROM generate_series(101, 100000) AS id;
+FROM generate_series(101, 2000) AS id;
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO demo_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO demo_user;

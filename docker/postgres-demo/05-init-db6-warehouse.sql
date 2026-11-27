@@ -19,7 +19,7 @@ SELECT
     END,
     json_build_object('event_id', id, 'client', 'web', 'score', id % 100)::jsonb,
     'unprocessed'
-FROM generate_series(1, 100000) AS id;
+FROM generate_series(1, 2000) AS id;
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO demo_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO demo_user;

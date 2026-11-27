@@ -81,11 +81,17 @@ jobs:
         run: |
           docker compose up -d --build internal_db demo_postgres demo_mysql app
 
-      - name: Wait for All Services to be Healthy
+      - name: Wait for Services to be Healthy
         run: |
-          echo "Waiting for databases and backend service to become fully healthy..."
-          timeout 120s bash -c 'until docker compose ps internal_db | grep -q "healthy" && docker compose ps demo_postgres | grep -q "healthy" && docker compose ps demo_mysql | grep -q "healthy" && curl -sf http://localhost:8080/health > /dev/null; do sleep 3; done'
-          echo "All services are healthy and ready for stress load."
+          echo "Waiting for databases and backend service to become healthy..."
+          if ! timeout 120s bash -c 'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'; then
+            echo "Timeout waiting for backend service! Container status:"
+            docker compose ps
+            echo "Backend logs:"
+            docker compose logs app
+            exit 1
+          fi
+          echo "Backend and databases are healthy and ready for stress load."
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
