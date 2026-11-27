@@ -8,6 +8,7 @@ import (
 
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/domain"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/logger"
 )
 
 type ExecutorRepository struct {
@@ -73,7 +74,7 @@ func (r *ExecutorRepository) inspectTables(ctx context.Context, database domain.
 		SELECT table_schema, table_name
 		FROM information_schema.tables
 		WHERE table_type = 'BASE TABLE'
-		  AND table_schema NOT IN ('pg_catalog', 'information_schema')
+		  AND table_schema NOT IN ('pg_catalog', 'information_schema', 'wbd_migration')
 		ORDER BY table_name`
 
 	result, err := r.query(ctx, database, query)
@@ -96,7 +97,7 @@ func (r *ExecutorRepository) inspectColumns(ctx context.Context, database domain
 		SELECT table_schema, table_name, column_name, data_type,
 		       (is_nullable = 'YES') AS is_nullable
 		FROM information_schema.columns
-		WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+		WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'wbd_migration')
 		ORDER BY table_name, ordinal_position`
 
 	result, err := r.query(ctx, database, query)
@@ -123,7 +124,7 @@ func (r *ExecutorRepository) inspectIndexes(ctx context.Context, database domain
 		       (indexdef ILIKE '%UNIQUE INDEX%') AS is_unique,
 		       (indexname LIKE '%_pkey') AS is_primary
 		FROM pg_indexes
-		WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+		WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'wbd_migration')
 		ORDER BY tablename, indexname`
 
 	result, err := r.query(ctx, database, query)
@@ -152,12 +153,9 @@ func (r *ExecutorRepository) query(ctx context.Context, database domain.Database
 
 	tx := db.WithContext(ctx).Begin(&sql.TxOptions{ReadOnly: true})
 	if tx.Error != nil {
-		tx = db.WithContext(ctx).Begin()
-	}
-	if tx.Error != nil {
 		return nil, fmt.Errorf("begin transaction: %w", tx.Error)
 	}
-	defer tx.Rollback()
+	defer logger.ReadTransactionStarted(ctx, database.ID, func() error { return tx.Rollback().Error })()
 
 	rows, err := tx.Raw(query).Rows()
 	if err != nil {

@@ -29,6 +29,9 @@ func NewMigrationHandler(service ports.MigrationService) *MigrationHandler {
 //	@Produce		json
 //	@Security		CookieAuth
 //	@Param			database_id	path		int										true	"Database ID"
+//
+// @Param hide_rollback query bool false "Hide successful rollback pairs"
+//
 //	@Param			page		query		int										false	"Page number (default: 1)"
 //	@Param			limit		query		int										false	"Items per page (default: 10)"
 //	@Success		200			{object}	response.PagedResponse[MigrationResponse]	"Migrations retrieved"
@@ -56,7 +59,12 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 		return
 	}
 
-	migrations, totalData, err := h.service.GetMigrationsByDatabaseID(c.Request.Context(), databaseID, userID, params)
+	hideRollback, err := strconv.ParseBool(c.DefaultQuery("hide_rollback", "false"))
+	if err != nil {
+		c.Error(domain.ErrInvalidMigrationInput)
+		return
+	}
+	migrations, totalData, err := h.service.GetMigrationsByDatabaseID(c.Request.Context(), databaseID, userID, params, hideRollback)
 	if err != nil {
 		c.Error(err)
 		return
@@ -69,59 +77,25 @@ func (h *MigrationHandler) GetMigrationsByDatabaseID(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewPagedResponse(http.StatusOK, "migrations retrieved successfully", data, params, totalData))
 }
 
-// CreateMigration runs a new SQL migration on a database.
+// CreateMigration submits a SQL migration for approval.
 //
-//	@Summary		Create migration
-//	@Description	Runs a SQL migration (sql_up) on the specified database and records the result. Requires edit access.
+//	@Summary		Submit migration draft
+//	@Description	Submits a SQL migration as a draft for unanimous approval. Requires edit access.
 //	@Tags			Me - Migrations
 //	@Accept			json
 //	@Produce		json
 //	@Security		CookieAuth
 //	@Param			database_id	path		int										true	"Database ID"
-//	@Param			body		body		CreateMigrationRequest					true	"SQL up migration"
-//	@Success		201			{object}	response.BaseResponse[MigrationResponse]	"Migration created"
+//	@Param			body		body		CreateDraftRequest					true	"SQL up migration"
+//	@Success		201			{object}	response.BaseResponse[DraftResponse]	"Draft created"
 //	@Failure		400			{object}	response.BaseResponse[any]				"Invalid database ID or migration input"
 //	@Failure		401			{object}	response.BaseResponse[any]				"Unauthorized"
 //	@Failure		403			{object}	response.BaseResponse[any]				"Forbidden (no edit access)"
 //	@Failure		409			{object}	response.BaseResponse[any]				"Migration version conflict"
 //	@Failure		500			{object}	response.BaseResponse[any]				"Internal server error"
 //	@Router			/me/databases/{database_id}/migrations [post]
-func (h *MigrationHandler) CreateMigration(c *gin.Context) {
-	databaseID, err := ginutil.ParseUintParam(c, "database_id")
-	if err != nil {
-		c.Error(domain.ErrInvalidDatabaseID)
-		return
-	}
-
-	userID, err := middleware.CurrentUserID(c)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	var req CreateMigrationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-
-	migration, err := h.service.CreateMigration(
-		c.Request.Context(),
-		domain.CreateMigrationInput{
-			DatabaseID: databaseID,
-			UserID:     userID,
-			SqlUp:      req.SqlUp,
-		},
-	)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	message := "migration created successfully"
-	if migration.Status == "fail" {
-		message = "migration failed and was recorded"
-	}
-	c.JSON(http.StatusCreated, response.Success(message, toMigrationResponse(migration)))
+func (h *DraftHandler) CreateMigration(c *gin.Context) {
+	h.CreateDraft(c)
 }
 
 // GetMigrationByIDAndDatabaseID returns a single migration by ID.
@@ -192,12 +166,12 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	firstMigrationID, err := strconv.ParseUint(c.Query("migration_id_1"), 10, 64)
+	firstMigrationID, err := strconv.ParseUint(c.Query("migration_id_1"), 10, strconv.IntSize)
 	if err != nil || firstMigrationID == 0 {
 		c.Error(domain.ErrInvalidMigrationComparison)
 		return
 	}
-	secondMigrationID, err := strconv.ParseUint(c.Query("migration_id_2"), 10, 64)
+	secondMigrationID, err := strconv.ParseUint(c.Query("migration_id_2"), 10, strconv.IntSize)
 	if err != nil || secondMigrationID == 0 {
 		c.Error(domain.ErrInvalidMigrationComparison)
 		return
@@ -224,58 +198,18 @@ func (h *MigrationHandler) CompareMigrations(c *gin.Context) {
 	}))
 }
 
-// RollbackMigrations rolls back migrations to a target migration.
-//
-//	@Summary		Rollback migrations
-//	@Description	Rolls back all migrations up to and including the target migration ID.
-//	@Tags			Me - Migrations
-//	@Accept			json
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Param			body	body		RollbackMigrationRequest						true	"Rollback target"
-//	@Success		200		{object}	response.BaseResponse[[]MigrationResponse]		"Migrations rolled back"
-//	@Failure		400		{object}	response.BaseResponse[any]						"Invalid input"
-//	@Failure		401		{object}	response.BaseResponse[any]						"Unauthorized"
-//	@Failure		403		{object}	response.BaseResponse[any]						"Forbidden"
-//	@Failure		409		{object}	response.BaseResponse[any]						"Rollback unavailable or version conflict"
-//	@Failure		500		{object}	response.BaseResponse[any]						"Internal server error"
-//	@Router			/me/databases/migrations/rollback [post]
-func (h *MigrationHandler) RollbackMigrations(c *gin.Context) {
-	userID, err := middleware.CurrentUserID(c)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	var request RollbackMigrationRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.Error(err)
-		return
-	}
-	rolledBack, err := h.service.RollbackMigrations(
-		c.Request.Context(),
-		domain.RollbackMigrationsInput{
-			DatabaseID:        request.DatabaseID,
-			UserID:            userID,
-			TargetMigrationID: request.TargetMigrationID,
-		},
-	)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	data := make([]MigrationResponse, 0, len(rolledBack))
-	for _, migration := range rolledBack {
-		data = append(data, toMigrationResponse(migration))
-	}
-	c.JSON(http.StatusOK, response.Success("migrations rolled back successfully", data))
-}
-
 func toMigrationResponse(migration *domain.Migration) MigrationResponse {
 	var snapshot json.RawMessage
 	if len(migration.Snapshot) > 0 && json.Valid(migration.Snapshot) {
 		snapshot = json.RawMessage(migration.Snapshot)
 	}
 	return MigrationResponse{
+		ExecutionID:        migration.ExecutionID,
+		RevertsMigrationID: migration.RevertsMigrationID,
+		SourceMigrationID:  migration.SourceMigrationID,
+		IsReversible:       migration.IsReversible,
+		IrreversibleReason: migration.IrreversibleReason,
+
 		ID:           migration.ID,
 		DatabaseID:   migration.DatabaseID,
 		Version:      migration.Version,
@@ -285,5 +219,6 @@ func toMigrationResponse(migration *domain.Migration) MigrationResponse {
 		ErrorMessage: migration.ErrorMessage,
 		Snapshot:     snapshot,
 		UserID:       migration.UserID,
+		MigratedAt:   migration.MigratedAt,
 	}
 }

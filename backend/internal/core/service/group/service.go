@@ -59,8 +59,17 @@ func (s *groupService) CreateGroup(ctx context.Context, input domain.CreateGroup
 		return domain.Group{}, err
 	}
 
+	if input.LeaderID == 0 {
+		return domain.Group{}, domain.ErrInvalidInput
+	}
+
+	if _, err := s.users.FindByID(ctx, input.LeaderID); err != nil {
+		return domain.Group{}, err
+	}
+
 	return s.groups.Save(ctx, domain.Group{
 		Name:             name,
+		LeaderID:         input.LeaderID,
 		DatabaseAccesses: accesses,
 	})
 }
@@ -77,6 +86,34 @@ func (s *groupService) UpdateGroup(ctx context.Context, id uint, input domain.Up
 			return domain.Group{}, domain.ErrInvalidInput
 		}
 		current.Name = name
+	}
+
+	if input.LeaderID != nil {
+		if *input.LeaderID == 0 {
+			return domain.Group{}, domain.ErrInvalidInput
+		}
+		if _, err := s.users.FindByID(ctx, *input.LeaderID); err != nil {
+			return domain.Group{}, err
+		}
+
+		memberIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, id)
+		if err != nil {
+			return domain.Group{}, err
+		}
+
+		isMember := false
+		for _, memberID := range memberIDs {
+			if memberID == *input.LeaderID {
+				isMember = true
+				break
+			}
+		}
+
+		if !isMember {
+			return domain.Group{}, domain.ErrLeaderMustBeGroupMember
+		}
+
+		current.LeaderID = *input.LeaderID
 	}
 
 	accessChanged, err := s.applyGroupAccessesUpdate(ctx, &current, input.DatabaseAccesses)

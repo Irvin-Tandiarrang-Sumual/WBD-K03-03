@@ -12,6 +12,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 type ConnectionTester struct{}
@@ -26,7 +27,7 @@ func (t *ConnectionTester) Test(ctx context.Context, database domain.Database) e
 	dsn := buildDSN(database)
 
 	// First attempt: try connecting directly to the target database
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err == nil {
 		sqlDB, dbErr := db.DB()
 		if dbErr == nil {
@@ -43,7 +44,7 @@ func (t *ConnectionTester) Test(ctx context.Context, database domain.Database) e
 	}
 
 	// Verify connection to the new/verified database
-	verifyDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	verifyDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err != nil {
 		return fmt.Errorf("open PostgreSQL connection: %w", err)
 	}
@@ -72,11 +73,11 @@ func createDatabaseIfNotExists(ctx context.Context, database domain.Database) er
 	maintDb.Name = "postgres"
 	maintDSN := buildDSN(maintDb)
 
-	maintConn, err := gorm.Open(postgres.Open(maintDSN), &gorm.Config{})
+	maintConn, err := gorm.Open(postgres.Open(maintDSN), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err != nil {
 		maintDb.Name = "template1"
 		maintDSN = buildDSN(maintDb)
-		maintConn, err = gorm.Open(postgres.Open(maintDSN), &gorm.Config{})
+		maintConn, err = gorm.Open(postgres.Open(maintDSN), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 		if err != nil {
 			return fmt.Errorf("connect to PostgreSQL server: %w", err)
 		}

@@ -1,0 +1,206 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/auth-context';
+import { draftService } from '../services/draft_service';
+import type { DraftProposal, DraftStatus, SnackbarData, TargetDatabase } from '../types';
+import { useAsyncAction } from './useAsyncAction';
+
+function notifyDraftExecutionStatus(
+  draftId: string,
+  status: DraftStatus,
+  showSnackbar: (message: string, tone?: SnackbarData['tone']) => void
+) {
+  switch (status) {
+    case 'applied':
+      showSnackbar(`Draft ${draftId} applied successfully!`, 'pine');
+      break;
+    case 'failed':
+      showSnackbar(`Draft ${draftId} execution failed.`, 'maroon');
+      break;
+    case 'partial':
+      showSnackbar(`Draft ${draftId} partially failed (database quarantined).`, 'maroon');
+      break;
+    case 'partially_reverted':
+      showSnackbar(`Draft ${draftId} partially reverted.`, 'maroon');
+      break;
+    case 'executing':
+      showSnackbar(`Draft ${draftId} queued for execution...`, 'blue');
+      break;
+    default:
+      break;
+  }
+}
+
+export interface UseDraftDetailProps {
+  initialDraft: DraftProposal;
+  databases: TargetDatabase[];
+}
+
+export function useDraftDetail({ initialDraft, databases }: UseDraftDetailProps) {
+  const [draft, setDraft] = useState<DraftProposal>(initialDraft);
+  const { user, showSnackbar } = useAuth();
+  const { isLoading: isExecuting, execute: runAsync } = useAsyncAction(showSnackbar);
+
+  const targetDb = databases.find((d) => d.id === draft.databaseId);
+  const progressPercent = draft.batchConfig
+    ? Math.round(
+        (draft.batchConfig.processedRows / Math.max(1, draft.batchConfig.totalRows)) * 100
+      )
+    : 0;
+
+  const isAuthor = user.id === draft.proposerId;
+  const isAdmin = user.role === 'admin';
+
+  useEffect(() => {
+    setDraft(initialDraft);
+  }, [initialDraft]);
+
+  const isPolling = !draft.batchConfig && draft.status === 'executing';
+  useEffect(() => {
+    if (!isPolling) return;
+    let stopped = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const updated = await draftService.getDraftById(draft.id);
+        if (stopped) return;
+        setDraft(updated);
+        if (updated.status !== 'executing') {
+          notifyDraftExecutionStatus(updated.id, updated.status, showSnackbar);
+          return;
+        }
+      } catch (error) {
+        if (stopped) return;
+        console.error('Failed to refresh draft status', error);
+      }
+      timeout = setTimeout(refresh, 1000);
+    };
+    timeout = setTimeout(refresh, 1000);
+    return () => {
+      stopped = true;
+      clearTimeout(timeout);
+    };
+  }, [draft.id, isPolling]);
+
+  useEffect(() => {
+    if (!draft.batchConfig || draft.status !== 'executing') {
+      return;
+    }
+
+    const unsubscribe = draftService.streamBatchProgress(
+      draft.id,
+      (progress) => {
+        setDraft((prev) => {
+          if (!prev.batchConfig) return prev;
+          return {
+            ...prev,
+            status: (progress.status || prev.status) as any,
+            batchConfig: {
+              ...prev.batchConfig,
+              currentBatch: progress.current_batch,
+              totalBatches: progress.total_batches,
+              processedRows: progress.rows_processed,
+              totalRows: progress.total_rows,
+            },
+          };
+        });
+      },
+      async () => {
+        try {
+          const refreshed = await draftService.getDraftById(draft.id);
+          setDraft(refreshed);
+          if (refreshed.status !== 'executing') {
+            notifyDraftExecutionStatus(refreshed.id, refreshed.status, showSnackbar);
+          }
+        } catch (err) {
+          console.error('[SSE] Failed to refresh draft after stream completion', err);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [draft.id, draft.status, !!draft.batchConfig]);
+
+  const myPendingVote = draft.consensus.find(
+    (c) =>
+      c.status === 'pending' &&
+      (c.leaderId === user.id || isAdmin)
+  );
+
+  const handleVote = async (status: string) => {
+    await runAsync(
+      async () => {
+        const updated = await draftService.submitApproval(draft.id, status);
+        return updated;
+      },
+      {
+        successMessage: `Vote recorded: ${status.toUpperCase()} for draft ${draft.id}`,
+        successTone: ['approved', 'resume', 'yes'].includes(status) ? 'pine' : 'maroon',
+        onSuccess: (updated) => {
+          setDraft(updated);
+        },
+      }
+    );
+  };
+
+  const handleExecuteNormal = async () => {
+    await runAsync(
+      async () => {
+        await draftService.executeDraft(draft.id);
+        const updated = await draftService.getDraftById(draft.id);
+        return updated;
+      },
+      {
+        errorMessage: 'Execution failed or requires consensus approval',
+        onSuccess: (updated) => {
+          setDraft(updated);
+          notifyDraftExecutionStatus(updated.id, updated.status, showSnackbar);
+        },
+      }
+    );
+  };
+
+  const handleBatchStep = async (direction: 'forward' | 'rollback') => {
+    await runAsync(
+      async () => {
+        if (direction === 'forward') {
+          if (draft.status === 'approved') {
+            await draftService.executeDraft(draft.id);
+          } else {
+            await draftService.resumeBatch(draft.id);
+          }
+        } else {
+          await draftService.revertBatch(draft.id);
+        }
+
+        const updated = await draftService.getDraftById(draft.id);
+        return updated;
+      },
+      {
+        errorMessage: `Batch ${direction} operation failed`,
+        onSuccess: (updated) => {
+          setDraft(updated);
+          notifyDraftExecutionStatus(updated.id, updated.status, showSnackbar);
+        },
+      }
+    );
+  };
+
+  const showNormalExecuteBar = draft.mode === 'normal' && draft.status === 'approved';
+  const canExecute = isAuthor || isAdmin;
+
+  return {
+    draft,
+    targetDb,
+    progressPercent,
+    isExecuting,
+    isAuthor,
+    canExecute,
+    myPendingVote,
+    showNormalExecuteBar,
+    handleVote,
+    handleExecuteNormal,
+    handleBatchStep,
+  };
+}

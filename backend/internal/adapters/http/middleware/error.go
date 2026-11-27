@@ -42,9 +42,12 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		return http.StatusUnauthorized, response.Error("invalid or expired session")
 	case errors.Is(err, domain.ErrCurrentUserUnavailable):
 		return http.StatusUnauthorized, response.Error("authentication required")
+	case errors.Is(err, domain.ErrUnauthorized):
+		return http.StatusUnauthorized, response.Error(err.Error())
 
 	case errors.Is(err, domain.ErrAccessDenied),
 		errors.Is(err, domain.ErrDatabaseAccessDenied),
+		errors.Is(err, domain.ErrForbidden),
 		errors.Is(err, domain.ErrInvalidCSRFToken):
 		return http.StatusForbidden, response.Error(err.Error())
 
@@ -56,6 +59,8 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		return http.StatusNotFound, response.Error(err.Error())
 	case errors.Is(err, domain.ErrMigrationNotFound):
 		return http.StatusNotFound, response.Error(err.Error())
+	case errors.Is(err, domain.ErrDraftNotFound):
+		return http.StatusNotFound, response.Error(err.Error())
 
 	case errors.Is(err, domain.ErrUsernameTaken),
 		errors.Is(err, domain.ErrGroupNameTaken),
@@ -66,10 +71,25 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrGroupMustHaveDatabase),
 		errors.Is(err, domain.ErrUserMustHaveGroup),
 		errors.Is(err, domain.ErrLastAdmin),
+		errors.Is(err, domain.ErrLeaderRequiresReplacement),
+		errors.Is(err, domain.ErrLeaderMustBeGroupMember),
+		errors.Is(err, domain.ErrUserIsGroupLeader),
+		errors.Is(err, domain.ErrNoActiveMigration), errors.Is(err, domain.ErrNoForwardAvailable), errors.Is(err, domain.ErrDraftConflict),
 		errors.Is(err, domain.ErrMigrationRollbackUnavailable),
 		errors.Is(err, domain.ErrMigrationVersionUnavailable),
-		errors.Is(err, domain.ErrMigrationInProgress):
+		errors.Is(err, domain.ErrMigrationInProgress),
+		errors.Is(err, domain.ErrInvalidDraftState),
+		errors.Is(err, domain.ErrDraftNotApproved):
 		return http.StatusConflict, response.Error(err.Error())
+
+	case errors.Is(err, domain.ErrDatabaseMustResolvePartiallyReverted):
+		return http.StatusLocked, response.Error(err.Error())
+
+	case errors.Is(err, domain.ErrDatabaseLocked):
+		return http.StatusLocked, response.Error(err.Error())
+
+	case errors.Is(err, domain.ErrQueueFull):
+		return http.StatusServiceUnavailable, response.Error(err.Error())
 
 	case errors.Is(err, domain.ErrPasswordTooLong):
 		return http.StatusBadRequest, response.Error("password must not exceed 72 bytes")
@@ -83,7 +103,14 @@ func MapError(err error) (int, response.BaseResponse[any]) {
 		errors.Is(err, domain.ErrInvalidDatabaseAccess),
 		errors.Is(err, domain.ErrInvalidDatabaseInput),
 		errors.Is(err, domain.ErrInvalidDatabaseQuery),
+		errors.Is(err, domain.ErrMigrationIrreversible),
 		errors.Is(err, domain.ErrInvalidMigrationInput),
+		errors.Is(err, domain.ErrInvalidDraftInput),
+		errors.Is(err, domain.ErrBatchContainsDDL),
+		errors.Is(err, domain.ErrBatchMissingColumnOrSize),
+		errors.Is(err, domain.ErrBatchColumnNotFound),
+		errors.Is(err, domain.ErrBatchMultipleUnrelatedTables),
+		errors.Is(err, domain.ErrNoCheckpointToResume),
 		errors.Is(err, domain.ErrInvalidMigrationComparison),
 		errors.Is(err, domain.ErrSQLDownGenerationUnsupported),
 		errors.Is(err, domain.ErrDatabaseConnectionFailed):

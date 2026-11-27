@@ -1,0 +1,58 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ${OBSERVABILITY_CONFIG_DIR:-.}/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - app-logs:/var/log/wbd:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    volumes:
+      - ${OBSERVABILITY_CONFIG_DIR:-.}/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+
+  loki:
+    image: grafana/loki:3.0.0
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki-data:/tmp/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ${OBSERVABILITY_CONFIG_DIR:-.}/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ${OBSERVABILITY_CONFIG_DIR:-.}/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ${OBSERVABILITY_CONFIG_DIR:-.}/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - jaeger
+      - loki
+
+volumes:
+  app-logs:
+  loki-data:

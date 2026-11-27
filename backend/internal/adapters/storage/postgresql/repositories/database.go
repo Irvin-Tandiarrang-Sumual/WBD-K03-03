@@ -9,6 +9,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/pkg/pagination"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type databaseRepository struct {
@@ -122,7 +123,7 @@ func (r *databaseRepository) FindByIDAndUserID(ctx context.Context, databaseID u
 		Joins("JOIN group_databases ON group_databases.database_id = databases.id").
 		Joins("JOIN user_groups ON user_groups.group_id = group_databases.group_id").
 		Where("databases.id = ? AND user_groups.user_id = ?", databaseID, userID).
-		Select("databases.id", "databases.port", "databases.host", "databases.user", "databases.type", "databases.name").
+		Select("databases.id", "databases.port", "databases.host", "databases.user", "databases.type", "databases.name", "databases.current_migration_id").
 		First(&storedDatabase).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -138,7 +139,7 @@ func (r *databaseRepository) FindByIDAndUserID(ctx context.Context, databaseID u
 func (r *databaseRepository) FindByID(ctx context.Context, databaseID uint) (domain.Database, error) {
 	var storedDatabase model.Database
 	err := r.db.WithContext(ctx).
-		Select("id", "port", "host", "user", "type", "name").
+		Select("id", "port", "host", "user", "type", "name", "current_migration_id", "latest_execution_id").
 		First(&storedDatabase, databaseID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -255,14 +256,40 @@ func (r *databaseRepository) Delete(ctx context.Context, databaseID uint) error 
 	return nil
 }
 
+func (r *databaseRepository) IncrementExecutionID(ctx context.Context, databaseID uint) (uint, error) {
+	var latestExecID uint
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var db model.Database
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", databaseID).First(&db).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domain.ErrDatabaseNotFound
+			}
+			return err
+		}
+		db.LatestExecutionID++
+		if err := tx.Model(&db).Update("latest_execution_id", db.LatestExecutionID).Error; err != nil {
+			return err
+		}
+		latestExecID = db.LatestExecutionID
+		return nil
+	})
+	return latestExecID, err
+}
+
+func (r *databaseRepository) UpdateCurrentMigrationID(ctx context.Context, databaseID uint, migrationID uint) error {
+	return r.db.WithContext(ctx).Model(&model.Database{}).Where("id = ?", databaseID).Update("current_migration_id", migrationID).Error
+}
+
 func toDomain(database model.Database, password string) domain.Database {
 	return domain.Database{
-		ID:       database.ID,
-		Port:     database.Port,
-		Host:     database.Host,
-		User:     database.User,
-		Password: password,
-		Type:     database.Type,
-		Name:     database.Name,
+		ID:                 database.ID,
+		Port:               database.Port,
+		Host:               database.Host,
+		User:               database.User,
+		Password:           password,
+		Type:               database.Type,
+		Name:               database.Name,
+		LatestExecutionID:  database.LatestExecutionID,
+		CurrentMigrationID: database.CurrentMigrationID,
 	}
 }

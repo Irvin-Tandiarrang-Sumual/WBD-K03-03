@@ -17,30 +17,32 @@ services:
   demo_postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: db1_pg
-      POSTGRES_USER: demo_user
-      POSTGRES_PASSWORD: demo_password
+      POSTGRES_DB: ${DEMO_PG_DB:-db1_pg}
+      POSTGRES_USER: ${DEMO_PG_USER:-demo_user}
+      POSTGRES_PASSWORD: ${DEMO_PG_PASSWORD:-demo_password}
     volumes:
-      - ./docker/postgres-demo/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/postgres-demo:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U demo_user -d db1_pg"]
+      test: ["CMD-SHELL", "pg_isready -U ${DEMO_PG_USER:-demo_user} -d ${DEMO_PG_DB:-db1_pg}"]
       interval: 2s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 20s
   demo_mysql:
     image: mysql:8.4
     environment:
-      MYSQL_DATABASE: db2_mysql
-      MYSQL_USER: demo_user
-      MYSQL_PASSWORD: demo_password
-      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ${DEMO_MYSQL_DB:-db2_mysql}
+      MYSQL_USER: ${DEMO_MYSQL_USER:-demo_user}
+      MYSQL_PASSWORD: ${DEMO_MYSQL_PASSWORD:-demo_password}
+      MYSQL_ROOT_PASSWORD: ${DEMO_MYSQL_ROOT_PASSWORD:-root_password}
     volumes:
-      - ./docker/mysql-demo/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/mysql-demo:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u demo_user -pdemo_password --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 2s
       timeout: 5s
-      retries: 20
+      retries: 30
+      start_period: 20s
   app:
     build:
       context: .
@@ -55,24 +57,72 @@ services:
       SEED_TEST_DATA: ${SEED_TEST_DATA:-true}
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${SERVER_PORT:-8080}/health > /dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
     depends_on:
       internal_db:
         condition: service_healthy
       demo_postgres:
         condition: service_healthy
-      demo_mysql:
-        condition: service_healthy
     restart: unless-stopped
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend-spa
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
     environment:
       NODE_ENV: production
-      HOSTNAME: 0.0.0.0
       PORT: 3000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/databases > /dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
     restart: unless-stopped
+
+  e2e:
+    profiles: ["test"]
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    environment:
+      - BASE_URL=${BASE_URL:-http://host.docker.internal:3000}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8080/api/v1}
+      - CI=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
+    volumes:
+      - ./e2e/playwright-report:/app/playwright-report
+      - ./e2e/test-results:/app/test-results
+    depends_on:
+      frontend:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+
+  k6:
+    profiles: ["stress"]
+    image: grafana/k6:latest
+    environment:
+      - BASE_URL=${BASE_URL:-http://app:8080}
+      - STRESS_PROFILE=${STRESS_PROFILE:-quick}
+    volumes:
+      - ./stress:/stress
+    working_dir: /stress
+    command: ["run", "stress_suite.js"]
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    depends_on:
+      app:
+        condition: service_healthy

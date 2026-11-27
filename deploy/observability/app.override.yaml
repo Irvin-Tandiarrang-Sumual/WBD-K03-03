@@ -1,0 +1,10 @@
+services:
+  app:
+    environment:
+      APP_LOG_PATH: /var/log/wbd/app.jsonl
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    volumes:
+      - app-logs:/var/log/wbd
+    depends_on:
+      - otel-collector

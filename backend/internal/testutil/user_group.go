@@ -10,7 +10,7 @@ import (
 type UserGroupRepository struct {
 	ports.UserGroupRepository
 	AddUserFunc                      func(context.Context, uint, uint) error
-	RemoveUserFunc                   func(context.Context, uint, uint) error
+	RemoveUserFunc                   func(context.Context, uint, uint, *uint) error
 	CountByUserIDFunc                func(context.Context, uint) (int64, error)
 	FindAllUserIDsByGroupIDFunc      func(context.Context, uint) ([]uint, error)
 	FindAllAccessTypesFunc           func(context.Context, uint, uint) ([]domain.AccessType, error)
@@ -26,9 +26,9 @@ func (f *UserGroupRepository) AddUser(ctx context.Context, groupID uint, userID 
 	return nil
 }
 
-func (f *UserGroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+func (f *UserGroupRepository) RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error {
 	if f.RemoveUserFunc != nil {
-		return f.RemoveUserFunc(ctx, groupID, userID)
+		return f.RemoveUserFunc(ctx, groupID, userID, replacementLeaderID)
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func (f *UserGroupRepository) HasUserWithOnlyThisGroup(ctx context.Context, grou
 type UserGroupService struct {
 	ports.UserGroupService
 	AddUserFunc    func(context.Context, uint, uint) error
-	RemoveUserFunc func(context.Context, uint, uint) error
+	RemoveUserFunc func(context.Context, uint, uint, *uint) error
 	AuthorizeFunc  func(context.Context, uint, uint, domain.AccessType) error
 }
 
@@ -89,9 +89,9 @@ func (f *UserGroupService) AddUser(ctx context.Context, groupID uint, userID uin
 	return nil
 }
 
-func (f *UserGroupService) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
+func (f *UserGroupService) RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error {
 	if f.RemoveUserFunc != nil {
-		return f.RemoveUserFunc(ctx, groupID, userID)
+		return f.RemoveUserFunc(ctx, groupID, userID, replacementLeaderID)
 	}
 	return nil
 }

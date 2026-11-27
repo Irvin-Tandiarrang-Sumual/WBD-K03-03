@@ -5,11 +5,21 @@ import (
 )
 
 const (
-	MigrationStatusSuccess = "success"
-	MigrationStatusFail    = "fail"
+	MigrationStatusSnapshotPending = "snapshot_pending"
+	MigrationStatusSuccess         = "success"
+	MigrationStatusFail            = "fail"
 )
 
 type Migration struct {
+	ParentMigrationID  *uint
+	ForwardMigrationID *uint
+	RevertsMigrationID *uint
+	SourceMigrationID  *uint
+	DraftID            *uint
+	ExecutionID        uint
+	IsReversible       bool
+	IrreversibleReason string
+
 	ID           uint
 	DatabaseID   uint
 	Version      string
@@ -109,15 +119,7 @@ func (d *CompareMigrationsInput) Validate() error {
 	return nil
 }
 
-type RollbackMigrationsInput struct {
-	DatabaseID        uint
-	UserID            uint
-	TargetMigrationID uint
-}
-
-func (d *RollbackMigrationsInput) Validate() error {
-	if d.DatabaseID == 0 || d.UserID == 0 || d.TargetMigrationID == 0 {
-		return ErrInvalidMigrationInput
-	}
-	return nil
+type MigrationPosition struct {
+	HeadID      *uint
+	ExecutionID uint
 }

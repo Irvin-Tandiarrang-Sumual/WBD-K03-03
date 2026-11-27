@@ -42,8 +42,9 @@ func (s *userGroupService) AddUser(ctx context.Context, groupID uint, userID uin
 	return s.sessions.RevokeUser(ctx, userID)
 }
 
-func (s *userGroupService) RemoveUser(ctx context.Context, groupID uint, userID uint) error {
-	if _, err := s.groups.FindByID(ctx, groupID); err != nil {
+func (s *userGroupService) RemoveUser(ctx context.Context, groupID uint, userID uint, replacementLeaderID *uint) error {
+	group, err := s.groups.FindByID(ctx, groupID)
+	if err != nil {
 		return err
 	}
 
@@ -52,11 +53,39 @@ func (s *userGroupService) RemoveUser(ctx context.Context, groupID uint, userID 
 		return err
 	}
 
-	if err := s.ensureCanRemoveUser(ctx, groupID, user); err != nil {
+	memberIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	if !containsUserID(memberIDs, user.ID) {
+		return domain.ErrMembershipNotFound
+	}
+
+	groupCount, err := s.userGroups.CountByUserID(ctx, user.ID)
+	if err != nil {
 		return err
 	}
 
-	if err := s.userGroups.RemoveUser(ctx, groupID, user.ID); err != nil {
+	if user.Role == domain.RoleUser && groupCount <= 1 {
+		return domain.ErrUserMustHaveGroup
+	}
+
+	if group.LeaderID == user.ID {
+		if replacementLeaderID == nil || *replacementLeaderID == 0 {
+			return domain.ErrLeaderRequiresReplacement
+		}
+		if *replacementLeaderID == user.ID {
+			return domain.ErrInvalidInput
+		}
+		if _, err := s.users.FindByID(ctx, *replacementLeaderID); err != nil {
+			return err
+		}
+		if !containsUserID(memberIDs, *replacementLeaderID) {
+			return domain.ErrLeaderMustBeGroupMember
+		}
+	}
+
+	if err := s.userGroups.RemoveUser(ctx, groupID, user.ID, replacementLeaderID); err != nil {
 		return err
 	}
 
@@ -79,27 +108,6 @@ func (s *userGroupService) Authorize(
 	}
 
 	return domain.ErrDatabaseAccessDenied
-}
-
-func (s *userGroupService) ensureCanRemoveUser(ctx context.Context, groupID uint, user domain.User) error {
-	memberIDs, err := s.userGroups.FindAllUserIDsByGroupID(ctx, groupID)
-	if err != nil {
-		return err
-	}
-	if !containsUserID(memberIDs, user.ID) {
-		return domain.ErrMembershipNotFound
-	}
-
-	groupCount, err := s.userGroups.CountByUserID(ctx, user.ID)
-	if err != nil {
-		return err
-	}
-
-	if user.Role == domain.RoleUser && groupCount <= 1 {
-		return domain.ErrUserMustHaveGroup
-	}
-
-	return nil
 }
 
 func containsUserID(userIDs []uint, target uint) bool {

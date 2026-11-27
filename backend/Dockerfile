@@ -1,4 +1,4 @@
-FROM golang:1.27.3-alpine
+FROM golang:1.25.5-alpine
 
 WORKDIR /app
 
@@ -15,4 +15,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /main ./cmd/api && \
 ARG SERVER_PORT
 EXPOSE  ${SERVER_PORT}
 
-CMD ["/main"]
+CMD ["sh", "-c", "if [ \"$SEED_TEST_DATA\" = \"true\" ]; then /seed; else /migrate; fi && exec /main"]

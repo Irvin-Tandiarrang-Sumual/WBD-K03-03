@@ -19,16 +19,20 @@ type DatabaseAccess struct {
 type Group struct {
 	ID               uint
 	Name             string
+	LeaderID         uint
+	MemberIDs        []uint
 	DatabaseAccesses []DatabaseAccess
 }
 
 type CreateGroupInput struct {
 	Name             string
+	LeaderID         uint
 	DatabaseAccesses []DatabaseAccess
 }
 
 type UpdateGroupInput struct {
 	Name             *string
+	LeaderID         *uint
 	DatabaseAccesses *[]DatabaseAccess
 }
 

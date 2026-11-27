@@ -10,18 +10,18 @@ import (
 
 type MigrationRepository struct {
 	ports.MigrationRepository
-	FindAllByDatabaseIDFunc              func(context.Context, uint, pagination.PaginationParams) ([]*domain.Migration, int64, error)
-	FindLatestByDatabaseIDFunc           func(context.Context, uint) (*domain.Migration, error)
-	FindLatestSuccessfulByDatabaseIDFunc func(context.Context, uint) (*domain.Migration, error)
-	SaveFunc                             func(context.Context, *domain.Migration) (*domain.Migration, error)
-	UpdateFunc                           func(context.Context, *domain.Migration) (*domain.Migration, error)
-	FindByIDAndDatabaseIDFunc            func(context.Context, uint, uint) (*domain.Migration, error)
-	FindByVersionAndDatabaseIDFunc       func(context.Context, string, uint) (*domain.Migration, error)
+	FindAllByDatabaseIDFunc    func(context.Context, uint, pagination.PaginationParams, bool) ([]*domain.Migration, int64, error)
+	FindLatestByDatabaseIDFunc func(context.Context, uint) (*domain.Migration, error)
+	FinishDraftFunc            func(context.Context, uint, *domain.Migration, *uint, *uint, *uint) error
+
+	SaveFunc                  func(context.Context, *domain.Migration) (*domain.Migration, error)
+	UpdateFunc                func(context.Context, *domain.Migration) (*domain.Migration, error)
+	FindByIDAndDatabaseIDFunc func(context.Context, uint, uint) (*domain.Migration, error)
 }
 
-func (f *MigrationRepository) FindAllByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error) {
+func (f *MigrationRepository) FindAllByDatabaseID(ctx context.Context, databaseID uint, params pagination.PaginationParams, hideRollback bool) ([]*domain.Migration, int64, error) {
 	if f.FindAllByDatabaseIDFunc != nil {
-		return f.FindAllByDatabaseIDFunc(ctx, databaseID, params)
+		return f.FindAllByDatabaseIDFunc(ctx, databaseID, params, hideRollback)
 	}
 	return nil, 0, nil
 }
@@ -29,13 +29,6 @@ func (f *MigrationRepository) FindAllByDatabaseID(ctx context.Context, databaseI
 func (f *MigrationRepository) FindLatestByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
 	if f.FindLatestByDatabaseIDFunc != nil {
 		return f.FindLatestByDatabaseIDFunc(ctx, databaseID)
-	}
-	return nil, nil
-}
-
-func (f *MigrationRepository) FindLatestSuccessfulByDatabaseID(ctx context.Context, databaseID uint) (*domain.Migration, error) {
-	if f.FindLatestSuccessfulByDatabaseIDFunc != nil {
-		return f.FindLatestSuccessfulByDatabaseIDFunc(ctx, databaseID)
 	}
 	return nil, nil
 }
@@ -61,9 +54,20 @@ func (f *MigrationRepository) FindByIDAndDatabaseID(ctx context.Context, migrati
 	return nil, nil
 }
 
-func (f *MigrationRepository) FindByVersionAndDatabaseID(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-	if f.FindByVersionAndDatabaseIDFunc != nil {
-		return f.FindByVersionAndDatabaseIDFunc(ctx, version, databaseID)
-	}
+func (f *MigrationRepository) WithPosition(ctx context.Context, id uint, fn func(ports.MigrationRepository, domain.MigrationPosition) error) error {
+	return fn(f, domain.MigrationPosition{})
+}
+func (f *MigrationRepository) UpdatePosition(context.Context, uint, *uint, *uint, *uint, uint) error {
+	return nil
+}
+func (f *MigrationRepository) FindPendingSnapshot(context.Context, uint) (*domain.Migration, error) {
 	return nil, nil
+}
+
+func (f *MigrationRepository) HasConsensus(context.Context, uint, uint) (bool, error) {
+	return true, nil
+}
+
+func (f *MigrationRepository) FinishDraft(ctx context.Context, id uint, migration *domain.Migration, head, parent, forward *uint) error {
+	return f.FinishDraftFunc(ctx, id, migration, head, parent, forward)
 }

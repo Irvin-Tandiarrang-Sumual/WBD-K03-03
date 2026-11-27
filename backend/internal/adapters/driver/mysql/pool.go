@@ -11,6 +11,7 @@ import (
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 const (
@@ -39,7 +40,7 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*gorm.
 		return existingPool, nil
 	}
 
-	pool, err := gorm.Open(mysql.Open(buildDSN(database)), &gorm.Config{})
+	pool, err := gorm.Open(mysql.Open(buildDSN(database)), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	if err != nil {
 		return nil, fmt.Errorf("open MySQL pool: %w", err)
 	}
@@ -68,6 +69,21 @@ func (m *PoolManager) Get(ctx context.Context, database domain.Database) (*gorm.
 	m.pools[database.ID] = pool
 	m.mu.Unlock()
 	return pool, nil
+}
+
+func (m *PoolManager) CollectStats() (active int, idle int, open int, waitSec float64) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, p := range m.pools {
+		if sqlDB, err := p.DB(); err == nil {
+			st := sqlDB.Stats()
+			active += st.InUse
+			idle += st.Idle
+			open += st.OpenConnections
+			waitSec += st.WaitDuration.Seconds()
+		}
+	}
+	return
 }
 
 func (m *PoolManager) Invalidate(databaseID uint) error {

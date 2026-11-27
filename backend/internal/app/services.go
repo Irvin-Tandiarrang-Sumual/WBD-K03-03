@@ -1,11 +1,16 @@
 package app
 
 import (
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/config"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/metrics"
+	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/channel"
+	queuepostgres "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/queue/postgresql"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/adapters/storage/postgresql/repositories"
 	"github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/ports"
 	authservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/auth"
 	databaseservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database"
 	databasedriverservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/database_driver"
+	draftservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/draft"
 	groupservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/group"
 	migrationservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/migration"
 	sessionservice "github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/internal/core/service/session"
@@ -23,11 +28,20 @@ type applicationServices struct {
 	database       ports.DatabaseService
 	databaseDriver ports.DatabaseDriverService
 	migration      ports.MigrationService
+	draft          ports.DraftService
+	queue          *queuepostgres.Queue
+}
+
+func (s *applicationServices) close() {
+	if s.queue != nil {
+		s.queue.Close()
+	}
 }
 
 func buildServices(
 	systemDatabase *gorm.DB,
 	infrastructure *targetDatabaseInfrastructure,
+	workerConfig config.WorkerConfig,
 ) (*applicationServices, error) {
 	userRepository := repositories.NewUserRepository(systemDatabase)
 	groupRepository := repositories.NewGroupRepository(systemDatabase)
@@ -38,6 +52,7 @@ func buildServices(
 	)
 	sessionRepository := repositories.NewSessionRepository(systemDatabase)
 	migrationRepository := repositories.NewMigrationRepository(systemDatabase)
+	draftRepository := repositories.NewDraftRepository(systemDatabase)
 
 	sessionService := sessionservice.NewSessionService(sessionRepository)
 	authService := authservice.NewAuthService(userRepository, sessionService)
@@ -70,6 +85,36 @@ func buildServices(
 		userGroupService,
 	)
 
+	migrationMetrics := metrics.NewPrometheusMigrationMetrics()
+	worker := draftservice.NewExecutionWorker(
+		draftRepository,
+		databaseRepository,
+		migrationRepository,
+		infrastructure.databaseDriver,
+		groupRepository,
+		nil,
+		migrationMetrics,
+		userGroupService,
+	)
+
+	taskQueue := queuepostgres.NewQueue(
+		systemDatabase,
+		worker.Execute,
+		workerConfig.Count,
+		workerConfig.QueueCapacity,
+		channel.DefaultTaskTimeout,
+	)
+
+	draftService := draftservice.NewDraftService(
+		draftRepository,
+		groupRepository,
+		userGroupService,
+		databaseRepository,
+		taskQueue,
+		migrationRepository,
+		infrastructure.databaseDriver,
+	)
+
 	return &applicationServices{
 		auth:           authService,
 		user:           userService,
@@ -79,5 +124,7 @@ func buildServices(
 		database:       databaseService,
 		databaseDriver: databaseDriverService,
 		migration:      migrationService,
+		draft:          draftService,
+		queue:          taskQueue,
 	}, nil
 }

@@ -69,6 +69,32 @@ type DatabaseDriver interface {
 	SQLDialect
 }
 
+type BatchExecution struct {
+	Key string
+	Table string
+	Column string
+	Statement string
+	Size int
+	Resume bool
+	SourceKey string
+	Reverse bool
+}
+
+type BatchReceipt struct {
+	Number int
+	Cursor string
+	Rows int64
+}
+
+type BatchExecutor interface {
+	PrepareBatch(ctx context.Context, database domain.Database, batch BatchExecution) (int64, error)
+	ExecuteBatchChunk(ctx context.Context, database domain.Database, batch BatchExecution, number int, revert bool) (*BatchReceipt, error)
+}
+
+type MigrationValidator interface {
+	ValidateMigrationSQL(ctx context.Context, database domain.Database, script string) error
+}
+
 type DatabaseCredentialCipher interface {
 	Encrypt(plaintext string) (string, error)
 	Decrypt(ciphertext string) (string, error)

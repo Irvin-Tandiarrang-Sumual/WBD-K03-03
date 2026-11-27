@@ -17,4 +17,5 @@ type DatabaseResponse struct {
 	Type       string `json:"type"`
 	Name       string `json:"name"`
 	AccessType string `json:"accessType,omitempty"`
+	CurrentMigrationID *uint `json:"currentMigrationId"`
 }

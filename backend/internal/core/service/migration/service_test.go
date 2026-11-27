@@ -23,7 +23,7 @@ func TestGetMigrationsByDatabaseID_ZeroDatabaseID_ReturnsInvalidMigrationInputEr
 	)
 
 	// Act
-	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 0, 1, pagination.PaginationParams{Page: 1, Limit: 10})
+	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 0, 1, pagination.PaginationParams{Page: 1, Limit: 10}, false)
 
 	// Assert
 	if !errors.Is(err, domain.ErrInvalidMigrationInput) || migrations != nil || total != 0 {
@@ -41,7 +41,7 @@ func TestGetMigrationsByDatabaseID_ZeroUserID_ReturnsInvalidMigrationInputError(
 	)
 
 	// Act
-	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 1, 0, pagination.PaginationParams{Page: 1, Limit: 10})
+	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 1, 0, pagination.PaginationParams{Page: 1, Limit: 10}, false)
 
 	// Assert
 	if !errors.Is(err, domain.ErrInvalidMigrationInput) || migrations != nil || total != 0 {
@@ -65,7 +65,7 @@ func TestGetMigrationsByDatabaseID_UserNotAuthorized_ReturnsAuthorizationError(t
 	)
 
 	// Act
-	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 10, 5, pagination.PaginationParams{Page: 1, Limit: 10})
+	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 10, 5, pagination.PaginationParams{Page: 1, Limit: 10}, false)
 
 	// Assert
 	if !errors.Is(err, expectedErr) || migrations != nil || total != 0 {
@@ -77,7 +77,7 @@ func TestGetMigrationsByDatabaseID_StorageDependencyFails_ReturnsRepositoryError
 	// Arrange
 	expectedErr := errors.New("database connection failed")
 	repo := &testutil.MigrationRepository{
-		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error) {
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint, params pagination.PaginationParams, hideRollback bool) ([]*domain.Migration, int64, error) {
 			return nil, 0, expectedErr
 		},
 	}
@@ -89,7 +89,7 @@ func TestGetMigrationsByDatabaseID_StorageDependencyFails_ReturnsRepositoryError
 	)
 
 	// Act
-	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 10, 5, pagination.PaginationParams{Page: 1, Limit: 10})
+	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 10, 5, pagination.PaginationParams{Page: 1, Limit: 10}, false)
 
 	// Assert
 	if !errors.Is(err, expectedErr) || migrations != nil || total != 0 {
@@ -105,7 +105,7 @@ func TestGetMigrationsByDatabaseID_ValidInput_ReturnsMigrationsAndTotal(t *testi
 	}
 	expectedTotal := int64(2)
 	repo := &testutil.MigrationRepository{
-		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint, params pagination.PaginationParams) ([]*domain.Migration, int64, error) {
+		FindAllByDatabaseIDFunc: func(ctx context.Context, dbID uint, params pagination.PaginationParams, hideRollback bool) ([]*domain.Migration, int64, error) {
 			return expectedMigrations, expectedTotal, nil
 		},
 	}
@@ -117,7 +117,7 @@ func TestGetMigrationsByDatabaseID_ValidInput_ReturnsMigrationsAndTotal(t *testi
 	)
 
 	// Act
-	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 10, 5, pagination.PaginationParams{Page: 1, Limit: 10})
+	migrations, total, err := svc.GetMigrationsByDatabaseID(context.Background(), 10, 5, pagination.PaginationParams{Page: 1, Limit: 10}, false)
 
 	// Assert
 	if err != nil || total != expectedTotal || len(migrations) != 2 {
@@ -860,7 +860,7 @@ func TestCreateMigration_FailMigrationStorageFails_ReturnsRepositoryError(t *tes
 	}
 }
 
-func TestCreateMigration_CaptureSnapshotFails_StillSucceedsWithoutSnapshot(t *testing.T) {
+func TestCreateMigration_CaptureSnapshotFails_ReturnsSnapshotUnavailable(t *testing.T) {
 	// Arrange
 	dbRepo := &testutil.DatabaseRepository{
 		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
@@ -905,8 +905,8 @@ func TestCreateMigration_CaptureSnapshotFails_StillSucceedsWithoutSnapshot(t *te
 	})
 
 	// Assert
-	if err != nil || result == nil || result.Status != domain.MigrationStatusSuccess || len(result.Snapshot) != 0 {
-		t.Fatalf("expected successful migration with empty snapshot, got err=%v, result=%+v", err, result)
+	if !errors.Is(err, domain.ErrMigrationSnapshotUnavailable) || result != nil {
+		t.Fatalf("expected snapshot error, got err=%v, result=%+v", err, result)
 	}
 }
 
@@ -1019,995 +1019,70 @@ func TestCreateMigration_ValidInputInitialBaselineCreated_CreatesBaselineThenMig
 	}
 }
 
-func TestRollbackMigrations_InvalidInput_ReturnsInvalidMigrationInputError(t *testing.T) {
+func TestMigrationService_Classify_Irreversible_ReturnsFalseWithReason(t *testing.T) {
 	// Arrange
-	svc := migration.NewMigrationService(
-		&testutil.MigrationRepository{},
-		&testutil.DatabaseRepository{},
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
+	queries := []string{"DROP TABLE t", "alter table t drop column a", "drop database test", "TRUNCATE t", "CREATE TABLE t(id int); DELETE FROM t"}
 	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        0,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrInvalidMigrationInput) || result != nil {
-		t.Fatalf("expected ErrInvalidMigrationInput, got err=%v, result=%v", err, result)
+	for _, sql := range queries {
+		reversible, reason := domain.ClassifyMigration(sql)
+		// Assert
+		if reversible != false || (strings.TrimSpace(reason) == "") != reversible {
+			t.Errorf("%s: %t %q", sql, reversible, reason)
+		}
 	}
 }
 
-func TestRollbackMigrations_UserNotAuthorized_ReturnsAuthorizationError(t *testing.T) {
+func TestMigrationService_Classify_Reversible_ReturnsTrue(t *testing.T) {
 	// Arrange
-	expectedErr := errors.New("unauthorized rollback attempt")
-	ugSvc := &testutil.UserGroupService{
-		AuthorizeFunc: func(ctx context.Context, userID, databaseID uint, requiredAccessType domain.AccessType) error {
-			return expectedErr
-		},
-	}
-	svc := migration.NewMigrationService(
-		&testutil.MigrationRepository{},
-		&testutil.DatabaseRepository{},
-		&testutil.DatabaseDriver{},
-		ugSvc,
-	)
-
+	queries := []string{"CREATE TABLE t(id int)", "ALTER TABLE t ADD COLUMN foo int", "CREATE INDEX i ON t(id)", "ALTER TABLE t RENAME TO b", "CREATE TABLE t(s text DEFAULT 'DROP TABLE')"}
 	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, expectedErr) || result != nil {
-		t.Fatalf("expected %v, got err=%v, result=%v", expectedErr, err, result)
+	for _, sql := range queries {
+		reversible, reason := domain.ClassifyMigration(sql)
+		// Assert
+		if reversible != true || (strings.TrimSpace(reason) == "") != reversible {
+			t.Errorf("%s: %t %q", sql, reversible, reason)
+		}
 	}
 }
 
-func TestRollbackMigrations_DatabaseLocked_ReturnsErrMigrationInProgress(t *testing.T) {
+func TestMigrationService_GetMigrations_HideRollbackTrue_FiltersRevertedPairs(t *testing.T) {
 	// Arrange
-	inProgress := make(chan struct{})
-	release := make(chan struct{})
-
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			close(inProgress)
-			<-release
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		&testutil.MigrationRepository{},
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	go func() {
-		_, _ = svc.CreateMigration(context.Background(), domain.CreateMigrationInput{
-			DatabaseID: 10,
-			UserID:     1,
-			SqlUp:      "CREATE TABLE background (id INT);",
-		})
-	}()
-
-	<-inProgress
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-	close(release)
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationInProgress) || result != nil {
-		t.Fatalf("expected ErrMigrationInProgress, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_DatabaseCredentialFails_ReturnsRepositoryError(t *testing.T) {
-	// Arrange
-	expectedErr := errors.New("db credential lookup failed")
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{}, expectedErr
-		},
-	}
-	svc := migration.NewMigrationService(
-		&testutil.MigrationRepository{},
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, expectedErr) || result != nil {
-		t.Fatalf("expected %v, got err=%v, result=%v", expectedErr, err, result)
-	}
-}
-
-func TestRollbackMigrations_TargetMigrationNotFound_ReturnsRepositoryError(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return nil, domain.ErrMigrationNotFound
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 999, // non-existent migration ID
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationNotFound) || result != nil {
-		t.Fatalf("expected ErrMigrationNotFound, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_TargetMigrationStatusNotSuccess_ReturnsErrMigrationRollbackUnavailable(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: migrationID, Status: domain.MigrationStatusFail}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationRollbackUnavailable) || result != nil {
-		t.Fatalf("expected ErrMigrationRollbackUnavailable, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_LatestSuccessfulNotFound_ReturnsRepositoryError(t *testing.T) {
-	// Arrange
-	expectedErr := errors.New("no successful migrations")
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: migrationID, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return nil, expectedErr
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, expectedErr) || result != nil {
-		t.Fatalf("expected %v, got err=%v, result=%v", expectedErr, err, result)
-	}
-}
-
-func TestRollbackMigrations_TargetVersionInvalid_ReturnsErrMigrationVersionUnavailable(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: migrationID, Version: "invalid-target", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationVersionUnavailable) || result != nil {
-		t.Fatalf("expected ErrMigrationVersionUnavailable, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_LatestVersionInvalid_ReturnsErrMigrationVersionUnavailable(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: migrationID, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "invalid-latest", Status: domain.MigrationStatusSuccess}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationVersionUnavailable) || result != nil {
-		t.Fatalf("expected ErrMigrationVersionUnavailable, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_TargetVersionEqualToLatest_ReturnsErrMigrationRollbackUnavailable(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: migrationID, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 2,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationRollbackUnavailable) || result != nil {
-		t.Fatalf("expected ErrMigrationRollbackUnavailable, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_TargetVersionHigherThanLatest_ReturnsErrMigrationRollbackUnavailable(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			// Target version 5 has not occurred yet (future / non-existent higher version)
-			return &domain.Migration{ID: migrationID, Version: "5", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			// Current latest version is only 2
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		&testutil.DatabaseDriver{},
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 5,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationRollbackUnavailable) || result != nil {
-		t.Fatalf("expected ErrMigrationRollbackUnavailable when rolling back to future non-existent version, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_MigrationInRollbackRangeNotFound_ExecutesCompensatingStatementsAndReturnsError(t *testing.T) {
-	// Arrange
-	rangeErr := errors.New("migration in range not found")
-	var compensatingExecuted []string
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			if version == "3" {
-				return &domain.Migration{
-					ID:      3,
-					Version: "3",
-					Status:  domain.MigrationStatusSuccess,
-					SqlUp:   "CREATE TABLE test3 (id INT);",
-					SqlDown: "DROP TABLE test3;",
-				}, nil
+	var received bool
+	repo := &testutil.MigrationRepository{
+		FindAllByDatabaseIDFunc: func(_ context.Context, _ uint, _ pagination.PaginationParams, hide bool) ([]*domain.Migration, int64, error) {
+			received = true
+			if hide != true {
+				t.Fatalf("filter: %v", hide)
 			}
-			return nil, rangeErr
+			return nil, 0, nil
 		},
 	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			compensatingExecuted = append(compensatingExecuted, command)
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
+	svc := migration.NewMigrationService(repo, nil, nil, &testutil.UserGroupService{})
 	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
+	_, _, err := svc.GetMigrationsByDatabaseID(context.Background(), 1, 1, pagination.PaginationParams{}, true)
 	// Assert
-	if !errors.Is(err, rangeErr) || result != nil || len(compensatingExecuted) < 2 {
-		t.Fatalf("expected error %v and compensating execution, got err=%v, result=%v, executed=%v", rangeErr, err, result, compensatingExecuted)
-	}
-	if compensatingExecuted[0] != "DROP TABLE test3" || compensatingExecuted[1] != "CREATE TABLE test3 (id INT)" {
-		t.Fatalf("expected down statement then compensating up, got %v", compensatingExecuted)
+	if err != nil || !received {
+		t.Fatalf("history: %v", err)
 	}
 }
 
-func TestRollbackMigrations_MissingSQLDownInRollbackRange_ExecutesCompensatingStatementsAndReturnsErrMigrationRollbackUnavailable(t *testing.T) {
+func TestMigrationService_GetMigrations_HideRollbackFalse_ReturnsAll(t *testing.T) {
 	// Arrange
-	var compensatingExecuted []string
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			if version == "3" {
-				return &domain.Migration{
-					ID:      3,
-					Version: "3",
-					Status:  domain.MigrationStatusSuccess,
-					SqlUp:   "CREATE TABLE test3 (id INT);",
-					SqlDown: "DROP TABLE test3;",
-				}, nil
+	var received bool
+	repo := &testutil.MigrationRepository{
+		FindAllByDatabaseIDFunc: func(_ context.Context, _ uint, _ pagination.PaginationParams, hide bool) ([]*domain.Migration, int64, error) {
+			received = true
+			if hide != false {
+				t.Fatalf("filter: %v", hide)
 			}
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test2 (id INT);",
-				SqlDown: "", // Missing SQL Down!
-			}, nil
+			return nil, 0, nil
 		},
 	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			compensatingExecuted = append(compensatingExecuted, command)
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
+	svc := migration.NewMigrationService(repo, nil, nil, &testutil.UserGroupService{})
 	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
+	_, _, err := svc.GetMigrationsByDatabaseID(context.Background(), 1, 1, pagination.PaginationParams{}, false)
 	// Assert
-	if !errors.Is(err, domain.ErrMigrationRollbackUnavailable) || result != nil || len(compensatingExecuted) < 2 {
-		t.Fatalf("expected ErrMigrationRollbackUnavailable, got err=%v, result=%v, executed=%v", err, result, compensatingExecuted)
-	}
-}
-
-func TestRollbackMigrations_ExecuteRollbackDownFails_ExecutesCompensatingStatementsAndReturnsExecutionError(t *testing.T) {
-	// Arrange
-	execErr := errors.New("foreign key constraint prevents table drop")
-	var executedCommands []string
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test (id INT);",
-				SqlDown: "DROP TABLE test;",
-			}, nil
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			executedCommands = append(executedCommands, command)
-			return nil, execErr
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, execErr) || result != nil {
-		t.Fatalf("expected execution error %v, got err=%v, result=%v", execErr, err, result)
-	}
-}
-
-func TestRollbackMigrations_RecordRollbackMigrationFindLatestFails_ReturnsRepositoryError(t *testing.T) {
-	// Arrange
-	expectedErr := errors.New("failure finding latest attempt")
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test (id INT);",
-				SqlDown: "DROP TABLE test;",
-			}, nil
-		},
-		FindLatestByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return nil, expectedErr
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, expectedErr) || result != nil {
-		t.Fatalf("expected %v, got err=%v, result=%v", expectedErr, err, result)
-	}
-}
-
-func TestRollbackMigrations_RecordRollbackMigrationSaveFails_ReturnsRepositoryError(t *testing.T) {
-	// Arrange
-	expectedErr := errors.New("audit rollback migration save failed")
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test (id INT);",
-				SqlDown: "DROP TABLE test;",
-			}, nil
-		},
-		FindLatestByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2"}, nil
-		},
-		SaveFunc: func(ctx context.Context, m *domain.Migration) (*domain.Migration, error) {
-			return nil, expectedErr
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, expectedErr) || result != nil {
-		t.Fatalf("expected %v, got err=%v, result=%v", expectedErr, err, result)
-	}
-}
-
-func TestRollbackMigrations_ValidRange_ExecutesDownStatementsAndRecordsAuditMigration(t *testing.T) {
-	// Arrange
-	var executedDowns []string
-	var savedAudit *domain.Migration
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:       1,
-				Version:  "1",
-				Status:   domain.MigrationStatusSuccess,
-				Snapshot: []byte(`{"Tables":{"target":{"Schema":"public"}}}`),
-			}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			if version == "3" {
-				return &domain.Migration{
-					ID:      3,
-					Version: "3",
-					Status:  domain.MigrationStatusSuccess,
-					SqlUp:   "CREATE TABLE test3 (id INT);",
-					SqlDown: "DROP TABLE test3;",
-				}, nil
-			}
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test2 (id INT);",
-				SqlDown: "DROP TABLE test2;",
-			}, nil
-		},
-		FindLatestByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3"}, nil
-		},
-		SaveFunc: func(ctx context.Context, m *domain.Migration) (*domain.Migration, error) {
-			m.ID = 4
-			savedAudit = m
-			return m, nil
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			executedDowns = append(executedDowns, command)
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if err != nil || len(result) != 3 || savedAudit == nil {
-		t.Fatalf("expected 2 rolled back + 1 audit migration, got err=%v, count=%d, savedAudit=%+v", err, len(result), savedAudit)
-	}
-	if savedAudit.Version != "4" || savedAudit.Status != domain.MigrationStatusSuccess {
-		t.Fatalf("expected audit migration version 4 success, got %+v", savedAudit)
-	}
-	if len(executedDowns) != 2 || executedDowns[0] != "DROP TABLE test3" || executedDowns[1] != "DROP TABLE test2" {
-		t.Fatalf("expected down statements executed in reverse chronological order, got %v", executedDowns)
-	}
-}
-
-func TestRollbackMigrations_RangeContainsFailedMigration_SkipsFailedMigrationAndRollsBackSuccesses(t *testing.T) {
-	// Arrange
-	var executedDowns []string
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:      1,
-				Version: "1",
-				Status:  domain.MigrationStatusSuccess,
-			}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			if version == "3" {
-				return &domain.Migration{
-					ID:      3,
-					Version: "3",
-					Status:  domain.MigrationStatusSuccess,
-					SqlUp:   "CREATE TABLE test3 (id INT);",
-					SqlDown: "DROP TABLE test3;",
-				}, nil
-			}
-			// Version 2 was a failed migration attempt in the database
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusFail,
-				SqlUp:   "CREATE TABLE test2_failed (id INT);",
-				SqlDown: "DROP TABLE test2_failed;",
-			}, nil
-		},
-		FindLatestByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3"}, nil
-		},
-		SaveFunc: func(ctx context.Context, m *domain.Migration) (*domain.Migration, error) {
-			m.ID = 4
-			return m, nil
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			executedDowns = append(executedDowns, command)
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if err != nil || len(result) != 2 { // 1 success rollback + 1 audit migration
-		t.Fatalf("expected 1 rolled back migration + 1 audit migration, got err=%v, count=%d", err, len(result))
-	}
-	if len(executedDowns) != 1 || executedDowns[0] != "DROP TABLE test3" {
-		t.Fatalf("expected only successful migration v3 to be executed for down, got %v", executedDowns)
-	}
-}
-
-func TestRollbackMigrations_CompensatingMultiStatementsExecutedInReverseOrder_ExecutesAllCompensatingStatements(t *testing.T) {
-	// Arrange
-	execErr := errors.New("migration 2 down execution failed")
-	var compensatingCommands []string
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 3, Version: "3", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			if version == "3" {
-				return &domain.Migration{
-					ID:      3,
-					Version: "3",
-					Status:  domain.MigrationStatusSuccess,
-					SqlUp:   "CREATE TABLE part1 (id INT);\nCREATE TABLE part2 (id INT);",
-					SqlDown: "DROP TABLE part2;\nDROP TABLE part1;",
-				}, nil
-			}
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE part0 (id INT);",
-				SqlDown: "DROP TABLE part0;",
-			}, nil
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			if strings.Contains(command, "DROP TABLE part0") {
-				// Migration 2 down fails
-				return nil, execErr
-			}
-			if strings.Contains(command, "CREATE TABLE part") {
-				// Compensating commands executed by rollbackExecutedStatements
-				compensatingCommands = append(compensatingCommands, command)
-			}
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, execErr) || result != nil || len(compensatingCommands) < 2 {
-		t.Fatalf("expected execution error and multi-statement compensating execution, got err=%v, result=%v, compensating=%v", err, result, compensatingCommands)
-	}
-	if compensatingCommands[0] != "CREATE TABLE part1 (id INT)" || compensatingCommands[1] != "CREATE TABLE part2 (id INT)" {
-		t.Fatalf("expected compensating statements executed in order, got %v", compensatingCommands)
-	}
-}
-
-func TestRollbackMigrations_RecordRollbackMigrationCorruptVersion_ReturnsErrMigrationVersionUnavailable(t *testing.T) {
-	// Arrange
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 1, Version: "1", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test (id INT);",
-				SqlDown: "DROP TABLE test;",
-			}, nil
-		},
-		FindLatestByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "NaN"}, nil
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if !errors.Is(err, domain.ErrMigrationVersionUnavailable) || result != nil {
-		t.Fatalf("expected ErrMigrationVersionUnavailable, got err=%v, result=%v", err, result)
-	}
-}
-
-func TestRollbackMigrations_CapturesFreshSnapshotOnSuccess_SavesFreshSnapshotInAuditRecord(t *testing.T) {
-	// Arrange
-	var savedAudit *domain.Migration
-	dbRepo := &testutil.DatabaseRepository{
-		FindWithCredentialByIDFunc: func(ctx context.Context, dbID uint) (domain.Database, error) {
-			return domain.Database{ID: dbID}, nil
-		},
-	}
-	migRepo := &testutil.MigrationRepository{
-		FindByIDAndDatabaseIDFunc: func(ctx context.Context, migrationID, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:       1,
-				Version:  "1",
-				Status:   domain.MigrationStatusSuccess,
-				Snapshot: []byte(`{"Tables":{"old_target":{"Schema":"public"}}}`),
-			}, nil
-		},
-		FindLatestSuccessfulByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2", Status: domain.MigrationStatusSuccess}, nil
-		},
-		FindByVersionAndDatabaseIDFunc: func(ctx context.Context, version string, databaseID uint) (*domain.Migration, error) {
-			return &domain.Migration{
-				ID:      2,
-				Version: "2",
-				Status:  domain.MigrationStatusSuccess,
-				SqlUp:   "CREATE TABLE test (id INT);",
-				SqlDown: "DROP TABLE test;",
-			}, nil
-		},
-		FindLatestByDatabaseIDFunc: func(ctx context.Context, dbID uint) (*domain.Migration, error) {
-			return &domain.Migration{ID: 2, Version: "2"}, nil
-		},
-		SaveFunc: func(ctx context.Context, m *domain.Migration) (*domain.Migration, error) {
-			m.ID = 3
-			savedAudit = m
-			return m, nil
-		},
-	}
-	driver := &testutil.DatabaseDriver{
-		ExecuteCommandFunc: func(ctx context.Context, db domain.Database, command string) (*ports.DatabaseCommandResult, error) {
-			return &ports.DatabaseCommandResult{RowsAffected: 0}, nil
-		},
-		GetDatabaseMetadataFunc: func(ctx context.Context, db domain.Database) (*ports.DatabaseMetadata, error) {
-			return &ports.DatabaseMetadata{
-				Tables: []ports.DatabaseTableMetadata{
-					{Name: "restored_table", Schema: "public"},
-				},
-			}, nil
-		},
-	}
-	svc := migration.NewMigrationService(
-		migRepo,
-		dbRepo,
-		driver,
-		&testutil.UserGroupService{},
-	)
-
-	// Act
-	result, err := svc.RollbackMigrations(context.Background(), domain.RollbackMigrationsInput{
-		DatabaseID:        10,
-		UserID:            1,
-		TargetMigrationID: 1,
-	})
-
-	// Assert
-	if err != nil || len(result) != 2 || savedAudit == nil || len(savedAudit.Snapshot) == 0 {
-		t.Fatalf("expected fresh snapshot saved in audit record, got err=%v, count=%d, savedAudit=%+v", err, len(result), savedAudit)
-	}
-	if !strings.Contains(string(savedAudit.Snapshot), "restored_table") {
-		t.Fatalf("expected audit snapshot to contain fresh 'restored_table', got %s", string(savedAudit.Snapshot))
+	if err != nil || !received {
+		t.Fatalf("history: %v", err)
 	}
 }

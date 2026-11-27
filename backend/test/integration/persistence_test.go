@@ -61,10 +61,7 @@ func TestPersistence_GivenExistingUserAndGroup_WhenUserAssignedToGroup_ThenCasca
 	stack := setupTestStack(t)
 	ctx := context.Background()
 
-	group, err := stack.groupRepo.Save(ctx, domain.Group{Name: "engineering-team"})
-	if err != nil {
-		t.Fatalf("failed to create group: %v", err)
-	}
+	group := createTestGroup(t, stack, "engineering-team")
 
 	user, err := stack.userRepo.Save(ctx, domain.User{
 		Username: "engineer_bob",
@@ -75,10 +72,7 @@ func TestPersistence_GivenExistingUserAndGroup_WhenUserAssignedToGroup_ThenCasca
 		t.Fatalf("failed to create user: %v", err)
 	}
 
-	secondGroup, err := stack.groupRepo.Save(ctx, domain.Group{Name: "devops-team"})
-	if err != nil {
-		t.Fatalf("failed to create second group: %v", err)
-	}
+	secondGroup := createTestGroup(t, stack, "devops-team")
 
 	err = stack.userGroupRepo.AddUser(ctx, secondGroup.ID, user.ID)
 	if err != nil {
@@ -86,7 +80,7 @@ func TestPersistence_GivenExistingUserAndGroup_WhenUserAssignedToGroup_ThenCasca
 	}
 
 	// Act - Delete user from platform DB
-	err = stack.userRepo.Delete(ctx, user.ID)
+	err = stack.db.WithContext(ctx).Unscoped().Delete(&model.User{}, user.ID).Error
 	if err != nil {
 		t.Fatalf("failed to delete user: %v", err)
 	}
@@ -106,10 +100,7 @@ func TestPersistence_GivenActiveSession_WhenUserDeleted_ThenSessionCascadesInPla
 	stack := setupTestStack(t)
 	ctx := context.Background()
 
-	group, err := stack.groupRepo.Save(ctx, domain.Group{Name: "session-team"})
-	if err != nil {
-		t.Fatalf("failed to create group: %v", err)
-	}
+	group := createTestGroup(t, stack, "session-team")
 
 	user, err := stack.userRepo.Save(ctx, domain.User{
 		Username: "alice_session_test",
@@ -126,7 +117,7 @@ func TestPersistence_GivenActiveSession_WhenUserDeleted_ThenSessionCascadesInPla
 	}
 
 	// Act - Delete the user
-	err = stack.userRepo.Delete(ctx, user.ID)
+	err = stack.db.WithContext(ctx).Unscoped().Delete(&model.User{}, user.ID).Error
 	if err != nil {
 		t.Fatalf("failed to delete user: %v", err)
 	}
@@ -143,17 +134,14 @@ func TestPersistence_GivenDuplicateUsername_WhenInsertAttempted_ThenPostgreSQLUn
 	stack := setupTestStack(t)
 	ctx := context.Background()
 
-	group, err := stack.groupRepo.Save(ctx, domain.Group{Name: "unique-team"})
-	if err != nil {
-		t.Fatalf("failed to create group: %v", err)
-	}
+	group := createTestGroup(t, stack, "unique-team")
 
 	firstUser := domain.User{
 		Username: "unique_charlie",
 		Password: "password_hash",
 		Role:     domain.RoleUser,
 	}
-	_, err = stack.userRepo.Save(ctx, firstUser, []uint{group.ID})
+	_, err := stack.userRepo.Save(ctx, firstUser, []uint{group.ID})
 	if err != nil {
 		t.Fatalf("failed to insert initial user: %v", err)
 	}
