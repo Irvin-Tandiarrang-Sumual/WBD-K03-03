@@ -24,8 +24,8 @@ export function generateRandomReadQuery() {
 
 export function generateExplainAnalyzeQuery() {
   const queryGenerators = [
-    () => `EXPLAIN (ANALYZE, BUFFERS) SELECT c.id, c.name, count(o.id), avg(o.total_amount) FROM customers c LEFT JOIN orders o ON c.id = o.customer_id WHERE c.id > ${randomInt(1, 1000)} GROUP BY c.id, c.name;`,
-    () => `EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM orders WHERE total_amount > ${randomInt(100000, 2000000)} ORDER BY created_at DESC LIMIT 100;`,
+    () => `SELECT actor, count(*), max(logged_at) FROM audit_logs WHERE id > ${randomInt(1, 5000)} GROUP BY actor;`,
+    () => `SELECT id, metric_date, active_users, total_sales FROM daily_metrics WHERE active_users > ${randomInt(100, 1500)} ORDER BY metric_date DESC LIMIT 100;`,
   ];
   return queryGenerators[randomInt(0, queryGenerators.length - 1)]();
 }

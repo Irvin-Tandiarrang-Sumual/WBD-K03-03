@@ -1,4 +1,5 @@
 import { sleep } from 'k6';
+import { config } from '../config/environments.js';
 import { request } from '../helpers/api_client.js';
 import { pollDraftUntilTerminal } from '../helpers/job_poller.js';
 import {
@@ -29,7 +30,7 @@ export function runCrossDbSaturation(data, currentPhase, crossDraftPools) {
 
   if (res.status === 202) {
     migrationJobsSubmitted.add(1, targetTags);
-    pollDraftUntilTerminal(baseURL, author, draft.id, 45000, 300, targetTags);
+    pollDraftUntilTerminal(baseURL, author, draft.id, config.jobPollTimeoutMs, config.jobPollIntervalMs, targetTags);
   } else if (res.status === 409) {
     lockConflicts.add(1, targetTags);
     sleep(0.3);

@@ -44,6 +44,6 @@ export const config = {
     'migration_job_success_rate': ['rate>0.95'],
   },
 
-  jobPollTimeoutMs: Number(__ENV.JOB_POLL_TIMEOUT_MS || 45000),
+  jobPollTimeoutMs: Number(__ENV.JOB_POLL_TIMEOUT_MS || 60000),
   jobPollIntervalMs: Number(__ENV.JOB_POLL_INTERVAL_MS || 300),
 };

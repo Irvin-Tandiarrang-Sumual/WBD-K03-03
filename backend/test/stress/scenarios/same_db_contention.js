@@ -1,4 +1,5 @@
 import { sleep } from 'k6';
+import { config } from '../config/environments.js';
 import { request } from '../helpers/api_client.js';
 import { pollDraftUntilTerminal } from '../helpers/job_poller.js';
 import {
@@ -23,7 +24,7 @@ export function runSameDbContention(data, currentPhase, draftPool) {
 
   if (res.status === 202) {
     migrationJobsSubmitted.add(1, tags);
-    pollDraftUntilTerminal(baseURL, author, draft.id, 45000, 300, tags);
+    pollDraftUntilTerminal(baseURL, author, draft.id, config.jobPollTimeoutMs, config.jobPollIntervalMs, tags);
   } else if (res.status === 409) {
     lockConflicts.add(1, tags);
     sleep(0.5);

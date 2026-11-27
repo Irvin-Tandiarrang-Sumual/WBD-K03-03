@@ -108,7 +108,7 @@ export function setup() {
     sqlDown: `UPDATE customers SET name = name WHERE id BETWEEN ? AND ?`,
     isBatch: true,
     batchColumn: 'id',
-    batchSize: 50,
+    batchSize: 500,
   }));
 
   const crossDbDrafts = {
@@ -116,13 +116,13 @@ export function setup() {
       sqlUp: `UPDATE orders SET status = status WHERE id BETWEEN ? AND ?`,
       isBatch: true,
       batchColumn: 'id',
-      batchSize: 100,
+      batchSize: 1000,
     })),
     [secondaryDB.name]: provisionDraftBatch(baseURL, author, leadersMap, secondaryDB.id, crossBatchCount, () => ({
       sqlUp: `UPDATE daily_metrics SET active_users = active_users WHERE id BETWEEN ? AND ?`,
       isBatch: true,
       batchColumn: 'id',
-      batchSize: 50,
+      batchSize: 500,
     })),
   };
 
@@ -132,7 +132,7 @@ export function setup() {
       sqlUp: `UPDATE invoices SET amount = amount WHERE id BETWEEN ? AND ?`,
       isBatch: true,
       batchColumn: 'id',
-      batchSize: 200,
+      batchSize: 500,
     }));
   }
 
