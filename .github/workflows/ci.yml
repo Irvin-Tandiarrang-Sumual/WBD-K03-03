@@ -5,6 +5,16 @@ on:
     branches: [ '**' ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      stress_profile:
+        description: 'Stress test profile (quick or full)'
+        required: false
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,3 +63,50 @@ jobs:
         run: |
           cd backend
           go test -tags=integration -v ./test/integration/... -count=1
+
+  stress-test:
+    name: stress & performance tests
+    runs-on: ubuntu-latest
+    needs: [backend-unit-test, backend-integration-test]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.base_ref == 'main' || github.base_ref == 'develop' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment File
+        run: |
+          cp .env.example .env
+
+      - name: Start Application Stack
+        run: |
+          docker compose up -d --build internal_db demo_postgres demo_mysql app
+
+      - name: Wait for Backend Health
+        run: |
+          echo "Waiting for backend service to become healthy..."
+          timeout 90s bash -c 'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'
+          echo "Backend is healthy and ready for stress load."
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run k6 Migration Benchmark
+        run: |
+          k6 run -e BASE_URL=http://localhost:8080 backend/test/stress/migrations.js
+
+      - name: Run k6 Stress Testing Suite
+        run: |
+          PROFILE="${{ github.event.inputs.stress_profile || 'quick' }}"
+          k6 run -e BASE_URL=http://localhost:8080 -e STRESS_PROFILE="$PROFILE" backend/test/stress/stress_suite.js
+
+      - name: Print Container Logs on Failure
+        if: failure()
+        run: |
+          docker compose logs --tail=100 app
+          docker compose logs --tail=50 internal_db
+          docker compose logs --tail=50 demo_postgres
+
+      - name: Teardown Stack
+        if: always()
+        run: |
+          docker compose down -v
