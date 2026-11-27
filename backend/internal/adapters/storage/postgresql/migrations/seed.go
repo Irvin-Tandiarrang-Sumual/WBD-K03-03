@@ -62,6 +62,8 @@ func seedTestDatabases(tx *gorm.DB, encodePassword func(string) (string, error))
 		{Port: 3306, Host: "demo_mysql", User: "demo_user", Password: "demo_password", Type: "mysql", Name: "db2_mysql"},
 		{Port: 5432, Host: "demo_postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db3_analytics"},
 		{Port: 5432, Host: "demo_postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db4_billing"},
+		{Port: 5432, Host: "demo_postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db5_staging"},
+		{Port: 5432, Host: "demo_postgres", User: "demo_user", Password: "demo_password", Type: "postgresql", Name: "db6_warehouse"},
 	}
 
 	databases := make(map[string]model.Database, len(databaseSeeds))
@@ -143,6 +145,8 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database, users map[stri
 	db2 := databases[databaseKey("db2_mysql")]
 	db3 := databases[databaseKey("db3_analytics")]
 	db4 := databases[databaseKey("db4_billing")]
+	db5 := databases[databaseKey("db5_staging")]
+	db6 := databases[databaseKey("db6_warehouse")]
 
 	type dbAccess struct {
 		db         model.Database
@@ -164,6 +168,8 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database, users map[stri
 				{db: db2, accessType: "view_edit"},
 				{db: db3, accessType: "view_edit"},
 				{db: db4, accessType: "view_edit"},
+				{db: db5, accessType: "view_edit"},
+				{db: db6, accessType: "view_edit"},
 			},
 		},
 		{
@@ -175,6 +181,8 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database, users map[stri
 				{db: db2, accessType: "view_edit"},
 				{db: db3, accessType: "view_only"},
 				{db: db4, accessType: "view_edit"},
+				{db: db5, accessType: "view_edit"},
+				{db: db6, accessType: "view_edit"},
 			},
 		},
 		{
@@ -185,6 +193,8 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database, users map[stri
 				{db: db1, accessType: "view_edit"},
 				{db: db3, accessType: "view_only"},
 				{db: db4, accessType: "view_edit"},
+				{db: db5, accessType: "view_edit"},
+				{db: db6, accessType: "view_only"},
 			},
 		},
 		{
@@ -196,6 +206,8 @@ func seedGroups(tx *gorm.DB, databases map[string]model.Database, users map[stri
 				{db: db2, accessType: "view_only"},
 				{db: db3, accessType: "view_only"},
 				{db: db4, accessType: "view_only"},
+				{db: db5, accessType: "view_only"},
+				{db: db6, accessType: "view_only"},
 			},
 		},
 	}

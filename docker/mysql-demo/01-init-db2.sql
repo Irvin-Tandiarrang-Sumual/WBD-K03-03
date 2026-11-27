@@ -66,6 +66,37 @@ INSERT INTO inventory_movements (product_id, quantity_change, movement_type) VAL
     (11, 10, 'initial_stock'),
     (12, 45, 'initial_stock');
 
--- Grant all privileges to demo_user so dynamic database operations are permitted
+INSERT INTO products (sku, name, price)
+WITH RECURSIVE cte (n) AS (
+    SELECT 21
+    UNION ALL
+    SELECT n + 1 FROM cte WHERE n < 1000
+)
+SELECT 
+    CONCAT('WBD-', LPAD(n, 5, '0')),
+    CONCAT('Demo Product Item ', n),
+    ROUND(100000 + (RAND() * 5000000), 2)
+FROM cte;
+
+INSERT INTO inventory_movements (product_id, quantity_change, movement_type)
+WITH RECURSIVE cte_inv (n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM cte_inv WHERE n < 2000
+)
+SELECT 
+    ((n % 1000) + 1),
+    CASE (n % 3)
+        WHEN 0 THEN 50
+        WHEN 1 THEN -10
+        ELSE 25
+    END,
+    CASE (n % 3)
+        WHEN 0 THEN 'restock_in'
+        WHEN 1 THEN 'customer_sale'
+        ELSE 'audit_adjustment'
+    END
+FROM cte_inv;
+
 GRANT ALL PRIVILEGES ON *.* TO 'demo_user'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
