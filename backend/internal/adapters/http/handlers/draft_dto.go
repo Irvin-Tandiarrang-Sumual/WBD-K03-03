@@ -41,6 +41,7 @@ type DraftResponse struct {
 	ID                 uint                    `json:"id"`
 	DatabaseID         uint                    `json:"databaseId"`
 	UserID             uint                    `json:"userId"`
+	Username           string                  `json:"username,omitempty"`
 	Operation          string                  `json:"operation,omitempty"`
 	TargetID           uint                    `json:"targetId,omitempty"`
 	BaseExecutionID    uint                    `json:"baseExecutionId,omitempty"`
@@ -92,6 +93,7 @@ func toDraftResponse(d *domain.Draft) DraftResponse {
 		ID:                 d.ID,
 		DatabaseID:         d.DatabaseID,
 		UserID:             d.UserID,
+		Username:           d.Username,
 		Operation:          d.Operation,
 		TargetID:           d.TargetID,
 		BaseExecutionID:    d.BaseExecutionID,

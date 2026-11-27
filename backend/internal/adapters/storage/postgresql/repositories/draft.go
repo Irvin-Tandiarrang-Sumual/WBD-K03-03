@@ -104,6 +104,7 @@ func (r *draftRepository) FindByID(ctx context.Context, id uint) (*domain.Draft,
 		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
 	err := query.
+		Preload("User").
 		Preload("Approvals").
 		Preload("Checkpoints").
 		Where("id = ?", id).
@@ -133,6 +134,7 @@ func (r *draftRepository) FindAllByDatabaseID(
 
 	var modelDrafts []model.Draft
 	err := r.db.WithContext(ctx).
+		Preload("User").
 		Preload("Approvals").
 		Where("database_id = ?", databaseID).
 		Order("id DESC").
@@ -402,6 +404,7 @@ func toDomainDraft(m *model.Draft) *domain.Draft {
 		ID:                 m.ID,
 		DatabaseID:         m.DatabaseID,
 		UserID:             m.UserID,
+		Username:           m.User.Username,
 		Operation:          m.Operation,
 		TargetID:           m.TargetID,
 		BaseExecutionID:    m.BaseExecutionID,

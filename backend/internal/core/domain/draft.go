@@ -44,6 +44,7 @@ type Draft struct {
 	ID                 uint
 	DatabaseID         uint
 	UserID             uint
+	Username           string
 	Operation          string
 	TargetID           uint
 	BaseExecutionID    uint
