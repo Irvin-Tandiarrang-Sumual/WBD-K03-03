@@ -49,6 +49,45 @@ func TestMigrationQueue_GivenPersistedJobs_WhenWorkersRestart_ThenPendingRunsOnc
 	}
 }
 
+func TestMigrationQueue_GivenInterruptedBatchJob_WhenWorkersRestart_ThenDraftReconciledToPartial(t *testing.T) {
+	// Arrange
+	db := requirePlatformDB(t)
+	user := insertTestUser(t, &testStack{db: db}, "batch_crash_owner", "password123", domain.RoleUser)
+	target := model.Database{Name: "batch_crash_db", Host: "localhost", Port: 5432, User: user.Username, Type: "postgresql"}
+	if err := db.Create(&target).Error; err != nil {
+		t.Fatal(err)
+	}
+	draft := model.Draft{
+		DatabaseID: target.ID, UserID: user.ID, SqlUp: "UPDATE tbl SET x=1 WHERE id BETWEEN ? AND ?",
+		Status: domain.DraftStatusExecuting, IsBatch: true, BatchColumn: "id", BatchSize: 10,
+	}
+	if err := db.Create(&draft).Error; err != nil {
+		t.Fatal(err)
+	}
+	job := model.MigrationJob{
+		DraftID: draft.ID, DatabaseID: draft.DatabaseID, UserID: draft.UserID, ExecutionID: 1,
+		Operation: ports.MetricOpExecute, Status: "running", TraceCarrier: []byte("{}"),
+	}
+	if err := db.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	queue := queuepostgres.NewQueue(db, func(ctx context.Context, _ ports.ExecutionTask) error { return nil }, 1, 4, 5*time.Second)
+	defer queue.Close()
+
+	waitForJobStatus(t, db, job.ID, "failed")
+
+	// Assert
+	var reconciled model.Draft
+	if err := db.Take(&reconciled, draft.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if reconciled.Status != domain.DraftStatusPartial {
+		t.Fatalf("expected batch draft to be reconciled to partial, got %s", reconciled.Status)
+	}
+}
+
 func TestMigrationQueue_GivenApprovedDraft_WhenSubmittedTwice_ThenOnlyOneJobIsStored(t *testing.T) {
 	// Arrange
 	db := requirePlatformDB(t)
