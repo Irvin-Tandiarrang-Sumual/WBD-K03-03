@@ -26,15 +26,17 @@ type DraftExecutionResponse struct {
 }
 
 type DraftApprovalResponse struct {
-	ID          uint       `json:"id"`
-	DraftID     uint       `json:"draftId"`
-	GroupID     uint       `json:"groupId"`
-	LeaderID    *uint      `json:"leaderId"`
-	Status      string     `json:"status"`
-	Round       uint       `json:"round"`
-	Phase       string     `json:"phase,omitempty"`
-	Vote        string     `json:"vote,omitempty"`
-	RespondedAt *time.Time `json:"respondedAt,omitempty"`
+	ID             uint       `json:"id"`
+	DraftID        uint       `json:"draftId"`
+	GroupID        uint       `json:"groupId"`
+	GroupName      string     `json:"groupName,omitempty"`
+	LeaderID       *uint      `json:"leaderId"`
+	LeaderUsername string     `json:"leaderUsername,omitempty"`
+	Status         string     `json:"status"`
+	Round          uint       `json:"round"`
+	Phase          string     `json:"phase,omitempty"`
+	Vote           string     `json:"vote,omitempty"`
+	RespondedAt    *time.Time `json:"respondedAt,omitempty"`
 }
 
 type DraftResponse struct {
@@ -77,15 +79,17 @@ func toDraftResponse(d *domain.Draft) DraftResponse {
 	approvals := make([]DraftApprovalResponse, 0, len(d.Approvals))
 	for _, app := range d.Approvals {
 		approvals = append(approvals, DraftApprovalResponse{
-			ID:          app.ID,
-			DraftID:     app.DraftID,
-			GroupID:     app.GroupID,
-			LeaderID:    app.LeaderID,
-			Status:      app.Status,
-			Round:       app.Round,
-			Phase:       app.Phase,
-			Vote:        app.Vote,
-			RespondedAt: app.RespondedAt,
+			ID:             app.ID,
+			DraftID:        app.DraftID,
+			GroupID:        app.GroupID,
+			GroupName:      app.GroupName,
+			LeaderID:       app.LeaderID,
+			LeaderUsername: app.LeaderUsername,
+			Status:         app.Status,
+			Round:          app.Round,
+			Phase:          app.Phase,
+			Vote:           app.Vote,
+			RespondedAt:    app.RespondedAt,
 		})
 	}
 

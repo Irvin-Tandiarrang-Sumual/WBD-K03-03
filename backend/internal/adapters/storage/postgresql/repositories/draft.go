@@ -106,6 +106,8 @@ func (r *draftRepository) FindByID(ctx context.Context, id uint) (*domain.Draft,
 	err := query.
 		Preload("User").
 		Preload("Approvals").
+		Preload("Approvals.Group").
+		Preload("Approvals.Leader").
 		Preload("Checkpoints").
 		Where("id = ?", id).
 		First(&modelDraft).Error
@@ -136,6 +138,8 @@ func (r *draftRepository) FindAllByDatabaseID(
 	err := r.db.WithContext(ctx).
 		Preload("User").
 		Preload("Approvals").
+		Preload("Approvals.Group").
+		Preload("Approvals.Leader").
 		Where("database_id = ?", databaseID).
 		Order("id DESC").
 		Offset(params.Offset()).
@@ -221,6 +225,8 @@ func (r *draftRepository) UpdateApproval(ctx context.Context, approval *domain.D
 func (r *draftRepository) FindApprovalsByDraftID(ctx context.Context, draftID uint) ([]*domain.DraftApproval, error) {
 	var modelApprovals []model.DraftApproval
 	err := r.db.WithContext(ctx).
+		Preload("Group").
+		Preload("Leader").
 		Where("draft_id = ?", draftID).
 		Order("id ASC").
 		Find(&modelApprovals).Error
@@ -239,6 +245,8 @@ func (r *draftRepository) FindApprovalsByDraftID(ctx context.Context, draftID ui
 func (r *draftRepository) FindApprovalsByDraftAndRound(ctx context.Context, draftID uint, round uint) ([]*domain.DraftApproval, error) {
 	var modelApprovals []model.DraftApproval
 	err := r.db.WithContext(ctx).
+		Preload("Group").
+		Preload("Leader").
 		Where("draft_id = ? AND round = ?", draftID, round).
 		Order("id ASC").
 		Find(&modelApprovals).Error
@@ -430,16 +438,27 @@ func toDomainDraftApproval(m *model.DraftApproval) *domain.DraftApproval {
 		return nil
 	}
 
+	var groupName string
+	if m.Group.Name != "" {
+		groupName = m.Group.Name
+	}
+	var leaderUsername string
+	if m.Leader != nil && m.Leader.Username != "" {
+		leaderUsername = m.Leader.Username
+	}
+
 	return &domain.DraftApproval{
-		ID:          m.ID,
-		DraftID:     m.DraftID,
-		GroupID:     m.GroupID,
-		Round:       m.Round,
-		Phase:       m.Phase,
-		LeaderID:    m.LeaderID,
-		Status:      m.Status,
-		Vote:        m.Vote,
-		RespondedAt: m.RespondedAt,
+		ID:             m.ID,
+		DraftID:        m.DraftID,
+		GroupID:        m.GroupID,
+		GroupName:      groupName,
+		Round:          m.Round,
+		Phase:          m.Phase,
+		LeaderID:       m.LeaderID,
+		LeaderUsername: leaderUsername,
+		Status:         m.Status,
+		Vote:           m.Vote,
+		RespondedAt:    m.RespondedAt,
 	}
 }
 
