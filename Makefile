@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-unit-cover test-integration test-integration-cover test-all test-cover-all migrate seed swagger
+.PHONY: test test-unit test-unit-cover test-integration test-integration-cover test-all test-cover-all test-e2e test-e2e-docker test-e2e-fresh test-stress test-stress-docker test-stress-fresh migrate seed swagger
 
 UNIT_PKGS := ./config/... ./internal/adapters/driver/mysql/... ./internal/adapters/driver/postgresql/... ./internal/adapters/http/middleware/... ./internal/adapters/security/... ./internal/core/domain/... ./internal/core/service/... ./pkg/...
 
@@ -30,3 +30,24 @@ test-integration-cover:
 test-all: test-unit test-integration
 
 test-cover-all: test-unit-cover test-integration-cover
+
+test-e2e:
+	cd e2e && npx playwright test
+
+test-e2e-docker:
+	docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
+
+test-e2e-fresh:
+	docker compose down -v
+	docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
+
+test-stress:
+	k6 run stress/stress_suite.js
+
+test-stress-docker:
+	docker compose --profile stress run --rm k6 run stress_suite.js
+
+test-stress-fresh:
+	docker compose down -v
+	docker compose up -d --build
+	docker compose --profile stress run --rm k6 run stress_suite.js

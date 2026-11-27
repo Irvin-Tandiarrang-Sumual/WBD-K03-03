@@ -70,15 +70,17 @@ func (d *Draft) IsTerminal() bool {
 }
 
 type DraftApproval struct {
-	ID          uint
-	DraftID     uint
-	GroupID     uint
-	LeaderID    *uint
-	Round       uint
-	Phase       string
-	Status      string
-	Vote        string
-	RespondedAt *time.Time
+	ID             uint
+	DraftID        uint
+	GroupID        uint
+	GroupName      string
+	LeaderID       *uint
+	LeaderUsername string
+	Round          uint
+	Phase          string
+	Status         string
+	Vote           string
+	RespondedAt    *time.Time
 }
 
 type DraftCheckpoint struct {

@@ -78,6 +78,8 @@ SELECT
     ROUND(100000 + (RAND() * 5000000), 2)
 FROM cte;
 
+SET SESSION cte_max_recursion_depth = 2000;
+
 INSERT INTO inventory_movements (product_id, quantity_change, movement_type)
 WITH RECURSIVE cte_inv (n) AS (
     SELECT 1

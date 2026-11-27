@@ -14,7 +14,9 @@ export interface BackendDraftApproval {
   id: number;
   draftId: number;
   groupId: number;
+  groupName?: string;
   leaderId?: number | null;
+  leaderUsername?: string;
   status: string;
   round: number;
   phase?: string;
@@ -65,10 +67,13 @@ export function mapBackendDraftToProposal(
       voteStatus = rawVote as LeaderVoteStatus;
     }
 
+    const leaderDisplayName = a.leaderUsername || (a.leaderId ? `Leader #${a.leaderId}` : `Group #${a.groupId} Leader`);
+    const groupDisplayName = a.groupName || `Group #${a.groupId}`;
+
     return {
       leaderId: a.leaderId ? String(a.leaderId) : `leader-grp-${a.groupId}`,
-      leaderName: a.leaderId ? `Leader #${a.leaderId}` : `Group #${a.groupId} Leader`,
-      groupName: `Group #${a.groupId}`,
+      leaderName: leaderDisplayName,
+      groupName: groupDisplayName,
       status: voteStatus,
       votedAt: a.respondedAt || undefined,
       round: a.round,
@@ -83,8 +88,11 @@ export function mapBackendDraftToProposal(
     const processedRows = progress?.rows_processed ?? 0;
     const totalRows = progress?.total_rows ?? 2500;
 
+    const matchTable = d.sqlUp.match(/(?:FROM|UPDATE|INTO)\s+([a-zA-Z0-9_]+)/i);
+    const tableName = matchTable ? matchTable[1] : 'batch_table';
+
     batchConfig = {
-      targetTable: 'batch_table',
+      targetTable: tableName,
       batchColumn: d.batchColumn || 'id',
       batchSize: d.batchSize || 500,
       processedRows: Number(processedRows),
@@ -112,7 +120,7 @@ export function mapBackendDraftToProposal(
     databaseId: String(d.databaseId),
     description: desc,
     proposerId: String(d.userId),
-    proposerName: d.username || `User #${d.userId}`,
+    proposerName: d.username || (d.userId ? `User #${d.userId}` : 'System Developer'),
     mode: d.isBatch ? 'batch_dml' : 'normal',
     status: validStatus,
     operation: d.operation,

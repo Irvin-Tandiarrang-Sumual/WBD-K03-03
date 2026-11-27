@@ -1,10 +1,38 @@
-# Database Management Platform (WBD-K03-03)
+# Database Management Platform (Wedebe - WBD-K03-03)
 
-Web-based database management platform to dynamically manage database connections, enforce group-based Role-Based Access Control (RBAC), execute schema migrations with multi-group consensus approval, analyze query execution plans (*EXPLAIN / EXPLAIN ANALYZE*), and recover batch DML executions (*quarantine auto-recovery*).
+Web-based database management platform to dynamically manage database connections, enforce group-based Role-Based Access Control (RBAC), execute schema migrations with multi-group consensus approval, analyze query execution plans (EXPLAIN / EXPLAIN ANALYZE), and recover batch DML executions with automatic quarantine.
 
 <p align="center">
   <img src="assets/images/oogway-quotes.jpg" alt="Master Oogway" width="250" align="center"/>
 </p>
+
+---
+
+## Table of Contents
+
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Environment Configuration](#environment-configuration)
+  - [Running the Application](#running-the-application)
+  - [Operational Commands](#operational-commands)
+- [Technical Documentation (`docs/`)](#technical-documentation-docs)
+  - [Unit Testing](docs/unit-testing.md)
+  - [Integration Testing](docs/integration-testing.md)
+  - [End-to-End (E2E) Testing](docs/e2e-testing.md)
+  - [Performance & Stress Testing](docs/stress-testing.md)
+  - [Observability & Tracing](docs/observability.md)
+  - [Security SAST (CodeQL)](docs/security.md)
+  - [Demo Setup & Walkthroughs](docs/demo.md)
+- [API Endpoints](#api-endpoints)
+  - [1. Authentication (`/auth`)](#1-authentication-auth)
+  - [2. System Health (`/health`)](#2-system-health-health)
+  - [3. Admin Governance (`/admin`)](#3-admin-governance-admin)
+  - [4. Database Exploration & Queries (`/me/databases`)](#4-database-exploration--queries-medatabases)
+  - [5. Schema Migrations (`/me/databases/:id/migrations`)](#5-schema-migrations-medatabasesidmigrations)
+  - [6. Migration Proposals & Consensus Drafts](#6-migration-proposals--consensus-drafts)
+  - [7. Batch DML Recovery & Quarantine (`/drafts`)](#7-batch-dml-recovery--quarantine-drafts)
+- [Contributors](#contributors)
 
 ---
 
@@ -20,249 +48,211 @@ Web-based database management platform to dynamically manage database connection
 
 ---
 
-## Usage Guide
+## Getting Started
 
-### 1. Prerequisites
+### Prerequisites
 - Docker Engine / Docker Desktop & Docker Compose v2+.
 
-### 2. Environment Configuration & Data Seeding
-Copy the environment template in the project root:
+### Environment Configuration
+Copy the sample environment configuration file:
 ```bash
 cp .env.example .env
 ```
-> **Automatic Seeding on Docker Startup:**
-> In `.env`, the `SEED_TEST_DATA` variable controls startup behavior:
-> - `SEED_TEST_DATA=true` *(default)*: Backend automatically runs schema migrations and seeds test data (users, groups, demo database connections, migration history, and consensus drafts).
-> - `SEED_TEST_DATA=false`: Backend only runs internal schema migrations without seeding mock test data (clean database).
+The `SEED_TEST_DATA` variable in `.env` controls database initialization:
+- `SEED_TEST_DATA=true` (default): Automatically runs internal migrations and seeds mock demo data (users, groups, target databases, migration history, and drafts).
+- `SEED_TEST_DATA=false`: Runs internal migrations only, leaving a clean database.
 
-### 3. Running the Application
-Start all services from the root directory:
+### Running the Application
+Start all application services from the root directory:
 ```bash
 docker compose up --build -d
 ```
-Wait until all containers are healthy. Access the services at:
+Wait until all containers report healthy. Access the services at:
 - **Frontend Web Console**: [http://localhost:3000](http://localhost:3000)
 - **Backend API Server**: [http://localhost:8080](http://localhost:8080)
 - **Interactive Swagger Docs**: [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
 
-### 4. Default Seed Accounts
-
-| Username | Password | Role | Group & Access Level | Testing Scenario |
-|---|---|---|---|---|
-| `admin` | `admin123` | **Admin** | `admin` (`view_edit`) | User management, group RBAC, database connections, and execution of approved drafts. |
-| `leader` | `leader123` | **User** | `engineering` (Leader) | Voting rights for migration proposals (engineering group consensus). |
-| `user` | `user123` | **User** | `engineering` (Member) | Regular developer: submit drafts and query team databases. |
-| `leader_qa` | `qa123` | **User** | `qa-team` (Leader) | Second voting leader for multi-group consensus validation. |
-| `auditor_lead` | `auditor123` | **User** | `auditors` (Leader) | `view_only` access (read & explain queries, restricted from schema edits). |
-
-### 5. Demo Target Databases
-
-| Database | Engine | Initial Seed State | Testing Scenario |
-|---|---|---|---|
-| `db1_pg` | PostgreSQL | Normal (`v3_applied`) | Reversible migration history (eligible for safe rollback). |
-| `db2_mysql` | MySQL | Normal (`v3_applied`) | Irreversible migration (destructive column drop). |
-| `db3_analytics`| PostgreSQL | Post-Rollback (`v1`) | Active `Forward` pointer for Re-apply / Redo testing. |
-| `db4_billing` | PostgreSQL | **Quarantined (423)** | Partial batch DML failure, ready for Resume or Revert batch recovery. |
-
-### 6. Key Commands
+### Operational Commands
 
 ```bash
-# Run internal database schema migration
-make migrate        # or: cd backend && go run ./cmd/migrate
+# Run internal database schema migrations manually
+make migrate
 
-# Re-run data seeding
-make seed           # or: cd backend && go run ./cmd/seed
+# Re-run initial demo data seeding
+make seed
 
-# Run backend unit tests
-make test           # or: cd backend && go test ./...
-
-# Run frontend typecheck
-cd frontend-spa && npx tsc --noEmit
-
-# Stop containers
+# Stop all application containers
 docker compose down
 
-# Stop containers and wipe database volumes
+# Stop all containers and wipe database volumes
 docker compose down -v
 ```
 
 ---
 
-## Observability
+## Technical Documentation (`docs/`)
 
-From the repository root, start the application and observability stack together. Set `OBSERVABILITY_CONFIG_DIR=./deploy/observability` and use backend port `8080` for the default Prometheus target.
+Detailed documentation is organized by category in the [`docs/`](docs/) directory:
 
-```bash
-export OBSERVABILITY_CONFIG_DIR=./deploy/observability
-docker compose -f docker-compose.yml -f deploy/observability/docker-compose.yaml -f deploy/observability/app.override.yaml up --build -d
-```
-
-In PowerShell, set the variable with `$env:OBSERVABILITY_CONFIG_DIR = './deploy/observability'`. Open Grafana at `http://localhost:3001` to view the migration dashboard. In Explore, use Loki with `{service_name="wbd-backend"} | json` to find application logs and follow a trace ID into Jaeger. Jaeger is also available at `http://localhost:16686`, and Prometheus at `http://localhost:9090`.
-
-The backend writes JSON to stdout and copies it to a shared volume when `APP_LOG_PATH` is set. The Collector forwards those records to Loki and sends application traces to Jaeger. SQL audit records contain the operation and execution metadata while redacting the statement contents and parameter values.
-
-An observed PostgreSQL demo run processed 20 rows in three batches. This excerpt from Loki is for the last batch.
-
-```json
-{
-  "event": "sql.batch.chunk.complete",
-  "status": "success",
-  "correlation_id": "wbd-demo-logging-1795736006689804900-execute",
-  "trace_id": "2d871c5c8a4bf49c87f479caa88d2dcf",
-  "span_id": "5deeb60f818c6532",
-  "job_id": 1,
-  "batch_number": 3,
-  "attempt": 1,
-  "rows": 6,
-  "query": "UPDATE [redacted]"
-}
-```
-
-The same trace ID in Jaeger contained the execute request, `queue.submit`, `queue.lock`, `worker.execute_task`, `db.batch.prepare`, and three `db.batch.chunk` spans. Prometheus reported `migration_queue_jobs{status="done"} = 1`, `migration_batch_rows_processed_total{operation="execute"} = 20`, and `db_pool_connections_idle{dialect="postgresql"} = 1`.
-
----
-
-## Performance Testing
-
-Run these tests against a freshly seeded local demo stack. The script creates and approves its own drafts using the demo accounts. Run the stress test before the large dataset benchmark so both measurements use an otherwise idle queue.
-
-```bash
-k6 run -e BASE_URL=http://localhost:8080 backend/test/stress/migrations.js
-```
-
-Each phase lasts 14 seconds. Two virtual users establish the baseline, the peak ramps to 12, and recovery brings the load back to two. At each level k6 submits three approved drafts together, two for one PostgreSQL database and one for another. It retries expected HTTP 409 responses and counts a job as complete when its draft reaches `applied`. The thresholds are API p95 below 500 ms, unexpected errors below 1%, and three completed jobs per phase.
-
-### Observed k6 run
-
-The API figures cover database-list requests and job submissions. Request throughput uses the 14-second phase window. Job throughput uses the time from submission to the last observed completion in each group. Mean queue wait and worker duration come from application metrics.
-
-| Phase | API p50 | API p95 | Requests/s | Unexpected errors | Mean queue wait | Mean worker duration | Jobs completed/s |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Baseline, 2 VUs | 21.90 ms | 41.48 ms | 11.64 | 0% | 53.62 ms | 217.58 ms | 3.51 |
-| Peak, ramp to 12 VUs | 14.78 ms | 41.20 ms | 60.14 | 0% | 53.47 ms | 230.02 ms | 2.77 |
-| Recovery, ramp to 2 VUs | 14.99 ms | 43.72 ms | 23.07 | 0% | 58.65 ms | 188.50 ms | 4.97 |
-
-API p95 stayed within 3 ms across phases. At peak, request throughput was about five times the baseline and jobs took slightly longer. Recovery includes the ramp down, which accounts for some of the extra requests compared with the baseline. All nine jobs finished, with five expected HTTP 409 responses before retry. Each group contains only three jobs, so job throughput describes this run.
-
-### Large batch migration benchmark
-
-On a fresh demo database, load the dataset and time the full-table UPDATE. The script rolls back that UPDATE so the batch uses the same rows and starting values.
-
-```bash
-docker compose exec -T demo_postgres psql -U demo_user -d db1_pg -v rows=200000 < backend/test/stress/batch_dataset.sql
-k6 run -e BASE_URL=http://localhost:8080 -e BENCHMARK_ROWS=200000 backend/test/stress/migrations.js
-```
-
-On Docker Desktop with 12 available CPUs and about 7.5 GiB of RAM, the full-table UPDATE of 200,000 rows took **5.46 s**. The worker processed the same rows in **20 committed batches** of 10,000 in **22.82 s**. A database query confirmed that all 200,000 rows ended with `score = 1`. Batching took longer in this run and recorded progress after every commit. The plain UPDATE measurement excludes commit. A separate 700,000-row run also finished, with a 19.65 s full-table UPDATE and 147.05 s from queue submission to job completion.
-
-## Security: SAST dengan CodeQL
-
-Menurut [OWASP](https://community.owasp.org/controls/Static_Code_Analysis), **Static Application Security Testing (SAST)** merupakan metode pengujian keamanan yang menganalisis kode sumber tanpa menjalankan aplikasi untuk mendeteksi kerentanan keamanan sedini mungkin (*shift-left security*). Berbeda dengan **Dynamic Application Security Testing (DAST)** yang menguji aplikasi saat sedang berjalan melalui request dan respons (*black-box*), SAST memiliki visibilitas menyeluruh (*white-box*) terhadap alur logika internal program.
-
-Repository ini mengintegrasikan **[CodeQL](https://codeql.github.com/docs/codeql-overview/about-codeql/)**, engine analisis semantik industri yang mengubah kode sumber menjadi database relasional (berisi *Abstract Syntax Tree*, *Control Flow Graph*, dan *Data Flow Graph*) lalu mengeksekusi kueri kustom/standar untuk melacak aliran data dari sumber input (*taint sources*) menuju operasi sensitif (*sinks*). Evaluasi keamanan diselaraskan dengan standar **OWASP Top 10** dan **CWE Top 25**.
-
-### 1. Konfigurasi & Cara Menjalankan CodeQL
-
-Pengujian SAST diotomatisasi melalui GitHub Actions workflow [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml):
-* **Trigger Otomatis**: Berjalan pada setiap `push` dan `pull_request` menuju branch `main` dan `develop`.
-* **Trigger Manual**: Dapat dijalankan sewaktu-waktu melalui menu **Actions** > **CodeQL SAST** > **Run workflow** (*workflow_dispatch*).
-* **Matrix Bahasa**:
-  * **Go (Backend)**: Menggunakan `build-mode: manual` dengan kompilasi `go build -v ./...` pada direktori `backend/`.
-  * **JavaScript/TypeScript (Frontend)**: Menggunakan `build-mode: none` untuk analisis sintaksis dan data flow SPA React.
-
-Hasil pemindaian otomatis dipublikasikan ke tab **Security** > **Code scanning alerts** pada repository GitHub serta tersimpan sebagai file SARIF pada ringkasan *Actions run*.
-
----
-
-### 2. Cakupan Kode yang Dianalisis (*Code Coverage*)
-
-| Komponen | Bahasa / Framework | Target Direktori & Modul | Cakupan Analisis |
+| Document | Category | Description | Link |
 |---|---|---|---|
-| **Backend** | Go 1.23+ / Gin, GORM | `backend/cmd/...`, `backend/internal/...`, `backend/pkg/...` | Handlers HTTP, RBAC middleware, token auth, business use cases, driver PostgreSQL & MySQL, queue worker, dan migration engine. |
-| **Frontend** | TypeScript / React 19 | `frontend-spa/src/...` | Komponen visual, form input, state management, client routing, dan HTTP API service client. |
+| **Unit Testing** | Testing | Go unit tests across 22 packages (parsers, hazard classification, DDL reverse generators) and TypeScript verification. | [docs/unit-testing.md](docs/unit-testing.md) |
+| **Integration Testing** | Testing | Ephemeral container testing (PostgreSQL 15 & MySQL 8.4) with Testcontainers-Go covering 8 journey test suites. | [docs/integration-testing.md](docs/integration-testing.md) |
+| **End-to-End Testing** | Testing | Playwright browser automation covering 17 critical user journeys across desktop and mobile (375px) viewports. | [docs/e2e-testing.md](docs/e2e-testing.md) |
+| **Stress & Performance** | Pengujian | Uji k6 untuk melihat respons API dan antrean migrasi ketika beban naik lalu turun. | [docs/stress-testing.md](docs/stress-testing.md) |
+| **Observability** | Infrastructure | Centralized monitoring with Prometheus, Grafana dashboards, Loki log queries, and Jaeger distributed tracing. | [docs/observability.md](docs/observability.md) |
+| **Security SAST** | Security | Static Application Security Testing with CodeQL, automated CI workflows, and OWASP/CWE evaluations. | [docs/security.md](docs/security.md) |
+| **Demo Setup** | Guide | Seed accounts, target database profiles (`db1` to `db4`), and interactive scenario walkthroughs. | [docs/demo.md](docs/demo.md) |
 
 ---
 
-### 3. Dokumentasi Temuan & Analisis Kerentanan (Security Evaluation)
+## Uji Beban Penuh k6 Milestone 2
 
-Berikut adalah dokumentasi hasil analisis semantik dan evaluasi risiko terhadap basis kode:
+Jalankan profil penuh pada stack demo lokal yang sudah diisi data awal. [Skrip k6](stress/stress_suite.js) menguji daftar database, riwayat migrasi, query, dan explain sambil mengirim draf migrasi yang sudah disetujui ke database yang sama maupun berbeda. Skrip memantau status setiap job yang diterima hingga selesai. Job dihitung berhasil ketika statusnya `applied`.
 
-| ID | Rule / CWE | Severity | Lokasi Kode | Potensi Dampak (OWASP Top 10) | Keputusan | Alasan & Mitigasi |
-|---|---|---|---|---|---|---|
-| **F-01** | `go/sql-injection`<br>(CWE-89) | **High** | `backend/internal/adapters/driver/postgresql/executor_repository.go:34`<br>`backend/internal/adapters/driver/mysql/executor_repository.go:34` | **A03:2021 – Injection**:<br>Eksekusi arbitrary SQL command pada basis data. | **Accepted Risk**<br>*(By Design)* | Fitur inti platform adalah *Database Migration & Management* yang memang mengeksekusi DDL/DML pengguna. Risiko diamankan secara berlapis: (1) Autentikasi session cookie + CSRF; (2) RBAC ketat (`view_only` diblokir total dari eksekusi); (3) *Multi-Leader Consensus Voting* wajib menyetujui draft sebelum dieksekusi; (4) Eksekusi terisolasi di database target pengguna, terpisah dari internal metadata database. |
-| **F-02** | `js/xss`<br>(CWE-79) | **Medium** | `frontend-spa/src/**/*.tsx` | **A03:2021 – Injection**:<br>Eksekusi script berbahaya pada browser pengguna lain. | **Clean**<br>*(0 Findings)* | React 19 secara otomatis melakukan HTML escaping pada semua binding ekspresi JSX. Tidak ada penggunaan `dangerouslySetInnerHTML` pada input pengguna. Cookie session dikonfigurasi dengan flag `HttpOnly`. |
-| **F-03** | `go/csrf-protection`<br>(CWE-352) | **Medium** | `backend/internal/adapters/http/middleware/csrf.go` | **A01:2021 – Broken Access Control**:<br>Pemalsuan request mutasi data lintas domain. | **Clean**<br>*(Protected)* | Seluruh request HTTP bermutasi (`POST`, `PUT`, `PATCH`, `DELETE`) divalidasi menggunakan token `X-CSRF-Token` yang dicocokkan dengan cookie sesi bertipe `SameSite=Lax`. |
-| **F-04** | `go/path-injection`<br>(CWE-22) | **High** | Filesystem access | **A01:2021 – Broken Access Control**:<br>Pembacaan/penulisan file terlarang di server. | **Clean**<br>*(0 Findings)* | Aplikasi tidak menyediakan endpoint pembacaan maupun manipulasi file fisik di filesystem server berdasarkan input pengguna. |
+```powershell
+$env:OBSERVABILITY_CONFIG_DIR = './deploy/observability'
+$compose = @('-f', 'docker-compose.yml', '-f', 'deploy/observability/docker-compose.yaml', '-f', 'deploy/observability/app.override.yaml')
+$results = (New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("wbd-k6-" + (Get-Date -Format 'yyyyMMdd-HHmmss')))).FullName
+docker compose -p wbd-bonus-demo @compose --profile stress run --rm --no-deps -v "${results}:/results" -e STRESS_PROFILE=full k6 run --out json=/results/full.json stress_suite.js
+```
 
----
+VU adalah pengguna yang disimulasikan k6. Pada [profil penuh di repo](stress/config/environments.js), jumlah pengguna untuk skenario API dinaikkan bertahap lalu diturunkan kembali. Batas uji API adalah **p95 < 800 ms**, **p99 < 2.000 ms**, dan **error tak terduga < 3%**. P50 adalah waktu respons tengah. P95 menunjukkan waktu yang mencakup 95% request, jadi membantu melihat kelambatan yang tidak tergambar dari nilai tengah.
+
+### Hasil profil penuh
+
+Pengujian dilakukan di Docker lokal pada 27 November 2026 dengan commit `f8fc148`. Dari **26.688 request API**, p95 keseluruhan mencapai **914 ms**. P99 sebesar **1,87 detik** memenuhi batas 2 detik. k6 keluar dengan kode 99 karena p95 melewati target. Semua **55 job yang diterima mencapai `applied`**.
+
+| Fase | VU API | API p50 | API p95 | Request/detik | Error tak terduga | Job diterima / selesai | Waktu antre p95 | Durasi worker p50 | Job selesai/detik |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Beban awal, 30 dtk | 2 → 10 | 35 ms | 123 ms | 9,90 | 0 / 297 | 20 / 20 | 170 ms | 624 ms | 0,667 |
+| Di atas normal, 60 dtk | 10 → 30 | 34 ms | 145 ms | 106,98 | 0 / 6.419 | 35 / 35 | 100 ms | 356 ms | 0,583 |
+| Naik ke puncak, 60 dtk | 30 → 75 | 153 ms | 551 ms | 153,93 | 0 / 9.236 | 0 / 0 | — | — | 0 |
+| Bertahan di puncak, 30 dtk | 75 | 460 ms | 2.113 ms | 102,80 | 1 / 3.084 (0,032%) | 0 / 0 | — | — | 0 |
+| Penurunan beban, 30 dtk | 75 → 10 | 338 ms | 1.289 ms | 128,33 | 0 / 3.850 | 0 / 0 | — | — | 0 |
+| Pemulihan, 45 dtk | 10 → 0 | 25 ms | 224 ms | 84,44 | 0 / 3.800 | 0 / 0 | — | — | 0 |
+
+Angka per fase diambil dari output JSON k6 dan dibagi durasi fase untuk menghitung throughput. Job selesai dikelompokkan berdasarkan fase pengajuannya. Waktu antre dihitung dari waktu job tersimpan hingga worker mulai. Durasi worker dihitung dari log mulai hingga status akhir job tersimpan. Median dari awal polling hingga job terkonfirmasi selesai adalah **689 ms**.
+
+Data mentah memuat satu timeout ketika beban bertahan di puncak. Metrik error bawaan mencatat 0% karena request berstatus 0 ikut dihitung sebagai sukses. Tabel memasukkan timeout itu dan memisahkan **1.578 respons HTTP 409** serta **80 respons HTTP 423**. Penghitung `lock_conflicts` di skrip menghitung 409 dua kali dan mencakup pengajuan berulang. Untuk waktu antre, tabel memakai catatan job dan log worker karena metrik k6 mencatat nol.
+
+Pada dua fase awal, API bisa melayani lebih banyak request per detik dengan waktu respons yang masih dekat dengan beban awal. Saat beban dipertahankan di puncak, jumlah request yang dilayani per detik turun dari sekitar 154 ke 103, sementara p95 naik dari 551 ms ke 2,11 detik. Artinya, saat beban tinggi bertahan, pengguna mulai menunggu lebih lama dan target respons terlewati. Setelah beban turun, p95 membaik ke 224 ms, masih di atas 123 ms pada beban awal. Satu request setelah tes selesai merespons dalam 9,72 ms. Waktu sampai respons kembali stabil belum diukur.
+
+Seluruh 55 job yang diterima masuk pada dua fase awal dan selesai. Pada fase berikutnya, termasuk saat beban puncak, tidak ada job baru yang diterima. Karena itu, pengukuran waktu antre dan durasi worker hanya mencakup dua fase awal.
+
+## Bukti dan Analisis CodeQL
+
+CodeQL membaca kode untuk mencari pola yang berpotensi menimbulkan celah keamanan. Pemindaian Go dan JavaScript/TypeScript selesai dan hasil tersedia di Actions. [Bukti run CodeQL di GitHub Actions](https://github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/actions/runs/45959900310)
+
+| Bahasa | File yang dipindai | Temuan |
+|---|---:|---:|
+| Go | 135 dari 182 file | 11 |
+| JavaScript dan TypeScript | 14 dari 14 JS, 136 dari 136 TS | 0 |
+
+Di backend Go, terdapat temuan terkait dua hal. Pertama, aplikasi bisa membaca ID migrasi sebagai angka yang keliru pada sistem 32-bit. Kedua, sebagian input ikut membentuk perintah database, sehingga perlu dipastikan perintah tetap sesuai tujuan pengguna. Beberapa lokasi sudah punya pemeriksaan yang mencegah dampak tersebut. Untuk sisi web, scan ini melaporkan nol temuan pada file yang dipindai.
+
+| Rule dan skor keamanan | Lokasi | Dampak dan keputusan |
+|---|---|---|
+| `go/incorrect-integer-conversion`, tinggi (8,1), 2 temuan | `backend/internal/adapters/http/handlers/migration_handler.go:184–185` | ID migrasi berpotensi terpotong pada sistem 32-bit. Pembacaan ID sekarang menolak angka yang melebihi ukuran `uint` pada sistem yang dipakai. |
+| `go/incorrect-integer-conversion`, tinggi (8,1), 2 temuan | `backend/pkg/ginutil/ginutil.go:20,23` | Jalur ini sudah mengecek hasil konversi bolak-balik dan menolak nilai yang berubah sebelum mengembalikan ID. Dari peninjauan kode, kedua temuan ini dinilai false positive. |
+| `go/sql-injection`, tinggi (8,8), 3 temuan | `backend/internal/adapters/driver/mysql/connect.go:110,136` dan `backend/internal/adapters/driver/postgresql/connect.go:100` | Nama database masuk ke SQL pembuatan database. Jalur pemanggil sudah membatasi nama ke huruf, angka, dan garis bawah. Ketiga temuan dinilai false positive pada jalur yang ditinjau. |
+| `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/connect.go:143,147` | Nama akun sekarang diperlakukan sebagai nama akun MySQL yang dikutip dengan benar. Pemberian hak otomatis dibatasi ke database yang didaftarkan. Integration test memverifikasi bahwa akun dapat memakai database baru tanpa hak di tingkat server. |
+| `go/sql-injection`, tinggi (8,8), 2 temuan | `backend/internal/adapters/driver/mysql/executor_repository.go:162` dan `backend/internal/adapters/driver/postgresql/executor_repository.go:163` | SQL Console memeriksa izin dan memvalidasi query di service. Driver sekarang menghentikan eksekusi jika transaksi baca gagal dibuka. CodeQL masih menandai kedua jalur tersebut pada scan ulang. |
+
+### Hasil scan ulang setelah perbaikan
+
+Perubahan ada di [commit `bc5f233`](https://github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/commit/bc5f233aed1742b5d8fd703e674d88cb3f809969). Temuan Go turun dari **11 menjadi 8**. JavaScript dan TypeScript tetap **0**. [Pemeriksaan GitHub untuk commit perbaikan](https://github.com/Irvin-Tandiarrang-Sumual/WBD-K03-03/actions/runs/46010555158)
+
+| Bagian | Awal → ulang | Hasil peninjauan |
+|---|---:|---|
+| Pembacaan ID perbandingan migrasi | 2 → 0 | Kedua peringatan hilang setelah aplikasi membatasi angka yang bisa diterima sesuai ukuran `uint`. |
+| Pemberian hak akses MySQL | 2 → 1 | Peringatan pada pemberian hak tingkat server hilang setelah perintah itu dihapus. Peringatan di `mysql/connect.go:161` ditutup sebagai *false positive* pada jalur yang ditinjau. Nama akun dikutip sebagai identifier MySQL, nama database divalidasi, dan grant hanya berlaku untuk database tujuan, termasuk nama dengan garis bawah. Integration test memeriksa bahwa akun bisa memakai database baru tanpa mendapat hak tingkat server. |
+| Pemeriksaan ID umum dan pembuatan database | 5 → 5 | Dua peringatan di helper ID dan tiga peringatan pembuatan database tetap muncul. Peninjauan kode menilai kelimanya sebagai false positive pada jalur yang diperiksa karena pemeriksaan batas angka dan validasi nama database sudah ada. |
+| SQL Console MySQL dan PostgreSQL | 2 → 2 | Dua temuan ditutup dalam peninjauan dengan mitigasi. Menerima teks SQL adalah bagian dari fitur. Jalur Query, Explain, dan Explain Analyze memeriksa akses serta memvalidasi perintah di service, lalu driver mewajibkan transaksi baca. Validasi sekarang juga menolak komentar yang bisa dieksekusi, pemanggilan `LOAD_FILE`, dan `SELECT ... INTO`. Lokasi pada scan ini ada di `mysql/executor_repository.go:159` dan `postgresql/executor_repository.go:160`. |
+
+Hasil scan ulang di tabel adalah hasil dari commit `bc5f233`. Penutupan di atas adalah keputusan peninjauan kode. Untuk SQL Console, batas transaksi melindungi perubahan data biasa. Efek fungsi khusus yang tersedia pada database tujuan masih bergantung pada hak akun koneksi, sehingga akun target perlu memakai hak minimum. 
+
 
 ## API Endpoints
 
-PostgreSQL batch migrations support a single `UPDATE` with a single-column integer primary key as its batch column. End SQL up and SQL down with a predicate such as `AND id BETWEEN ? AND ?` or `WHERE id BETWEEN ? AND ?`. The worker binds the exact keys for each batch and stores commit evidence alongside the target changes. Revert uses the approved SQL down in reverse batch order and limits it to keys actually changed by SQL up.
-
-Migration jobs are stored in the platform PostgreSQL database. When workers restart, pending jobs remain available for execution. Each database can have only one active job. A worker holds a PostgreSQL advisory lock while it processes the job, and PostgreSQL releases the lock if the worker connection ends.
-
-If a worker disconnects mid-execution, the next worker checks whether the draft already has a recorded outcome. When the outcome is still unclear, the job is held as `uncertain` and blocks new jobs on that database. Verify the actual changes on the target against the draft and any committed checkpoints before resuming work. Automatic reconciliation of uncertain outcomes is still pending.
-
-All protected endpoints require session cookie (`session=<token>`) and CSRF validation headers, except `/api/v1/health` and `/api/v1/auth/login`.
+All protected endpoints require an encrypted session cookie (`session=<token>`) and CSRF validation headers (`X-CSRF-Token`), except `/api/v1/health` and `/api/v1/auth/login`.
 
 ### 1. Authentication (`/auth`)
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/v1/auth/login` | User login, set session cookie & CSRF token |
-| `POST` | `/api/v1/auth/logout` | Terminate active user session |
-| `GET` | `/api/v1/auth/me` | Get current user profile |
+| `POST` | `/api/v1/auth/login` | Authenticate user, issue session cookie and CSRF token |
+| `POST` | `/api/v1/auth/logout` | Terminate active user session and invalidate token |
+| `GET` | `/api/v1/auth/me` | Retrieve profile of the currently authenticated user |
 
-### 2. Admin Panel (`/admin`)
+### 2. System Health (`/health`)
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/admin/users` | List all users (paginated) |
-| `POST` | `/api/v1/admin/users` | Create new user |
-| `GET` / `PATCH` / `DELETE` | `/api/v1/admin/users/:id` | Get detail, update, or delete user |
-| `PATCH` | `/api/v1/admin/users/:id/role` | Update user role (`admin` / `user`) |
-| `GET` / `POST` | `/api/v1/admin/groups` | List or create access group |
-| `GET` / `PATCH` / `DELETE` | `/api/v1/admin/groups/:id` | Get detail, update database access, or delete group |
-| `POST` / `DELETE` | `/api/v1/admin/groups/:id/users/:user_id` | Add or remove user from group |
-| `GET` / `POST` | `/api/v1/admin/databases` | List registered databases or register new database |
-| `GET` / `DELETE` | `/api/v1/admin/databases/:id` | Get detail or delete database connection |
+| `GET` | `/api/v1/health` | Service health status check |
 
-### 3. Database Exploration & Queries (`/me/databases`)
-| Method | Endpoint | Access Level | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/me/databases` | — | List databases accessible to current user |
-| `GET` | `/api/v1/me/databases/:database_id` | `view_only` | Get database detail & table schema metadata |
-| `POST` | `/api/v1/me/databases/:database_id/query` | `view_only` | Execute custom SQL query |
-| `POST` | `/api/v1/me/databases/:database_id/explain` | `view_only` | Analyze query execution plan (`EXPLAIN`) |
-| `POST` | `/api/v1/me/databases/:database_id/explain-analyze` | `view_only` | Analyze actual query execution plan (`EXPLAIN ANALYZE`) |
+### 3. Admin Governance (`/admin`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/admin/users` | List all registered users (paginated) |
+| `POST` | `/api/v1/admin/users` | Register a new user |
+| `GET` | `/api/v1/admin/users/:id` | Retrieve user details by ID |
+| `PATCH` | `/api/v1/admin/users/:id` | Update user profile details |
+| `DELETE` | `/api/v1/admin/users/:id` | Delete a user account |
+| `PATCH` | `/api/v1/admin/users/:id/role` | Update user platform role (`admin` / `user`) |
+| `GET` | `/api/v1/admin/groups` | List all access groups |
+| `POST` | `/api/v1/admin/groups` | Create a new access group |
+| `GET` | `/api/v1/admin/groups/:id` | Retrieve group details and database permissions |
+| `PATCH` | `/api/v1/admin/groups/:id` | Update group details and database mappings |
+| `DELETE` | `/api/v1/admin/groups/:id` | Delete an access group |
+| `POST` | `/api/v1/admin/groups/:id/users/:user_id` | Add a user to an access group |
+| `DELETE` | `/api/v1/admin/groups/:id/users/:user_id` | Remove a user from an access group |
+| `GET` | `/api/v1/admin/databases` | List all registered target databases |
+| `POST` | `/api/v1/admin/databases` | Connect and register a new target database |
+| `GET` | `/api/v1/admin/databases/:id` | Retrieve database connection details |
+| `DELETE` | `/api/v1/admin/databases/:id` | Delete a target database connection |
 
-### 4. Migration Management & Consensus Drafts (`/me/databases` & `/me/drafts`)
-| Method | Endpoint | Access Level | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/me/databases/:database_id/migrations` | `view_only` | Database migration version history |
-| `GET` | `/api/v1/me/databases/:database_id/migrations/:id` | `view_only` | Get single migration detail |
-| `GET` | `/api/v1/me/databases/:database_id/migrations/compare` | `view_only` | Compare two migration versions (*Schema Diff*) |
-| `POST` | `/api/v1/me/databases/:database_id/migrations` | `view_edit` | Directly execute schema migration |
-| `POST` | `/api/v1/me/databases/:database_id/drafts` | `view_edit` | Submit new migration draft proposal |
-| `GET` | `/api/v1/me/databases/:database_id/drafts` | `view_only` | List draft proposals for database |
-| `POST` | `/api/v1/me/databases/:database_id/rollback-draft` | `view_edit` | Create draft proposal for rollback |
-| `POST` | `/api/v1/me/databases/:database_id/forward-draft` | `view_edit` | Create draft proposal for forward / re-apply |
-| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/vote` | Leader | Vote (*approve* / *reject*) on draft proposal |
-| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/execute` | `view_edit` | Execute approved consensus draft |
+### 4. Database Exploration & Queries (`/me/databases`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/me/databases` | List databases accessible to current user |
+| `GET` | `/api/v1/me/databases/:database_id` | Retrieve database metadata and table schemas |
+| `POST` | `/api/v1/me/databases/:database_id/query` | Execute custom read-only SQL queries |
+| `POST` | `/api/v1/me/databases/:database_id/explain` | View query execution plan (`EXPLAIN`) |
+| `POST` | `/api/v1/me/databases/:database_id/explain-analyze` | View actual query execution plan (`EXPLAIN ANALYZE`) |
 
-### 5. Batch DML Recovery & Quarantine Recovery (`/me/drafts`)
-| Method | Endpoint | Access Level | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/me/drafts/:id` | `view_only` | Get draft status & quarantine isolation details |
-| `POST` | `/api/v1/me/drafts/:id/resume` | `view_edit` | Resume interrupted batch DML execution |
-| `POST` | `/api/v1/me/drafts/:id/revert-batch` | `view_edit` | Revert and rollback executed batch DML |
-| `GET` | `/api/v1/me/drafts/:id/progress` | `view_only` | Get current batch execution progress |
-| `GET` | `/api/v1/me/drafts/:id/progress/stream` | `view_only` | Server-Sent Events (SSE) real-time stream of batch progress |
+### 5. Schema Migrations (`/me/databases/:id/migrations`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/me/databases/:database_id/migrations` | Retrieve database migration history |
+| `GET` | `/api/v1/me/databases/:database_id/migrations/:migration_id` | View single migration version details |
+| `GET` | `/api/v1/me/databases/:database_id/migrations/compare` | Compare schema diff between two migration versions |
+| `POST` | `/api/v1/me/databases/:database_id/migrations` | Directly apply a schema migration |
+
+### 6. Migration Proposals & Consensus Drafts
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/me/databases/:database_id/drafts` | Submit a new migration proposal draft |
+| `GET` | `/api/v1/me/databases/:database_id/drafts` | List draft proposals for a database |
+| `POST` | `/api/v1/me/databases/:database_id/rollback-draft` | Submit a rollback draft proposal with reverse DDL |
+| `POST` | `/api/v1/me/databases/:database_id/forward-draft` | Submit a forward / re-apply draft proposal |
+| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/vote` | Cast vote (`approve` / `reject`) on a proposal |
+| `POST` | `/api/v1/me/databases/:database_id/migration-drafts/:draft_id/execute` | Execute an approved consensus draft |
+| `GET` | `/api/v1/drafts/:id` | Retrieve draft details, status, and isolation state |
+| `POST` | `/api/v1/drafts/:id/approvals` | Submit consensus approval or rejection vote |
+| `POST` | `/api/v1/drafts/:id/execute` | Submit approved draft for asynchronous execution |
+
+### 7. Batch DML Recovery & Quarantine (`/drafts`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/drafts/:id/resume` | Resume interrupted batch DML execution from last checkpoint |
+| `POST` | `/api/v1/drafts/:id/revert-batch` | Roll back committed chunks of a failed batch draft in reverse order |
+| `GET` | `/api/v1/drafts/:id/progress` | Check batch execution progress percentage and row counts |
+| `GET` | `/api/v1/drafts/:id/progress/stream` | Real-time Server-Sent Events (SSE) execution progress stream |
 
 ---
 
 ## Contributors
 
-| NIM | Name |
+| Student ID | Name |
 |---|---|
 | 13524006 | Gabriella Botimada Lubis |
 | 13524030 | Irvin Tandiarrang Sumual |

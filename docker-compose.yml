@@ -57,6 +57,12 @@ services:
       SEED_TEST_DATA: ${SEED_TEST_DATA:-true}
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${SERVER_PORT:-8080}/health > /dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
     depends_on:
       internal_db:
         condition: service_healthy
@@ -74,4 +80,49 @@ services:
       PORT: 3000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/databases > /dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
     restart: unless-stopped
+
+  e2e:
+    profiles: ["test"]
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    environment:
+      - BASE_URL=${BASE_URL:-http://host.docker.internal:3000}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8080/api/v1}
+      - CI=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
+    volumes:
+      - ./e2e/playwright-report:/app/playwright-report
+      - ./e2e/test-results:/app/test-results
+    depends_on:
+      frontend:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+
+  k6:
+    profiles: ["stress"]
+    image: grafana/k6:latest
+    environment:
+      - BASE_URL=${BASE_URL:-http://app:8080}
+      - STRESS_PROFILE=${STRESS_PROFILE:-quick}
+    volumes:
+      - ./stress:/stress
+    working_dir: /stress
+    command: ["run", "stress_suite.js"]
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    depends_on:
+      app:
+        condition: service_healthy

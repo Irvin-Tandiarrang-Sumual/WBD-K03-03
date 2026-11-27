@@ -16,6 +16,8 @@ func TestIsReadOnlyQuery_ReadOnlyStatements_ReturnsTrue(t *testing.T) {
 		{name: "read-only common table expression", query: "WITH cte AS (SELECT 1) SELECT * FROM cte"},
 		{name: "semicolon inside string literal", query: "SELECT * FROM logs WHERE message = 'error; please retry'"},
 		{name: "comment containing semicolon", query: "SELECT 1 /* comment; */ FROM users"},
+		{name: "executable comment marker inside a literal", query: "SELECT '/*! marker */'"},
+		{name: "quoted column with a server function name", query: "SELECT `load_file` FROM logs"},
 		{name: "column name containing keyword substring", query: "SELECT updated_at, is_deleted FROM users"},
 	}
 
@@ -49,6 +51,11 @@ func TestIsReadOnlyQuery_MutationOrInvalidStatements_ReturnsFalseOrError(t *test
 		{name: "delete query", query: "DELETE FROM users WHERE id = 1", wantErr: false},
 		{name: "insert query", query: "INSERT INTO users (name) VALUES ('a')", wantErr: false},
 		{name: "stacked multiple statements", query: "SELECT 1; SELECT 2", wantErr: false},
+		{name: "select into variable", query: "SELECT 1 INTO @result", wantErr: false},
+		{name: "server file function", query: "SELECT LOAD_FILE(NULL)", wantErr: false},
+		{name: "quoted server file function", query: "SELECT `LOAD_FILE`(NULL)", wantErr: false},
+		{name: "embedded executable comment", query: "SELECT 1 /*! */", wantErr: true},
+		{name: "MariaDB executable comment", query: "SELECT 1 /*M! */", wantErr: true},
 		{name: "writable cte with delete", query: "WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d", wantErr: false},
 		{name: "writable cte with update", query: "WITH u AS (UPDATE users SET role = 'admin' RETURNING *) SELECT * FROM u", wantErr: false},
 		{name: "unclosed string literal syntax error", query: "SELECT * FROM users WHERE name = 'abc", wantErr: true},
